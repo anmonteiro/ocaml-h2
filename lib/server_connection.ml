@@ -29,6 +29,7 @@ type t =
   ; mutable max_client_stream_id   : Stream_identifier.t
   ; mutable max_pushed_stream_id   : Stream_identifier.t
   ; mutable receiving_headers_for_stream : Stream_identifier.t option
+  ; mutable did_send_go_away       : bool
   ; wakeup_writer  : (unit -> unit) ref
   ; wakeup_reader  : (unit -> unit) list ref
   ; encoder : Hpack.Encoder.t
@@ -104,30 +105,35 @@ let make_active_frame_reader t =
 
 let handle_error t = function
   | Error.ConnectionError (error, data) ->
-    Printf.eprintf "REPORTING CONNECTION ERROR %ld %S\n%!" (Error.serialize error) data;
-    (* From RFC7540§5.4.1:
-         An endpoint that encounters a connection error SHOULD first send a
-         GOAWAY frame (Section 6.8) with the stream identifier of the last
-         stream that it successfully received from its peer. The GOAWAY frame
-         includes an error code that indicates why the connection is
-         terminating. After sending the GOAWAY frame for an error condition,
-         the endpoint MUST close the TCP connection. *)
-    let debug_data = if String.length data == 0 then
-      Bigstringaf.empty
-    else
-      Bigstringaf.of_string ~off:0 ~len:(String.length data) data
-    in
-    let frame_info = Writer.make_frame_info Stream_identifier.connection in
-    (* TODO: Only write if not already shutdown. *)
-    Writer.write_go_away
-      t.writer
-      frame_info
-      ~debug_data
-      ~last_stream_id:t.max_client_stream_id
-      error;
-    (* TODO(anmonteiro): I think we need to allow lower numbered streams to
-     * complete. *)
-    shutdown t
+    if not t.did_send_go_away then begin
+      Printf.eprintf "REPORTING CONNECTION ERROR %ld %S\n%!" (Error.serialize error) data;
+      (* From RFC7540§5.4.1:
+           An endpoint that encounters a connection error SHOULD first send a
+           GOAWAY frame (Section 6.8) with the stream identifier of the last
+           stream that it successfully received from its peer. The GOAWAY frame
+           includes an error code that indicates why the connection is
+           terminating. After sending the GOAWAY frame for an error condition,
+           the endpoint MUST close the TCP connection. *)
+      let debug_data = if String.length data == 0 then
+        Bigstringaf.empty
+      else
+        Bigstringaf.of_string ~off:0 ~len:(String.length data) data
+      in
+      let frame_info = Writer.make_frame_info Stream_identifier.connection in
+      (* TODO: Only write if not already shutdown. *)
+      Writer.write_go_away
+        t.writer
+        frame_info
+        ~debug_data
+        ~last_stream_id:t.max_client_stream_id
+        error;
+      Writer.flush t.writer (fun () ->
+        (* XXX: We need to allow lower numbered streams to complete before
+         * shutting down. *)
+        shutdown t);
+      t.did_send_go_away <- true;
+      wakeup_writer t
+    end
   | StreamError (stream_id, error) ->
     Printf.eprintf "REPORTING STREAM ERROR ON %ld %ld\n%!" stream_id (Error.serialize error);
     begin match Streams.find t.streams stream_id with
@@ -154,10 +160,10 @@ let set_error_and_handle ?request t stream error error_code =
   Reqd.report_error stream error error_code;
   wakeup_writer t
 
-let report_exn t _exn =
+let report_exn t exn =
   if not (is_shutdown t) then
-    ()
-    (* set_error_and_handle t (`Exn exn) *)
+    let additional_debug_data = Printexc.to_string exn in
+    report_connection_error t ~additional_debug_data Error.InternalError
 
 let on_stream_closed t = fun () ->
   t.current_client_streams <- t.current_client_streams - 1
@@ -1141,6 +1147,7 @@ stream"
   ; max_client_stream_id      = 0l
   ; max_pushed_stream_id      = 0l
   ; receiving_headers_for_stream = None
+  ; did_send_go_away          = false
   ; wakeup_writer             = ref default_wakeup_writer
   ; wakeup_reader             = ref []
   (* From RFC7540§4.3:

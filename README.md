@@ -111,11 +111,4 @@ $ esy b dune runtest
 
 ## License
 
-BSD3, see LICENSE files for its text.
-
-
-Configs TODO:
-
-- GOAWAY frames: keep state that we've received / sent a goaway frame
-- client
-
+Distributed under the 3-Clause BSD License, see [LICENSE](./LICENSE).
