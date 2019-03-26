@@ -87,7 +87,7 @@ let rec check_settings_list = function
 type t =
   { mutable header_table_size : int
   ; mutable enable_push : bool
-  ; mutable max_concurrent_streams : int option
+  ; mutable max_concurrent_streams : int
   ; mutable initial_window_size : int
   ; mutable max_frame_size : int
   ; mutable max_header_list_size : int option
@@ -97,7 +97,10 @@ type t =
 let default_settings =
   { header_table_size = 0x1000
   ; enable_push = true
-  ; max_concurrent_streams = None
+    (* From RFC7540§6.5.2:
+         SETTINGS_MAX_CONCURRENT_STREAMS (0x3): [...] Initially, there is no
+         limit to this value. *)
+  ; max_concurrent_streams = Int32.(to_int max_int)
   ; initial_window_size = WindowSize.default_initial_window_size
   ; max_frame_size = 0x4000
   ; max_header_list_size = None

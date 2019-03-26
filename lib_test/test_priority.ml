@@ -32,7 +32,7 @@ let test_reqd stream_id =
   Reqd.create
     ~max_frame_size:Config.default.read_buffer_size
     stream_id
-    Serialize.Writer.(create ())
+    Serialize.Writer.(create 0x400)
     default_error_handler
 
 let repeat (Streams.PriorityTreeNode.Connection root) queue num =

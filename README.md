@@ -111,12 +111,5 @@ Configs TODO:
 - GOAWAY frames: keep state that we've received a goaway frame
 - send a goaway frame when stream ids are exhausted
   - Stream identifiers cannot be reused. Long-lived connections can result in an endpoint exhausting the available range of stream identifiers. A client that is unable to establish a new stream identifier can establish a new connection for new streams. A server that is unable to establish a new stream identifier can send a GOAWAY frame so that the client is forced to open a new connection for new streams.
-- design available settings (config)
-  - push_enabled
-  - max concurrent streams
-  - max frame size
-  - size for header block buffers?
-  - initial window size
 - client
-- send the max concurrent streams setting such that h2spec can test it.
 

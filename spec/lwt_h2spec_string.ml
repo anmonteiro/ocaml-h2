@@ -100,7 +100,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
   in
 
   Http2af_lwt_unix.Server.create_connection_handler
-    ?config:None
+    ~config:{ Http2af.Config.default with max_concurrent_streams = 2 }
     ~request_handler
     ~error_handler
 

@@ -23,6 +23,9 @@ type t =
   ; request_handler                : request_handler
   ; error_handler                  : error_handler
   ; streams                        : Streams.t
+    (* Number of currently open client streams. Used for MAX_CONCURRENT_STREAMS
+     * bookkeeping *)
+  ; mutable current_client_streams : int
   ; mutable max_client_stream_id   : Stream_identifier.t
   ; mutable max_pushed_stream_id   : Stream_identifier.t
   ; mutable receiving_headers_for_stream : Stream_identifier.t option
@@ -159,6 +162,9 @@ let report_exn t _exn =
     ()
     (* set_error_and_handle t (`Exn exn) *)
 
+let on_stream_closed t = fun () ->
+  t.current_client_streams <- t.current_client_streams - 1
+
 let create_push_stream ({ max_pushed_stream_id; _ } as t) = fun () ->
   if not t.settings.enable_push then
     (* From RFC7540§6.6:
@@ -173,6 +179,7 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) = fun () ->
         ~max_frame_size:t.settings.max_frame_size
         t.writer
         t.error_handler
+        (on_stream_closed t)
     in
     Streams.add t.streams
       (* TODO: *)
@@ -212,57 +219,83 @@ let method_and_path_or_malformed headers =
   | _ -> None
 
 let handle_headers t ~end_stream reqd headers =
-  let active_stream =
-    Reqd.create_active_stream
-      t.encoder
-      t.config.response_body_buffer_size
-      (create_push_stream t)
-  in
-  reqd.Reqd.stream_state <- Open (FullHeaders active_stream);
-  t.receiving_headers_for_stream <- None;
-  match method_and_path_or_malformed headers with
-  | None ->
-    (* From RFC7540§8.1.2.6:
-         For malformed requests, a server MAY send an HTTP response prior to
-         closing or resetting the stream. *)
-    set_error_and_handle t reqd `Bad_request ProtocolError;
-  | Some (meth, path) ->
-    match end_stream, Message.unique_content_length_values headers with
-    | true, [ content_length ]
-      when
-        Int64.compare
-          (Message.content_length_of_string content_length)
-          0L
-        != 0 ->
+  (* From RFC7540§5.1.2:
+       Endpoints MUST NOT exceed the limit set by their peer. An endpoint that
+       receives a HEADERS frame that causes its advertised concurrent stream
+       limit to be exceeded MUST treat this as a stream error (Section 5.4.2)
+       of type PROTOCOL_ERROR or REFUSED_STREAM. *)
+  if t.current_client_streams + 1 > t.settings.max_concurrent_streams then
+    (* From RFC7540§8.1.4:
+         The REFUSED_STREAM error code can be included in a RST_STREAM frame to
+         indicate that the stream is being closed prior to any processing
+         having occurred. Any request that was sent on the reset stream can be
+         safely retried. *)
+    report_stream_error t reqd.Reqd.id Error.RefusedStream
+  else begin
+    (* From RFC7540§5.1.2:
+         Streams that are in the "open" state or in either of the "half-closed"
+         states count toward the maximum number of streams that an endpoint is
+         permitted to open. *)
+    let active_stream =
+      Reqd.create_active_stream
+        t.encoder
+        t.config.response_body_buffer_size
+        (create_push_stream t)
+    in
+    reqd.stream_state <- Open (FullHeaders active_stream);
+    t.receiving_headers_for_stream <- None;
+    t.current_client_streams <- t.current_client_streams + 1;
+    match method_and_path_or_malformed headers with
+    | None ->
       (* From RFC7540§8.1.2.6:
-           A request or response is also malformed if the value of a
-           content-length header field does not equal the sum of the DATA
-           frame payload lengths that form the body. *)
-      set_error_and_handle t reqd `Bad_request ProtocolError
-    | _ ->
-      let request = Request.create ~headers (Httpaf.Method.of_string meth) path in
-      let request_body = if end_stream then
-        Body.empty
-      else
-        Body.create Bigstringaf.empty
-      in
-      let new_stream_state =
-        Reqd.create_active_request active_stream request request_body
-      in
-      if end_stream then begin
-        (* From RFC7540§5.1:
-             [...] an endpoint receiving an END_STREAM flag causes the stream
-             state to become "half-closed (remote)". *)
-        reqd.stream_state <- HalfClosed new_stream_state;
-        (* Deliver EOF to the request body, as the handler might be waiting on
-         * it to produce a response. *)
-        Body.close_reader request_body;
-      end else begin
-        reqd.stream_state <- Open (ActiveRequest new_stream_state);
-      end;
-      t.request_handler reqd;
-      wakeup_writer t
-
+           For malformed requests, a server MAY send an HTTP response prior to
+           closing or resetting the stream. *)
+      set_error_and_handle t reqd `Bad_request ProtocolError;
+    | Some (meth, path) ->
+      match end_stream, Message.unique_content_length_values headers with
+      | true, [ content_length ]
+        when
+          Int64.compare
+            (Message.content_length_of_string content_length)
+            0L
+          != 0 ->
+        (* From RFC7540§8.1.2.6:
+             A request or response is also malformed if the value of a
+             content-length header field does not equal the sum of the DATA
+             frame payload lengths that form the body. *)
+        set_error_and_handle t reqd `Bad_request ProtocolError
+      | _ ->
+        let request =
+          Request.create ~headers (Httpaf.Method.of_string meth) path
+        in
+        let request_body = if end_stream then
+          Body.empty
+        else
+          (* TODO: Initializing the request body with an empty bigstring trades
+           * an allocation here vs. when the first data frame arrives. This
+           * would probably make sense if this were HTTP/1 because we wouldn't
+           * know whether the request had a body or not, but in HTTP/2 we
+           * clearly do. It's probably fine to just allocate here if we know
+           * we're gonna get data. *)
+          Body.create Bigstringaf.empty
+        in
+        let new_stream_state =
+          Reqd.create_active_request active_stream request request_body
+        in
+        if end_stream then begin
+          (* From RFC7540§5.1:
+               [...] an endpoint receiving an END_STREAM flag causes the stream
+               state to become "half-closed (remote)". *)
+          reqd.stream_state <- HalfClosed new_stream_state;
+          (* Deliver EOF to the request body, as the handler might be waiting
+           * on it to produce a response. *)
+          Body.close_reader request_body;
+        end else begin
+          reqd.stream_state <- Open (ActiveRequest new_stream_state);
+        end;
+        t.request_handler reqd;
+        wakeup_writer t
+  end
 let handle_headers_block t ?(is_trailers=false) reqd partial_headers flags headers_block =
   let open AB in
   let end_headers = Flags.test_end_header flags in
@@ -335,7 +368,7 @@ let open_stream t frame_header ?priority headers_block =
          identifier MUST respond with a connection error (Section 5.4.1) of
          type PROTOCOL_ERROR. *)
     report_connection_error t Error.ProtocolError
-  else
+  else begin
     (* From RFC7540§6.2:
          The HEADERS frame (type=0x1) is used to open a stream (Section 5.1), and
          additionally carries a header block fragment. HEADERS frames can be sent
@@ -348,6 +381,7 @@ let open_stream t frame_header ?priority headers_block =
           ~max_frame_size:t.settings.max_frame_size
           t.writer
           t.error_handler
+          (on_stream_closed t)
       in
       Streams.add t.streams
         ?priority
@@ -385,6 +419,7 @@ let open_stream t frame_header ?priority headers_block =
     if not end_headers then
       t.receiving_headers_for_stream <- Some stream_id;
     handle_headers_block t reqd partial_headers flags headers_block
+  end
 
 let process_trailer_headers t reqd response_state frame_header headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
@@ -654,6 +689,7 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
             ~max_frame_size:t.settings.max_frame_size
             t.writer
             t.error_handler
+            (on_stream_closed t)
         in
         Streams.add t.streams
           ~priority
@@ -730,11 +766,6 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
            parameter. Parameters are processed in the order in which they appear,
            and a receiver of a SETTINGS frame does not need to maintain any state
            other than the current value of its parameters. *)
-      Printf.eprintf "SETTINGS...\n%!";
-      Printf.eprintf "%s\n%!"
-        (settings
-        |> List.map (fun (k, v) -> Printf.sprintf "%d: %d" (Settings.from_key k) v)
-        |> String.concat ";");
       List.iter (function
         | Settings.HeaderTableSize, x ->
           (* From RFC7540§6.5.2:
@@ -748,7 +779,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
            * call to `Settings.check_settings_list` above. *)
           t.settings.enable_push <- x == 1
         | MaxConcurrentStreams, x ->
-          t.settings.max_concurrent_streams <- Some x
+          t.settings.max_concurrent_streams <- x
         | InitialWindowSize, new_val ->
           (* From RFC7540§6.9.2:
                [...] a SETTINGS frame can alter the initial flow-control window
@@ -968,32 +999,57 @@ let default_error_handler ?request:_ error handle =
 let create ?(config=Config.default) ?(error_handler=default_error_handler) request_handler =
   let
     { Config
-    . read_buffer_size
-    ; response_buffer_size
+    . response_buffer_size
     ; _ } = config
   in
   let settings =
     { Settings
     . default_settings
-    with max_frame_size = read_buffer_size
+    with max_frame_size = config.read_buffer_size
+    ; max_concurrent_streams = config.max_concurrent_streams
+    ; initial_window_size = config.initial_window_size
+    ; enable_push = config.enable_server_push
     }
   in
-  let writer = Writer.create ~buffer_size:response_buffer_size () in
+  let writer = Writer.create response_buffer_size in
   let rec init_handler = fun ({ Frame.frame_header; _ } as recv_frame) settings_list ->
     let t = Lazy.force t in
-    t.reader <- make_active_frame_reader t;
     Printf.eprintf "BEING CALLED. %d %d %d\n%!"
       (frame_header.stream_id |> Int32.to_int)
       frame_header.payload_length
       (List.length settings_list);
-    (* TODO: set settings for the connection, including adding inflow (send
-     * window_update frame) if more is configured. *)
-    (* From RFC7540§3.5:
-         The server connection preface consists of a potentially empty
-         SETTINGS frame (Section 6.5) that MUST be the first frame the
-         server sends in the HTTP/2 connection. *)
-    (* TODO: only send settings if different than the default. *)
-    let settings = Settings.[ MaxFrameSize, settings.max_frame_size ] in
+    t.reader <- make_active_frame_reader t;
+    (* Check if the settings for the connection are different than the default
+     * HTTP/2 settings. In the event that they are, we need to send a non-empty
+     * SETTINGS frame advertising our configuration. *)
+    let settings =
+      let settings_list =
+        if settings.max_frame_size <> Settings.default_settings.max_frame_size then
+          Settings.[ MaxFrameSize, settings.max_frame_size ]
+        else
+          []
+      in
+      let settings_list =
+        if settings.max_concurrent_streams <> Settings.default_settings.max_concurrent_streams then
+          Settings.(MaxConcurrentStreams, settings.max_concurrent_streams) :: settings_list
+        else
+          settings_list
+      in
+      let settings_list =
+        if settings.initial_window_size <> Settings.default_settings.initial_window_size then
+          Settings.(InitialWindowSize, settings.initial_window_size) :: settings_list
+        else
+          settings_list
+      in
+      let settings_list =
+        if settings.enable_push <> Settings.default_settings.enable_push then
+          Settings.(EnablePush, if settings.enable_push then 1 else 0) :: settings_list
+        else
+          settings_list
+      in
+      settings_list
+    in
+    (* TODO: add inflow (send window_update frame) if more is configured. *)
     (* This is the connection preface. We don't set the ack flag. *)
     let frame_info =
       Writer.make_frame_info
@@ -1001,13 +1057,19 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
         Stream_identifier.connection
     in
     (* This is our SETTINGS frame. *)
+    (* From RFC7540§3.5:
+         The server connection preface consists of a potentially empty
+         SETTINGS frame (Section 6.5) that MUST be the first frame the
+         server sends in the HTTP/2 connection. *)
     Writer.write_settings t.writer frame_info settings;
     (* Now process the client's SETTINGS frame. `process_settings_frame` will
      * take care of calling `wakeup_writer`. *)
     process_settings_frame t recv_frame settings_list
   and frame_handler t = function
+    | Error e ->
+      handle_error t e
     | Ok ({ Frame.frame_payload; frame_header } as frame) ->
-      begin match t.receiving_headers_for_stream with
+      match t.receiving_headers_for_stream with
       | Some stream_id
         when not (Stream_identifier.(stream_id === frame_header.stream_id)) ||
              frame_header.frame_type != Continuation ->
@@ -1023,10 +1085,7 @@ END_HEADERS flag set must be followed by a CONTINUATION frame for the same \
 stream"
           Error.ProtocolError
       | _ ->
-          Printf.eprintf "FRAME: %d; shutdown? %B\n%!"
-            (frame_header.frame_type |> Frame.FrameType.serialize)
-            (is_shutdown t);
-        begin match frame_payload with
+        match frame_payload with
         | Headers (priority, headers_block) ->
           process_headers_frame t frame ?priority headers_block
         | Data bs ->
@@ -1056,11 +1115,6 @@ stream"
           (* From RFC7540§5.1:
                Frames of unknown types are ignored. *)
           ()
-        end
-      end
-    | Error e ->
-        Printf.eprintf "Handling error here\n%!";
-        handle_error t e
   and t = lazy
   { settings
   ; reader                    = New (Reader.connection_preface init_handler)
@@ -1070,6 +1124,7 @@ stream"
   ; request_handler
   ; error_handler
   ; streams                   = Streams.make_root ()
+  ; current_client_streams    = 0
   ; max_client_stream_id      = 0l
   ; max_pushed_stream_id      = 0l
   ; receiving_headers_for_stream = None

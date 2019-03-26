@@ -90,6 +90,7 @@ and t =
   ; mutable stream_state   : stream_state
     (* The largest frame payload we're allowed to write. *)
   ; mutable max_frame_size : int
+  ; on_stream_closed       : unit -> unit
   }
 
 let default_waiting = Sys.opaque_identity (fun () -> ())
@@ -115,13 +116,14 @@ let create_active_stream encoder response_body_buffer_size create_push_stream =
   ; create_push_stream
   }
 
-let create id ~max_frame_size writer error_handler =
+let create id ~max_frame_size writer error_handler on_stream_closed =
   { id
   ; writer
   ; error_handler
   ; stream_state   = Idle
   ; error_code     = `Ok, None
   ; max_frame_size
+  ; on_stream_closed
   }
 
 let done_waiting when_done_waiting =
@@ -373,7 +375,8 @@ let push t request =
   unsafe_push t request
 
 let finish_stream t reason =
-  t.stream_state <- Closed { reason; ttl = initial_ttl }
+  t.stream_state <- Closed { reason; ttl = initial_ttl };
+  t.on_stream_closed ()
 
 let reset_stream t error_code =
   let frame_info = Writer.make_frame_info t.id in
@@ -476,8 +479,10 @@ let on_more_output_available t f =
   | HalfClosed { response_state; _ } ->
     begin match response_state with
     | Waiting when_done_waiting ->
-      if not (!when_done_waiting == default_waiting) then
-        failwith "httpaf.Reqd.on_more_output_available: only one callback can be registered at a time";
+      (* Due to the flow-control window, this function might be called when
+       * another callback is already stored. We don't enforce that the
+       * currently stored callback is equal to `default_waiting` because it is
+       * OK for that not to happen. *)
       when_done_waiting := f
     | Streaming(_, response_body) ->
       Body.when_ready_to_write response_body f

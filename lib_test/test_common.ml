@@ -22,6 +22,9 @@ let hex_of_string s =
   let (`Hex hex) = Hex.of_string s in
   String.uppercase_ascii hex
 
+let make_iovecs bs =
+  [{ Httpaf.IOVec.buffer = bs; off = 0; len = Bigstringaf.length bs }]
+
 let write_frame ?padding t { Frame.frame_header; frame_payload } =
   let open Serialize in
   let { Frame.flags; stream_id; _ } = frame_header in
@@ -31,7 +34,7 @@ let write_frame ?padding t { Frame.frame_header; frame_payload } =
     Writer.schedule_data t info body
   | Headers (priority, headers_block) ->
     (* Block already HPACK-encoded. *)
-    write_headers_frame t.encoder info ?priority headers_block
+    write_headers_frame t.encoder info ?priority (make_iovecs headers_block)
   | Priority p ->
     Writer.write_priority t info p
   | RSTStream e ->
@@ -39,7 +42,7 @@ let write_frame ?padding t { Frame.frame_header; frame_payload } =
   | Settings settings ->
     Writer.write_settings t info settings
   | PushPromise (promised_id, header_block) ->
-    write_push_promise_frame t.encoder info ~promised_id header_block
+    write_push_promise_frame t.encoder info ~promised_id (make_iovecs header_block)
   | Ping payload ->
     Writer.write_ping t info payload
   | GoAway (last_stream_id, error, debug_data) ->
@@ -47,14 +50,14 @@ let write_frame ?padding t { Frame.frame_header; frame_payload } =
   | WindowUpdate window_size ->
     Writer.write_window_update t info window_size
   | Continuation header_block ->
-    write_continuation_frame t.encoder info header_block
+    write_continuation_frame t.encoder info (make_iovecs header_block)
   | Unknown _ ->
     assert false
 
 let serialize_frame ?padding frame =
   let open Serialize in
   let { Frame.payload_length; _ } = frame.Frame.frame_header in
-  let writer = Writer.create ~buffer_size:payload_length () in
+  let writer = Writer.create payload_length in
   write_frame ?padding writer frame;
   Faraday.serialize_to_bigstring (Writer.faraday writer)
 

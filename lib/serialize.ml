@@ -306,13 +306,12 @@ module Writer = struct
     ; headers_block_buffer : Bigstringaf.t
     }
 
-  let create ?(buffer_size=0x800) () =
+  let create buffer_size =
     let buffer = Bigstringaf.create buffer_size in
     let encoder = Faraday.of_bigstring buffer in
     { buffer
     ; encoder
     ; drained_bytes = 0
-      (* TODO: Do we also wanna let this be configurable? *)
     ; headers_block_buffer = Bigstringaf.create 0x1000
     }
 
@@ -387,13 +386,12 @@ module Writer = struct
       else
         max_frame_payload
       in
-      let _op = Faraday.serialize faraday (fun iovecs ->
+      ignore (Faraday.serialize faraday (fun iovecs ->
         write_frame_fn t.encoder
           frame_info
           ~len:headers_block_len
           iovecs;
-          `Ok headers_block_len)
-      in
+          `Ok headers_block_len));
       let rec loop remaining =
         if max_frame_payload < remaining then begin
           (* Note: Don't reuse flags from frame info as CONTINUATION frames
@@ -405,13 +403,12 @@ module Writer = struct
                  END_HEADERS (0x4): When set, bit 2 indicates that this frame
                  ends a header block (Section 4.3). *)
           let frame_info = { frame_info with flags = Flags.default_flags } in
-          let _op = Faraday.serialize faraday (fun iovecs ->
+          ignore (Faraday.serialize faraday (fun iovecs ->
             write_continuation_frame t.encoder
               frame_info
               ~len:max_frame_payload
               iovecs;
-              `Ok max_frame_payload)
-          in
+              `Ok max_frame_payload));
           loop (remaining - max_frame_payload)
         end else begin
           let frame_info =
@@ -419,14 +416,12 @@ module Writer = struct
             with flags = Flags.(set_end_header default_flags)
             }
           in
-          let _op = Faraday.serialize faraday (fun iovecs ->
+          ignore (Faraday.serialize faraday (fun iovecs ->
             write_continuation_frame t.encoder
               frame_info
               ~len:remaining
               iovecs;
-            `Ok remaining)
-          in
-          ()
+            `Ok remaining))
         end
       in
       loop (block_size - headers_block_len);
@@ -436,12 +431,10 @@ module Writer = struct
         with flags = Flags.set_end_header frame_info.flags
         }
       in
-      let _op = Faraday.serialize faraday (fun iovecs ->
+      ignore (Faraday.serialize faraday (fun iovecs ->
         let len = Httpaf.IOVec.lengthv iovecs in
         write_frame_fn t.encoder frame_info ~len iovecs;
-        `Ok len)
-      in
-      ()
+        `Ok len))
     end
 
   let encode_headers hpack_encoder faraday headers =

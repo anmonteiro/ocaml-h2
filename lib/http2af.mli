@@ -429,10 +429,13 @@ end
 (** {2 Buffer Size Configuration} *)
 module Config : sig
   type t =
-    { read_buffer_size          : int (** Default is [4096] *)
-    ; request_body_buffer_size  : int (** Default is [4096] *)
-    ; response_buffer_size      : int (** Default is [1024] *)
-    ; response_body_buffer_size : int (** Default is [4096] *)
+    { read_buffer_size          : int  (** Defaults to [16384] *)
+    ; request_body_buffer_size  : int  (** Defaults to [4096] *)
+    ; response_buffer_size      : int  (** Defaults to [1024] *)
+    ; response_body_buffer_size : int  (** Defaults to [4096] *)
+    ; enable_server_push        : bool (** Defaults to [true] *)
+    ; max_concurrent_streams    : int  (** Defaults to [] *)
+    ; initial_window_size       : int  (** Defaults to [] *)
     }
 
   val default : t
