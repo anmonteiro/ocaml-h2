@@ -46,9 +46,6 @@ let is_closed t =
 let is_shutdown t =
   Reader.is_closed (reader t) && Writer.is_closed t.writer
 
-(* let is_waiting t =
-  not (is_shutdown t) && Hashtbl.length t.streams == 0 *)
-
 let is_active t =
   match t.reader with
   | Active _ -> true
@@ -296,6 +293,7 @@ let handle_headers t ~end_stream reqd headers =
         t.request_handler reqd;
         wakeup_writer t
   end
+
 let handle_headers_block t ?(is_trailers=false) reqd partial_headers flags headers_block =
   let open AB in
   let end_headers = Flags.test_end_header flags in
@@ -330,10 +328,6 @@ let handle_headers_block t ?(is_trailers=false) reqd partial_headers flags heade
         if Headers.trailers_valid headers then begin
           Reqd.deliver_trailer_headers reqd headers;
           let request_body = Reqd.request_body reqd in
-          (* TODO: should we only give back flow control here? there's a potential
-           * flow control issue right now where we're handing out connection-level
-           * flow control tokens on the receipt of every DATA frame. This might
-           * allow clients to send unbounded bytes. *)
           Body.close_reader request_body;
         end else begin
           (* From RFC7540§8.1.2.1:
@@ -584,6 +578,10 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
               set_error_and_handle t reqd `Bad_request ProtocolError;
           | _ ->
             let end_stream = Flags.test_end_stream flags in
+            (* TODO: should we only give back flow control here? there's a potential
+             * flow control issue right now where we're handing out connection-level
+             * flow control tokens on the receipt of every DATA frame. This might
+             * allow clients to send unbounded bytes. *)
             if end_stream then begin
               (* From RFC7540§6.1:
                    When set, bit 0 indicates that this frame is the last that
@@ -1179,7 +1177,6 @@ let read_with_more t bs ~off ~len more =
   (* if is_active t then
     Reqd.flush_request_body (current_reqd_exn t); *)
   Reader.read_with_more (reader t) bs ~off ~len more
-;;
 
 let read t bs ~off ~len =
   read_with_more t bs ~off ~len Incomplete
@@ -1189,7 +1186,6 @@ let read_eof t bs ~off ~len =
 
 let yield_reader t k =
   on_wakeup_reader t k
-;;
 
 let flush_response_body t =
   if is_active t then

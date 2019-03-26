@@ -34,6 +34,7 @@ let test_reqd stream_id =
     stream_id
     Serialize.Writer.(create 0x400)
     default_error_handler
+    ignore
 
 let repeat (Streams.PriorityTreeNode.Connection root) queue num =
   let rec loop q n acc =
