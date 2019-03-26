@@ -1,0 +1,20 @@
+opam-version: "2.0"
+name: "hpack"
+maintainer: "Antonio Nuno Monteiro <anmonteiro@gmail.com>"
+authors: [ "Antonio Nuno Monteiro <anmonteiro@gmail.com>" ]
+homepage: "https://github.com/anmonteiro/http2af"
+license: "MIT"
+dev-repo: "git+https://github.com/anmonteiro/http2af.git"
+bug-reports: "https://github.com/anmonteiro/http2af/issues"
+depends: [
+  "ocaml" {>= "4.03.0"}
+  "dune" {build}
+  "yojson" {with-test}
+  "hex" {with-test}
+  "angstrom"
+  "faraday"
+]
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+  ["dune" "runtest" "-p" name "-j" jobs] {with-test}
+]

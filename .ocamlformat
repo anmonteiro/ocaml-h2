@@ -1,0 +1,3 @@
+profile = janestreet
+break-cases = all
+cases-exp-indent = 2

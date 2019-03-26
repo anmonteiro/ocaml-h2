@@ -1,0 +1,41 @@
+(executables
+ (libraries bigstringaf http2af alcotest test_common)
+ (modules test_http2af test_priority test_httpaf_server test_httpaf_client simulator)
+ (names   test_http2af test_priority test_httpaf_server test_httpaf_client))
+
+(alias
+ (name runtest)
+ (deps test_priority.exe)
+ (action (run %{deps})))
+
+(alias
+ (name runtest)
+ (deps test_http2af.exe)
+ (action (run %{deps})))
+
+; (alias
+ ; (name runtest)
+ ; (deps test_httpaf_server.exe)
+ ; (action (run %{deps})))
+
+; (alias
+ ; (name runtest)
+ ; (deps test_httpaf_client.exe)
+ ; (action (run %{deps})))
+
+(library
+  (name test_common)
+  (libraries bigstringaf hex http2af)
+  (modules test_common))
+
+(executable
+  (name test_frames)
+  (libraries http2af alcotest yojson hex angstrom test_common)
+  (modules test_frames))
+
+(alias
+ (name runtest)
+ (deps (:test_exe test_frames.exe)
+       (source_tree "http2-frame-test-case/"))
+ (action (run %{test_exe})))
+

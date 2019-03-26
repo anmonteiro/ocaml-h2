@@ -1,0 +1,4 @@
+(library
+ (name http2af_mirage)
+ (public_name http2af-mirage)
+ (libraries http2af http2af-lwt lwt mirage-conduit cstruct))

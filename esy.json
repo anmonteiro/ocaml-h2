@@ -1,0 +1,61 @@
+{
+  "name": "http2af",
+  "version": "0.1.0",
+  "description": "An HTTP/2 library for OCaml based on Angstrom and Faraday",
+  "author": "António N. Monteiro <anmonteiro@gmail.com>",
+  "license": "MIT",
+  "repository": "git+https://github.com/anmonteiro/http2af",
+  "dependencies": {
+    "ocaml": " >= 4.3.0",
+    "@opam/dune": "*",
+    "@opam/lwt": "4.1.0",
+    "@opam/bigstringaf": "*",
+    "@opam/angstrom": "*",
+    "@opam/faraday": "*",
+    "@opam/psq": "*",
+    "@opam/mirage-conduit": "*",
+    "@opam/faraday-lwt-unix": "*",
+    "@opam/ppx_sexp_conv": "*",
+    "@opam/sexplib": "v0.11.0",
+    "@opam/lwt_ssl": "*",
+    "@opam/conf-libev": "*",
+    "@opam/httpaf": "*"
+  },
+  "devDependencies": {
+    "@opam/alcotest": "*",
+    "@opam/hex": "*",
+    "@opam/merlin": "*",
+    "@opam/ocamlformat": "*"
+  },
+  "resolutions": {
+    "@opam/conf-libev": "esy-packages/libev:package.json#86d244e",
+    "@opam/conf-autoconf": "esy-packages/esy-autoconf:package.json#71a8836",
+    "@opam/conf-gmp": {
+      "source": "esy-packages/esy-gmp:package.json#03309d6",
+      "override": {
+        "exportedEnv": {
+          "CFLAGS": {
+            "scope": "global",
+            "val": "-I#{self.install / 'include'} $CFLAGS"
+          },
+          "LDFLAGS":{
+            "scope": "global",
+            "val": "-L#{self.lib} $LDFLAGS"
+          }
+        }
+      }
+    },
+    "@opam/conf-openssl": {
+      "source": "no-source:",
+      "override": {
+        "dependencies": {
+          "@opam/conf-pkg-config": "*",
+          "@esy-packages/esy-openssl": "*"
+        }
+      }
+    },
+    "@esy-packages/esy-openssl": "anmonteiro/esy-openssl#ff5baf956",
+    "@opam/ssl": "anmonteiro/ocaml-ssl:ssl.opam#917b768",
+    "@opam/httpaf": "inhabitedtype/httpaf:httpaf.opam#53042e5"
+  }
+}

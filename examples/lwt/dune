@@ -1,0 +1,7 @@
+(executables
+ (names lwt_echo_server lwt_echo_server2 lwt_https_server)
+ (libraries http2af httpaf http2af-lwt-unix lwt lwt.unix))
+
+(alias
+ (name examples)
+ (deps (glob_files *.exe)))

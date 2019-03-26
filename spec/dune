@@ -1,0 +1,3 @@
+(executables
+  (names lwt_h2spec_string lwt_h2spec_bigstring lwt_h2spec_streaming)
+  (libraries lwt.unix http2af http2af-lwt-unix))

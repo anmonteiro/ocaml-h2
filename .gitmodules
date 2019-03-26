@@ -1,0 +1,6 @@
+[submodule "hpack/test/hpack-test-case"]
+	path = hpack/test/hpack-test-case
+	url = git@github.com:http2jp/hpack-test-case.git
+[submodule "lib_test/http2-frame-test-case"]
+	path = lib_test/http2-frame-test-case
+	url = git@github.com:http2jp/http2-frame-test-case.git

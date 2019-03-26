@@ -1,0 +1,30 @@
+{
+  "name": "@esy-packages/libev",
+  "version": "0.1.0",
+  "description": "libev packaged for Esy",
+  "license": "GPLv2",
+  "source": "http://dist.schmorp.de/libev/Attic/libev-4.25.tar.gz#f78a1338a0b975fb396b0b6558709211b6ccd794",
+  "override": {
+    "build": [
+        ["bash", "-c", "#{os == 'windows' ? './configure mingw64 --prefix=$cur__install' : './configure --prefix=$cur__install'}"],
+        ["make"]
+    ],
+    "install": [
+      ["make", "install"]
+    ],
+    "buildsInSource": true,
+    "exportedEnv": {
+      "LIBEV_LIBS": {
+          "val": "-L#{self.lib} -lev",
+          "scope": "global"
+      },
+      "LIBEV_CFLAGS": {
+          "val": "-I#{self.install / 'include'}",
+          "scope": "global"
+      }
+    }
+  },
+  "dependencies": {
+
+  }
+}

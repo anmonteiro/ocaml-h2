@@ -1,0 +1,11 @@
+(executable
+  (name test)
+  (libraries hpack yojson hex alcotest))
+
+(include_subdirs unqualified)
+
+(alias
+  (name slowtests)
+  (package http2af)
+  (deps (:test_exe test.exe) (source_tree "hpack-test-case/"))
+  (action (run %{test_exe})))
