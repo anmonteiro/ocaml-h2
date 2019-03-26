@@ -39,7 +39,7 @@ let write_frame_with_padding t info frame_type length writer =
     let writer' t =
       write_uint8 t pad_length;
       writer t;
-      write_bigstring t padding
+      schedule_bigstring ~off:0 ~len:pad_length t padding
     in
     let header =
       { Frame
@@ -86,16 +86,33 @@ let write_priority t {Priority.exclusive; stream_dependency; weight} =
     Note: we store priority with values from 1 to 256, so decrement here. *)
   write_uint8 t (weight - 1)
 
-let write_headers_frame t info ?priority ?off ?len headers_block =
+let bounded_schedule_iovecs t ~len iovecs =
+  let rec loop t remaining iovecs =
+    match remaining, iovecs with
+    | 0, _
+    | _, [] -> ()
+    | remaining, { Httpaf.IOVec.buffer; off; len }::xs ->
+      if remaining < len then
+        schedule_bigstring t ~off ~len:remaining buffer
+      else begin
+        schedule_bigstring t ~off ~len buffer;
+        loop t (remaining - len) xs
+      end
+  in
+  loop t len iovecs
+
+let write_headers_frame t info ?priority ?len iovecs =
   let len = match len with
   | Some len -> len
-  | None -> Bigstringaf.length headers_block
+  | None -> Httpaf.IOVec.lengthv iovecs
   in
   match priority with
   | None ->
     (* See RFC7540§6.3:
          Just the Header Block Fragment length if no priority. *)
-    let writer t = schedule_bigstring ?off ~len t headers_block in
+    let writer t =
+      bounded_schedule_iovecs t ~len iovecs
+    in
     write_frame_with_padding t info Headers len writer
   | Some priority ->
     (* See RFC7540§6.2:
@@ -105,7 +122,7 @@ let write_headers_frame t info ?priority ?off ?len headers_block =
     let info' = { info with flags = Flags.set_priority info.flags } in
     let writer t =
       write_priority t priority;
-      schedule_bigstring t ?off ~len headers_block
+      bounded_schedule_iovecs t ~len iovecs
     in
     write_frame_with_padding t info' Headers payload_length writer
 
@@ -161,10 +178,10 @@ let write_settings_frame t info settings =
   write_frame_header t header;
   write_settings_payload settings
 
-let write_push_promise_frame t info ~promised_id ?off ?len headers_block =
+let write_push_promise_frame t info ~promised_id ?len iovecs =
   let len = match len with
   | Some len -> len
-  | None -> Bigstringaf.length headers_block
+  | None -> Httpaf.IOVec.lengthv iovecs
   in
   let payload_length =
     (* From RFC7540§6.6:
@@ -175,26 +192,28 @@ let write_push_promise_frame t info ~promised_id ?off ?len headers_block =
   in
   let writer t =
     BE.write_uint32 t promised_id;
-    schedule_bigstring ?off ~len t headers_block
+    bounded_schedule_iovecs t ~len iovecs
   in
   write_frame_with_padding t info PushPromise payload_length writer
 
 let write_ping_frame t info payload =
+  (* From RFC7540§6.7:
+       In addition to the frame header, PING frames MUST contain 8 octets of
+       opaque data in the payload. *)
+  let payload_length = 8 in
   let header =
     { Frame
     . flags = info.flags
     ; stream_id = info.stream_id
-      (* From RFC7540§6.7:
-           In addition to the frame header, PING frames MUST contain 8 octets
-           of opaque data in the payload. *)
-    ; payload_length = 8
+    ; payload_length
     ; frame_type = Ping
     }
   in
   write_frame_header t header;
-  write_bigstring t payload
+  schedule_bigstring ~off:0 ~len:payload_length t payload
 
-let write_go_away_frame t info stream_id error_code_id debug_data =
+let write_go_away_frame t info stream_id error_code debug_data =
+  let debug_data_len = Bigstringaf.length debug_data in
   let header =
     { Frame
     . flags = info.flags
@@ -202,14 +221,14 @@ let write_go_away_frame t info stream_id error_code_id debug_data =
       (* See RFC7540§6.8:
            Last-Stream-ID (4 octets) + Error Code (4 octets) + Additional Debug
            Data (opaque) *)
-    ; payload_length = 8 + Bigstringaf.length debug_data
+    ; payload_length = 8 + debug_data_len
     ; frame_type = GoAway
     }
   in
   write_frame_header t header;
-  BE.write_uint32 t stream_id ;
-  BE.write_uint32 t (Error.serialize error_code_id) ;
-  write_bigstring t debug_data
+  BE.write_uint32 t stream_id;
+  BE.write_uint32 t (Error.serialize error_code);
+  schedule_bigstring t ~off:0 ~len:debug_data_len debug_data
 
 let write_window_update_frame t info window_size =
   let header =
@@ -228,10 +247,10 @@ let write_window_update_frame t info window_size =
   write_frame_header t header;
   BE.write_uint32 t (Int32.of_int window_size)
 
-let write_continuation_frame t info ?off ?len headers_block =
+let write_continuation_frame t info ?len iovecs =
   let len = match len with
   | Some len -> len
-  | None -> Bigstringaf.length headers_block
+  | None -> Httpaf.IOVec.lengthv iovecs
   in
   let header =
     { Frame
@@ -242,7 +261,7 @@ let write_continuation_frame t info ?off ?len headers_block =
     }
   in
   write_frame_header t header;
-  schedule_bigstring t ?off ~len headers_block
+  bounded_schedule_iovecs t ~len iovecs
 
 (* TODO: write proper settings frame. This function should only write the preface,
  * and `Reader.write_connection_preface` should additionally write the settings.*)
@@ -349,11 +368,10 @@ module Writer = struct
     ?(has_priority=false)
     ~(write_frame_fn : Faraday.t ->
       frame_info ->
-      ?off:int ->
       ?len:int ->
-      Bigstringaf.t -> unit)
-    headers_block =
-    let block_size = Bigstringaf.length headers_block in
+      Bigstringaf.t iovec list -> unit)
+    faraday =
+    let block_size = Faraday.pending_bytes faraday in
     let total_length = if has_priority then
       (* See RFC7540§6.2:
            Exclusive Bit & Stream Dependency (4 octets) + Weight (1 octet) +
@@ -369,12 +387,14 @@ module Writer = struct
       else
         max_frame_payload
       in
-      write_frame_fn t.encoder
-        frame_info
-        ~off:0
-        ~len:headers_block_len
-        headers_block;
-      let rec loop ~off remaining =
+      let _op = Faraday.serialize faraday (fun iovecs ->
+        write_frame_fn t.encoder
+          frame_info
+          ~len:headers_block_len
+          iovecs;
+          `Ok headers_block_len)
+      in
+      let rec loop remaining =
         if max_frame_payload < remaining then begin
           (* Note: Don't reuse flags from frame info as CONTINUATION frames
              only define END_HEADERS.
@@ -385,33 +405,43 @@ module Writer = struct
                  END_HEADERS (0x4): When set, bit 2 indicates that this frame
                  ends a header block (Section 4.3). *)
           let frame_info = { frame_info with flags = Flags.default_flags } in
-          write_continuation_frame t.encoder
-            frame_info
-            ~off
-            ~len:max_frame_payload
-            headers_block;
-          loop ~off:(off + max_frame_payload) (remaining - max_frame_payload)
+          let _op = Faraday.serialize faraday (fun iovecs ->
+            write_continuation_frame t.encoder
+              frame_info
+              ~len:max_frame_payload
+              iovecs;
+              `Ok max_frame_payload)
+          in
+          loop (remaining - max_frame_payload)
         end else begin
           let frame_info =
             { frame_info
             with flags = Flags.(set_end_header default_flags)
             }
           in
-          write_continuation_frame t.encoder
-            frame_info
-            ~off
-            ~len:remaining
-            headers_block;
+          let _op = Faraday.serialize faraday (fun iovecs ->
+            write_continuation_frame t.encoder
+              frame_info
+              ~len:remaining
+              iovecs;
+            `Ok remaining)
+          in
+          ()
         end
       in
-      loop ~off:headers_block_len (block_size - headers_block_len);
+      loop (block_size - headers_block_len);
     end else begin
       let frame_info =
         { frame_info
         with flags = Flags.set_end_header frame_info.flags
         }
       in
-      write_frame_fn t.encoder frame_info headers_block
+      let _op = Faraday.serialize faraday (fun iovecs ->
+        let len = Httpaf.IOVec.lengthv iovecs in
+        write_frame_fn t.encoder frame_info ~len iovecs;
+        `Ok len)
+      in
+      ()
     end
 
   let encode_headers hpack_encoder faraday headers =
@@ -443,7 +473,7 @@ module Writer = struct
       frame_info
       ~write_frame_fn:(write_headers_frame ?priority)
       ~has_priority
-      (Faraday.serialize_to_bigstring faraday)
+      faraday
 
   let write_push_promise t hpack_encoder frame_info ~promised_id request =
     let { Request.meth; target; headers } = request in
@@ -465,7 +495,7 @@ module Writer = struct
       t
       frame_info
       ~write_frame_fn:(write_push_promise_frame ~promised_id)
-      (Faraday.serialize_to_bigstring faraday)
+      faraday
 
   let write_rst_stream t frame_info e =
     write_rst_stream_frame t.encoder frame_info e
@@ -475,19 +505,7 @@ module Writer = struct
 
   let schedule_iovecs t ~len frame_info iovecs =
     let writer t ~iovecs =
-      let rec loop remaining iovecs =
-        match remaining, iovecs with
-        | 0, _
-        | _, [] -> ()
-        | remaining, { Httpaf.IOVec.buffer; off; len }::xs ->
-          if remaining < len then
-            schedule_bigstring t ~off ~len:remaining buffer
-          else begin
-            schedule_bigstring t ~off ~len buffer;
-            loop (remaining - len) xs
-          end
-      in
-      loop len iovecs
+      bounded_schedule_iovecs t ~len iovecs
     in
     chunk_data_frames frame_info len ~f:(fun ~off ~len frame_info ->
       write_frame_with_padding t.encoder
