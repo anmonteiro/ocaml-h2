@@ -61,6 +61,16 @@ directory structure is as follows:
   that respond with the different provided APIs to be used for conformance
   testing with the [h2spec](https://github.com/summerwind/h2spec) tool.
 
+### Cloning the repository
+
+```shell
+# Clone the repository
+$ git clone git@github.com:anmonteiro/http2af.git
+# cd into the directory and clone the submodules (http2 standard test cases)
+$ cd http2af
+$ git submodule update --init --recursive
+```
+
 ### Using OPAM
 
 To install development dependencies, pin the package from the root of the
