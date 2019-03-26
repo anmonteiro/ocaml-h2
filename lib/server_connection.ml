@@ -1049,7 +1049,6 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
       in
       settings_list
     in
-    (* TODO: add inflow (send window_update frame) if more is configured. *)
     (* This is the connection preface. We don't set the ack flag. *)
     let frame_info =
       Writer.make_frame_info
@@ -1062,6 +1061,14 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
          SETTINGS frame (Section 6.5) that MUST be the first frame the
          server sends in the HTTP/2 connection. *)
     Writer.write_settings t.writer frame_info settings;
+    (* If a higher value for initial window size is configured, add more
+     * tokens to the connection (we have no streams at this point). *)
+    if t.settings.initial_window_size > Settings.default_settings.initial_window_size then begin
+      let diff =
+        t.settings.initial_window_size - Settings.default_settings.initial_window_size
+      in
+      send_window_update t t.streams diff
+    end;
     (* Now process the client's SETTINGS frame. `process_settings_frame` will
      * take care of calling `wakeup_writer`. *)
     process_settings_frame t recv_frame settings_list
