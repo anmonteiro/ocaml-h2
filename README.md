@@ -106,10 +106,6 @@ BSD3, see LICENSE files for its text.
 
 Configs TODO:
 
-- related to above: disable flow control as a config?
-  - Deployments that do not require this capability can advertise a flow-control window of the maximum size (2^31-1) and can maintain this window by sending a WINDOW_UPDATE frame when any data is received. This effectively disables flow control for that receiver.
-- GOAWAY frames: keep state that we've received a goaway frame
-- send a goaway frame when stream ids are exhausted
-  - Stream identifiers cannot be reused. Long-lived connections can result in an endpoint exhausting the available range of stream identifiers. A client that is unable to establish a new stream identifier can establish a new connection for new streams. A server that is unable to establish a new stream identifier can send a GOAWAY frame so that the client is forced to open a new connection for new streams.
+- GOAWAY frames: keep state that we've received / sent a goaway frame
 - client
 

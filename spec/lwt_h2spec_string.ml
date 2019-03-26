@@ -100,7 +100,12 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
   in
 
   Http2af_lwt_unix.Server.create_connection_handler
-    ~config:{ Http2af.Config.default with max_concurrent_streams = 2 }
+    ~config:
+      { Http2af.Config
+      . default
+      with max_concurrent_streams = 2
+      ; initial_window_size = Int32.(to_int max_int)
+      }
     ~request_handler
     ~error_handler
 

@@ -535,7 +535,13 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
          identifier MUST respond with a connection error (Section 5.4.1) of
          type PROTOCOL_ERROR. *)
     report_connection_error t Error.ProtocolError
-  else
+  else begin
+    (* From RFC7540§6.9:
+         A receiver that receives a flow-controlled frame MUST always account
+         for its contribution against the connection flow-control window,
+         unless the receiver treats this as a connection error (Section 5.4.1).
+         This is necessary even if the frame is in error. *)
+    Streams.deduct_inflow t.streams payload_length;
     match Streams.get_node t.streams stream_id with
     | Some (Stream { reqd; _ } as stream) ->
       begin match reqd.Reqd.stream_state with
@@ -551,13 +557,6 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
               is unable to accept a frame. *)
           report_stream_error t stream_id Error.FlowControlError
         end else begin
-          (* From RFC7540§6.9:
-               A receiver that receives a flow-controlled frame MUST always
-               account for its contribution against the connection flow-control
-               window, unless the receiver treats this as a connection error
-               (Section 5.4.1). This is necessary even if the frame is in
-               error. *)
-          Streams.deduct_inflow t.streams payload_length;
           Streams.deduct_inflow stream payload_length;
           match Message.unique_content_length_values request.headers with
           | [ content_length ]
@@ -578,17 +577,17 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
               set_error_and_handle t reqd `Bad_request ProtocolError;
           | _ ->
             let end_stream = Flags.test_end_stream flags in
-            (* TODO: should we only give back flow control here? there's a potential
-             * flow control issue right now where we're handing out connection-level
-             * flow control tokens on the receipt of every DATA frame. This might
-             * allow clients to send unbounded bytes. *)
+            (* XXX(anmonteiro): should we only give back flow control after we
+             * delivered EOF to the request body? There's a potential flow
+             * control issue right now where we're handing out connection-level
+             * flow control tokens on the receipt of every DATA frame. This
+             * might allow clients to send an unbounded number of bytes. *)
             if end_stream then begin
               (* From RFC7540§6.1:
                    When set, bit 0 indicates that this frame is the last that
                    the endpoint will send for the identified stream. Setting
                    this flag causes the stream to enter one of the
                    "half-closed" states or the "closed" state (Section 5.1). *)
-              (* Format.eprintf "State: %s; output? %B@." (Reqd.pp_state reqd) (Reqd.requires_output reqd); *)
               if Reqd.requires_output reqd then begin
                 (* There's a potential race condition here if the request handler
                  * completes the response right after . *)
@@ -635,7 +634,6 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
            keeping state information for the stream. This functions effectively
            as a way of only accepting frames after an RST_STREAM from us up to
            a time limit. *)
-        ()
       | _ ->
         send_window_update t t.streams payload_length;
         (* From RFC7540§6.1:
@@ -650,6 +648,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
            a stream in this state MUST be treated as a connection error
            (Section 5.4.1) of type PROTOCOL_ERROR. *)
       report_connection_error t Error.ProtocolError
+  end
 
 let process_priority_frame t { Frame.frame_header; _ } priority =
   let { Frame.stream_id; _ } = frame_header in
