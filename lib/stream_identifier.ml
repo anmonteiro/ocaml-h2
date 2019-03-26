@@ -36,3 +36,7 @@ let[@inline] is_pushed = function
   | 0l -> false
   | n -> Int32.rem n 2l === 0l
 
+(* From RFC7540§5.1.1:
+     Streams are identified with an unsigned 31-bit integer. *)
+let max_stream_id = Int32.max_int
+

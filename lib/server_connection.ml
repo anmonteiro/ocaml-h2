@@ -168,7 +168,16 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) = fun () ->
          PUSH_PROMISE MUST NOT be sent if the SETTINGS_ENABLE_PUSH setting of
          the peer endpoint is set to 0. *)
     Error "PUSH not enabled"
-  else begin
+  else if Stream_identifier.(Int32.(add t.max_pushed_stream_id 2l) > max_stream_id) then begin
+    (* From RFC7540§5.1:
+         Stream identifiers cannot be reused. Long-lived connections can result
+         in an endpoint exhausting the available range of stream identifiers.
+         [...] A server that is unable to establish a new stream identifier can
+         send a GOAWAY frame so that the client is forced to open a new
+         connection for new streams. *)
+    report_connection_error t Error.NoError;
+    Error "Stream identifiers exhausted"
+  end else begin
     let pushed_stream_id = Int32.add max_pushed_stream_id 2l in
     t.max_pushed_stream_id <- pushed_stream_id;
     let reqd =
