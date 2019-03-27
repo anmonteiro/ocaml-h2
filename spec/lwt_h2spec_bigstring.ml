@@ -46,7 +46,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
               Bigstringaf.of_string ~off:0 ~len:(String.length res_body) res_body
             in
             Reqd.respond_with_bigstring request_descriptor response bs)
-          ~on_read:(fun request_data ~off ~len ->
+          ~on_read:(fun _request_data ~off:_ ~len:_ ->
             respond ())
       in
       respond ()

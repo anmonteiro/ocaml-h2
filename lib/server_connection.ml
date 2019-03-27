@@ -873,11 +873,10 @@ let process_ping_frame t { Frame.frame_header; _ } payload =
   end
 
 let process_goaway_frame t _frame payload =
-  let (last_stream_id, error, debug_data) = payload in
+  let (_last_stream_id, _error, debug_data) = payload in
   let len = Bigstringaf.length debug_data in
   let bytes = Bytes.create len in
   Bigstringaf.unsafe_blit_to_bytes debug_data ~src_off:0 bytes ~dst_off:0 ~len;
-  let debug_data_str = Bytes.unsafe_to_string bytes in
   (* TODO(anmonteiro): I think we need to allow lower numbered streams to
    * complete. *)
   shutdown t

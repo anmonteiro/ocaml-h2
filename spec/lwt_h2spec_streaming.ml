@@ -48,7 +48,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
                   Body.write_string response_body " data");
                 Body.flush response_body (fun () ->
                   Body.close_writer response_body)))
-          ~on_read:(fun request_data ~off ~len ->
+          ~on_read:(fun _request_data ~off:_ ~len:_ ->
             respond ())
       in
       respond ()

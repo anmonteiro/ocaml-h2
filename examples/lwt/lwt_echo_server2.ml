@@ -41,7 +41,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
 
             Reqd.respond_with_string request_descriptor response "non-empty data."
             )
-          ~on_read:(fun request_data ~off ~len ->
+          ~on_read:(fun _request_data ~off:_ ~len:_ ->
             respond ())
       in
       respond ()
