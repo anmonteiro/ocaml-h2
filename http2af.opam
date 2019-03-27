@@ -25,8 +25,9 @@ depends: [
 synopsis:
   "A high-performance, memory-efficient, and scalable HTTP/2 library for for OCaml"
 description: """
-http/af implements the HTTP/2 specification with respect to parsing,
-serialization, and connection pipelining as a state machine that is agnostic to
-the underlying IO mechanism, and is therefore portable across many platform.
-It uses the Angstrom and Faraday libraries to implement the parsing and
-serialization layers of the HTTP standard, hence the name."""
+http2/af is an implementation of the HTTP/2 specification entirely in OCaml. It
+is based on the concepts in http/af, and therefore uses the Angstrom and
+Faraday libraries to implement the parsing and serialization layers of the
+HTTP/2 standard as a state machine that is agnostic to the underlying I/O
+specifics. It also preserves the same API as http/af wherever possible.
+"""
