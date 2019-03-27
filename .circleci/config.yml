@@ -102,7 +102,9 @@ jobs:
           <<: *esy_post_build_cache_key
       - run:
           name: "Install esy + system deps"
-          command: npm install -g esy
+          command: |
+            sudo apt-get install texinfo
+            npm install -g esy
       - run:
           name: 'esy install'
           command: ~/.npm-global/bin/esy install
