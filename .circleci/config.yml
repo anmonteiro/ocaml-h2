@@ -50,6 +50,21 @@ opam-steps: &opam-steps
           dune runtest --no-buffer
           dune build @slowtests --no-buffer
     - run:
+        name: 'Conformance tests'
+        command: |
+          curl -L https://github.com/summerwind/h2spec/releases/download/v2.2.1/h2spec_linux_amd64.tar.gz | tar xvz
+          nohup dune exec spec/lwt_h2spec_string.exe &
+          ./h2spec --strict -p 8080
+          kill $(lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
+
+          nohup dune exec spec/lwt_h2spec_bigstring.exe &
+          ./h2spec --strict -p 8080
+          kill $(lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
+
+          nohup dune exec spec/lwt_h2spec_streaming.exe &
+          ./h2spec --strict -p 8080 --timeout 3
+          kill $(lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
+    - run:
         name: 'Check git is clean'
         command: git diff --exit-code
 
