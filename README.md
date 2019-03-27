@@ -23,7 +23,8 @@ opam install http2af
 
 ## Usage
 
-TBD, see the examples folder and the [`.mli` file](./lib/http2af.mli) for now.
+TBD, see the [`examples`](./examples) folder and the [`.mli`
+file](./lib/http2af.mli) for now.
 
 ## Conformance
 
