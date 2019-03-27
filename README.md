@@ -20,6 +20,23 @@ Install the library and its dependencies via [OPAM][opam]:
 ```bash
 opam install http2af
 ```
+## Conformance
+
+One of http2/af's goals is to be 100% compliant with the HTTP/2 specification.
+There are currently 3 mechanisms in place to verify such conformance:
+
+1. Unit tests using the HPACK stories in the
+   [http2jp/hpack-test-case](https://github.com/http2jp/hpack-test-case).
+   repository
+2. Unit tests using the test cases provided by the
+   [http2jp/http2-frame-test-case](https://github.com/http2jp/http2-frame-test-case)
+   repository.
+3. Automated test runs (in CI) using the
+   [h2spec](https://github.com/summerwind/h2spec) conformance testing tool for
+   HTTP/2 implementations.
+   - These test all the `Reqd.respond_with_*` functions for conformance against
+     the specification.
+
 ## Performance
 
 http2/af aims to be a high-performance, memory-efficient, scalable, and easily
@@ -29,8 +46,8 @@ off-heap buffers wherever possible, for both parsing and serialization.
 
 ## Limitations
 
-http2/af only currently provides server implementation. In the future, a client
-library will also be provided.
+http2/af only currently provides a server implementation. In the future, a
+client library will also be provided.
 
 ## Usage
 
