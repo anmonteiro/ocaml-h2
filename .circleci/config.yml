@@ -103,7 +103,7 @@ jobs:
           <<: *esy_post_build_cache_key
       - run:
           name: "Install esy"
-          command: npm install -g esy@0.4.3
+          command: npm install -g esy
       - run:
           name: 'esy install'
           command: ~/.npm-global/bin/esy install
