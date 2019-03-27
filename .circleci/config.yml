@@ -100,7 +100,7 @@ jobs:
       - run:
           name: "Install esy + system deps"
           command: |
-            sudo apt-get install -y pkg-config libgmp-dev autotools-dev autoconf
+            sudo apt-get install -y pkg-config libgmp-dev autotools-dev autoconf makeinfo
             npm install -g esy
       - run:
           name: 'esy install'
