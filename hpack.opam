@@ -2,10 +2,11 @@ opam-version: "2.0"
 name: "hpack"
 maintainer: "Antonio Nuno Monteiro <anmonteiro@gmail.com>"
 authors: [ "Antonio Nuno Monteiro <anmonteiro@gmail.com>" ]
+license: "BSD-3-clause"
 homepage: "https://github.com/anmonteiro/ocaml-h2"
-license: "MIT"
-dev-repo: "git+https://github.com/anmonteiro/ocaml-h2.git"
 bug-reports: "https://github.com/anmonteiro/ocaml-h2/issues"
+dev-repo: "git+https://github.com/anmonteiro/ocaml-h2.git"
+doc: "https://anmonteiro.github.io/ocaml-h2/"
 depends: [
   "ocaml" {>= "4.04"}
   "dune" {build}
