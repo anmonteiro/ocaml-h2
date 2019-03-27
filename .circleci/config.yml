@@ -158,7 +158,22 @@ workflows:
   build-deploy:
     jobs:
       - 4.04.2
+          branches:
+            ignore:
+              - gh-pages
       - 4.05.0
+          branches:
+            ignore:
+              - gh-pages
       - 4.06.1
+          branches:
+            ignore:
+              - gh-pages
       - 4.07.1
+          branches:
+            ignore:
+              - gh-pages
       - esy
+          branches:
+            ignore:
+              - gh-pages
