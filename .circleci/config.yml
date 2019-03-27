@@ -30,7 +30,7 @@ opam-steps: &opam-steps
           sudo apt-get install -y pkg-config libgmp-dev autoconf
           opam update
           opam install -y dune
-          opam install --deps-only .
+          opam install -t --deps-only .
     - run:
         name: 'Clean'
         command: rm -rf ./_build
@@ -51,13 +51,6 @@ opam-steps: &opam-steps
         command: git diff --exit-code
 
 jobs:
-  4.03.0:
-    docker:
-      - image: ocaml/opam2:debian-9-ocaml-4.03
-    environment:
-      - TERM: dumb
-      - OCAML_VERSION: "4.03.0"
-    <<: *opam-steps
   4.04.2:
     docker:
       - image: ocaml/opam2:debian-9-ocaml-4.04
@@ -137,7 +130,6 @@ workflows:
   version: 2
   build-deploy:
     jobs:
-      - 4.03.0
       - 4.04.2
       - 4.05.0
       - 4.06.1

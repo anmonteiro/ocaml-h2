@@ -7,7 +7,7 @@ license: "MIT"
 dev-repo: "git+https://github.com/anmonteiro/http2af.git"
 bug-reports: "https://github.com/anmonteiro/http2af/issues"
 depends: [
-  "ocaml" {>= "4.03.0"}
+  "ocaml" {>= "4.04"}
   "dune" {build}
   "yojson" {with-test}
   "hex" {with-test}
