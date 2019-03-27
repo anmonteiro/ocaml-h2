@@ -32,7 +32,7 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-open Http2af
+open H2
 
 module type IO = sig
   type socket
@@ -56,7 +56,7 @@ module type IO = sig
 
   val close : socket -> unit Lwt.t
 
-  val report_exn : Http2af.Server_connection.t -> socket -> exn -> unit Lwt.t
+  val report_exn : Server_connection.t -> socket -> exn -> unit Lwt.t
 end
 
 

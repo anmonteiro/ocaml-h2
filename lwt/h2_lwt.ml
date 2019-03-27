@@ -32,7 +32,7 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-open Http2af
+open H2
 open Lwt.Infix
 
 (* Based on the Buffer module in httpaf_async.ml. *)
@@ -111,10 +111,10 @@ module type IO = sig
 
   val close : socket -> unit Lwt.t
 
-  val report_exn : Http2af.Server_connection.t -> socket -> exn -> unit Lwt.t
+  val report_exn : H2.Server_connection.t -> socket -> exn -> unit Lwt.t
 end
 
-module Config = Http2af.Config
+module Config = H2.Config
 
 module Server  (Io: IO) = struct
   let start_read_write_loops
@@ -210,7 +210,7 @@ end
 
 
 (* module Client = struct
-  module Client_connection = Http2af.Client_connection
+  module Client_connection = H2.Client_connection
 
   let start_read_write_loops
     ?(readf=read)

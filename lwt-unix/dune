@@ -15,10 +15,10 @@ let v ~ssl ~tls () =
 (rule (copy %s.ml tls_io.ml))
 
 (library
- (name http2af_lwt_unix)
- (public_name http2af-lwt-unix)
- (libraries faraday-lwt-unix http2af http2af-lwt lwt.unix %s%s)
- (modules http2af_lwt_unix tls_io ssl_io)
+ (name h2_lwt_unix)
+ (public_name h2-lwt-unix)
+ (libraries faraday-lwt-unix h2 h2-lwt lwt.unix %s%s)
+ (modules h2_lwt_unix tls_io ssl_io)
  (flags (:standard -safe-string)))
 |} ssl tls ssl_d tls_d
 

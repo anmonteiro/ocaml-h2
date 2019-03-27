@@ -1,10 +1,10 @@
 {
-  "name": "http2af",
+  "name": "h2",
   "version": "0.1.0",
   "description": "An HTTP/2 library for OCaml based on Angstrom and Faraday",
   "author": "António N. Monteiro <anmonteiro@gmail.com>",
   "license": "MIT",
-  "repository": "git+https://github.com/anmonteiro/http2af",
+  "repository": "git+https://github.com/anmonteiro/ocaml-h2",
   "dependencies": {
     "ocaml": " >= 4.3.0",
     "@opam/dune": "*",

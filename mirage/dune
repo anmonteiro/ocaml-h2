@@ -1,4 +1,4 @@
 (library
- (name http2af_mirage)
- (public_name http2af-mirage)
- (libraries http2af http2af-lwt lwt mirage-conduit cstruct))
+ (name h2_mirage)
+ (public_name h2-mirage)
+ (libraries h2 h2-lwt lwt mirage-conduit cstruct))

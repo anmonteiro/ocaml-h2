@@ -186,7 +186,7 @@ let request_body t =
   | Reserved _ ->
     (* From RFC7540§8.1:
          Promised requests MUST NOT include a request body. *)
-    failwith "http2af.Reqd.request_body: Promised requests must not include a request body"
+    failwith "h2.Reqd.request_body: Promised requests must not include a request body"
   | Closed _ -> assert false
 
 let response t =
@@ -209,13 +209,13 @@ let response_exn t =
   match t.stream_state with
   | Idle
   | Open (PartialHeaders _) ->
-    failwith "http2af.Reqd.response_exn: response has not started"
+    failwith "h2.Reqd.response_exn: response has not started"
   | Open (FullHeaders { response_state; _ })
   | Open (ActiveRequest { response_state; _ })
   | HalfClosed { response_state; _ }
   | Reserved { response_state; _ } ->
     begin match response_state with
-    | Waiting _ -> failwith "http2af.Reqd.response_exn: response has not started"
+    | Waiting _ -> failwith "h2.Reqd.response_exn: response has not started"
     | Streaming(response, _)
     | Fixed { response; _ }
     | Complete response -> response
@@ -259,10 +259,10 @@ let send_fixed_response t s response data =
       s.response_state <- Complete response;
     done_waiting when_done_waiting;
   | Streaming _ ->
-    failwith "http2af.Reqd.respond_with_*: response already started"
+    failwith "h2.Reqd.respond_with_*: response already started"
   | Fixed _
   | Complete _ ->
-    failwith "http2af.Reqd.respond_with_*: response already complete"
+    failwith "h2.Reqd.respond_with_*: response already complete"
 
 let unsafe_respond_with_data t response data =
   match t.stream_state with
@@ -285,12 +285,12 @@ let unsafe_respond_with_data t response data =
 
 let respond_with_string t response str =
   if fst t.error_code <> `Ok then
-    failwith "http2af.Reqd.respond_with_string: invalid state, currently handling error";
+    failwith "h2.Reqd.respond_with_string: invalid state, currently handling error";
   unsafe_respond_with_data t response (`String str)
 
 let respond_with_bigstring t response bstr =
   if fst t.error_code <> `Ok then
-    failwith "http2af.Reqd.respond_with_bigstring: invalid state, currently handling error";
+    failwith "h2.Reqd.respond_with_bigstring: invalid state, currently handling error";
   unsafe_respond_with_data t response (`Bigstring bstr)
 
 let send_streaming_response ~flush_headers_immediately t s response =
@@ -309,10 +309,10 @@ let send_streaming_response ~flush_headers_immediately t s response =
     done_waiting when_done_waiting;
     response_body
   | Streaming _ ->
-    failwith "http2af.Reqd.respond_with_streaming: response already started"
+    failwith "h2.Reqd.respond_with_streaming: response already started"
   | Fixed _
   | Complete _ ->
-    failwith "http2af.Reqd.respond_with_streaming: response already complete"
+    failwith "h2.Reqd.respond_with_streaming: response already complete"
 
 let unsafe_respond_with_streaming ~flush_headers_immediately t response =
   match t.stream_state with
@@ -338,7 +338,7 @@ let unsafe_respond_with_streaming ~flush_headers_immediately t response =
 
 let respond_with_streaming ?(flush_headers_immediately=false) t response =
   if fst t.error_code <> `Ok then
-    failwith "http2af.Reqd.respond_with_streaming: invalid state, currently handling error";
+    failwith "h2.Reqd.respond_with_streaming: invalid state, currently handling error";
   unsafe_respond_with_streaming ~flush_headers_immediately t response
 
 let start_push_stream t s request =
@@ -400,12 +400,12 @@ let unsafe_push t request =
 
 let push t request =
   if fst t.error_code <> `Ok then
-    failwith "http2af.Reqd.push: invalid state, currently handling error";
+    failwith "h2.Reqd.push: invalid state, currently handling error";
   if Stream_identifier.is_pushed t.id then
     (* From RFC7540§6.6:
          PUSH_PROMISE frames MUST only be sent on a peer-initiated stream that
          is in either the "open" or "half-closed (remote)" state. *)
-    failwith "http2af.Reqd.push: PUSH_PROMISE frames MUST only be sent on a peer-initiated stream";
+    failwith "h2.Reqd.push: PUSH_PROMISE frames MUST only be sent on a peer-initiated stream";
   unsafe_push t request
 
 let finish_stream t reason =
@@ -455,7 +455,7 @@ let _report_error ?request t s exn error_code =
     (* XXX(seliopou): Decide what to do in this unlikely case. There is an
      * outstanding call to the [error_handler], but an intervening exception
      * has been reported as well. *)
-    failwith "http2af.Reqd.report_exn: NYI"
+    failwith "h2.Reqd.report_exn: NYI"
   | Streaming(_response, response_body), `Ok ->
     Body.close_writer response_body;
     t.error_code <- (exn :> [`Ok | error]), Some error_code;
@@ -492,7 +492,7 @@ let report_exn t exn =
 let try_with t f : (unit, exn) Result.result =
   try f (); Ok () with exn -> report_exn t exn; Error exn
 
-(* Private API, not exposed to the user through http2af.mli *)
+(* Private API, not exposed to the user through h2.mli *)
 
 let close_request_body { request_body; _ } =
   Body.close_reader request_body

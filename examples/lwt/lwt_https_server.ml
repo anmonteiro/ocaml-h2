@@ -11,7 +11,7 @@ let set_interval ?(times=5) s f destroy =
   set_interval_loop s f times
 
 let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
-  let open Http2af in
+  let open H2 in
 
   let request_handler : Unix.sockaddr -> Reqd.t -> unit =
       fun _client_address request_descriptor ->
@@ -74,7 +74,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
 
     | `GET, _ ->
       Reqd.respond_with_string
-        request_descriptor (Response.create `OK) "Welcome to http2/af"
+        request_descriptor (Response.create `OK) "Welcome to ocaml-h2"
 
     | _ ->
       Reqd.respond_with_string
@@ -83,7 +83,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
 
   let error_handler :
       Unix.sockaddr ->
-      ?request:Http2af.Request.t ->
+      ?request:H2.Request.t ->
       _ ->
       (Headers.t -> [`write] Body.t) ->
         unit =
@@ -106,7 +106,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
 
   let certfile = "./certificates/server.pem" in
   let keyfile = "./certificates/server.key" in
-  Http2af_lwt_unix.Server.SSL.create_connection_handler
+  H2_lwt_unix.Server.SSL.create_connection_handler
     ?server:None
     ~certfile
     ~keyfile

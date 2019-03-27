@@ -1,4 +1,4 @@
-open Http2af__
+open H2__
 open Test_common
 
 module Json = Yojson.Basic.Util

@@ -1,7 +1,7 @@
-open Http2af
+open H2
 open Lwt.Infix
 
-module Io : Http2af_lwt.IO with
+module Io : H2_lwt.IO with
     type socket = Lwt_unix.file_descr
     and type addr = Unix.sockaddr = struct
   type socket = Lwt_unix.file_descr
@@ -72,13 +72,13 @@ module Io : Http2af_lwt.IO with
     Lwt.return_unit
 end
 
-module Config = Http2af.Config
+module Config = H2.Config
 
 module Server = struct
-  include Http2af_lwt.Server (Io)
+  include H2_lwt.Server (Io)
 
   module TLS = struct
-    include Http2af_lwt.Server (Tls_io.Io)
+    include H2_lwt.Server (Tls_io.Io)
 
     let create_connection_handler
       ?server
@@ -98,7 +98,7 @@ module Server = struct
   end
 
   module SSL = struct
-    include Http2af_lwt.Server (Ssl_io.Io)
+    include H2_lwt.Server (Ssl_io.Io)
     let create_connection_handler
       ?server
       ?certfile
@@ -120,7 +120,7 @@ end
 
 
 (* module Client = struct
-  module Client_connection = Http2af.Client_connection
+  module Client_connection = H2.Client_connection
 
   let start_read_write_loops
     ?(readf=read)

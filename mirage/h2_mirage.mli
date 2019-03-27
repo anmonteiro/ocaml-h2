@@ -1,4 +1,4 @@
-open Http2af
+open H2
 
 module type Server_intf = sig
   val create_connection_handler

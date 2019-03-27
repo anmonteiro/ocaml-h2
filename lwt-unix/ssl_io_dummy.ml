@@ -1,4 +1,4 @@
-module Io : Http2af_lwt.IO with
+module Io : H2_lwt.IO with
     type socket = Lwt_unix.file_descr * [ `Tls_not_available ]
     and type addr = Unix.sockaddr = struct
   type socket = Lwt_unix.file_descr * [ `Tls_not_available ]

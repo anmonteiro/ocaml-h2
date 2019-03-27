@@ -32,7 +32,7 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-(** Http2/af is a high-performance, memory-efficient, and scalable HTTP/2
+(** H2 is a high-performance, memory-efficient, and scalable HTTP/2
     implementation for OCaml. It is based on the concepts in http/af, and
     therefore uses the Angstrom and Faraday libraries to implement the parsing
     and serialization layers of the HTTP/2 standard. It also preserves the same
@@ -56,7 +56,7 @@ open Result
     See {{:https://tools.ietf.org/html/rfc7231#section-4} RFC7231§4} for more
     details.
 
-    This module is a proxy to [Httpaf.Method] and is included in http2/af for
+    This module is a proxy to [Httpaf.Method] and is included in h2 for
     convenience. *)
 module Method : module type of Httpaf.Method
 
@@ -189,7 +189,7 @@ end
     value}. Per the HTTP/2 specification, header field names {b must} be
     converted to lowercase prior to their encoding in HTTP/2 (see
     {{:https://tools.ietf.org/html/rfc7540#section-8.1.2} RFC7540§8.1.2} for
-    more details). http2/af does {b not} convert field names to lowercase; it
+    more details). h2 does {b not} convert field names to lowercase; it
     is therefore the responsibility of the caller of the functions contained in
     this module to use lowercase names for header fields.
 
@@ -445,7 +445,7 @@ module Response : sig
     -> Status.t
     -> t
   (** [create ?headers status] creates an HTTP response with the given
-      parameters. Unlike the [Response] type in http/af, http2/af does not
+      parameters. Unlike the [Response] type in http/af, h2 does not
       define a way for responses to carry reason phrases or protocol version.
 
       See {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.4}
