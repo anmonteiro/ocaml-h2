@@ -17,7 +17,8 @@
     "@opam/faraday-lwt-unix": "*",
     "@opam/lwt_ssl": "*",
     "@opam/conf-libev": "*",
-    "@opam/httpaf": "*"
+    "@opam/httpaf": "*",
+    "@opam/conf-autoconf": "*"
   },
   "devDependencies": {
     "@opam/alcotest": "*",

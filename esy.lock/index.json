@@ -1,5 +1,5 @@
 {
-  "checksum": "5c71680a94b52022a6f50c5eed767ac4",
+  "checksum": "14cda005b2c15fbb26adb3328beef2a5",
   "root": "http2af@link-dev:./esy.json",
   "node": {
     "yarn-pkg-config@github:esy-ocaml/yarn-pkg-config#d488cd9321cd5036bd36ec96744ce78c5d45fc49@d41d8cd9": {
@@ -47,6 +47,7 @@
         "@opam/faraday@opam:0.7.0@6026a81f",
         "@opam/dune@opam:1.8.2@511996a8",
         "@opam/conf-libev@archive:http://dist.schmorp.de/libev/Attic/libev-4.25.tar.gz#sha1:f78a1338a0b975fb396b0b6558709211b6ccd794@9b5c6712",
+        "@opam/conf-autoconf@github:esy-packages/esy-autoconf:package.json#71a8836@d41d8cd9",
         "@opam/bigstringaf@opam:0.5.0@93c1ca28",
         "@opam/angstrom@opam:0.11.2@2e02b026"
       ],
