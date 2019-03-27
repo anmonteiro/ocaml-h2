@@ -102,12 +102,10 @@ jobs:
           <<: *esy_post_build_cache_key
       - run:
           name: "Install esy + system deps"
-          command: |
-            sudo apt-get install -y pkg-config libgmp-dev autotools-dev autoconf texinfo
-            npm install -g esy
+          command: npm install -g esy
       - run:
           name: 'esy install'
-          command: ~/.npm-global/bin/esy install
+          command: ~/.npm-global/bin/esy
       - save_cache:
           <<: *esy_cache_key
           paths:
