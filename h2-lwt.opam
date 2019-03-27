@@ -3,9 +3,9 @@ name: "h2-lwt"
 maintainer: "Antonio Monteiro <anmonteiro@gmail.com>"
 authors: [ "Antonio Monteiro <anmonteiro@gmail.com>" ]
 license: "BSD-3-clause"
-homepage: "https://github.com/anmonteiro/h2"
-bug-reports: "https://github.com/anmonteiro/h2/issues"
-dev-repo: "git+https://github.com/anmonteiro/h2.git"
+homepage: "https://github.com/anmonteiro/ocaml-h2"
+bug-reports: "https://github.com/anmonteiro/ocaml-h2/issues"
+dev-repo: "git+https://github.com/anmonteiro/ocaml-h2.git"
 build: [
   ["dune" "subst"] {pinned}
   ["dune" "build" "-p" name "-j" jobs]
