@@ -5,7 +5,7 @@ module Writer = Serialize.Writer
 type request_handler = Reqd.t -> unit
 
 type error =
-  [ `Bad_gateway | `Bad_request | `Internal_server_error | `Exn of exn]
+  [ `Bad_request | `Internal_server_error | `Exn of exn]
 
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit

@@ -2,7 +2,7 @@ module Writer = Serialize.Writer
 module AB = Angstrom.Buffered
 
 type error =
-  [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
+  [ `Bad_request | `Internal_server_error | `Exn of exn ]
 
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit

@@ -1,12 +1,12 @@
-(** Http2/af is a high-performance, memory-efficient, and scalable web server
-    for OCaml. It implements the HTTP 1.1 specification with respect to
-    parsing, serialization, and connection pipelining. For compatibility,
-    http/af respects the imperatives of the [Server_connection] header when handling
-    HTTP 1.0 connections.
+(** Http2/af is a high-performance, memory-efficient, and scalable HTTP/2
+    implementation for OCaml. It is based on the concepts in http/af, and
+    therefore uses the Angstrom and Faraday libraries to implement the parsing
+    and serialization layers of the HTTP/2 standard. It also preserves the same
+    API as http/af wherever possible.
 
-    To use this library effectively, the user must be familiar with the HTTP
-    1.1 specification, and the basic principles of memory management and
-    vectorized IO. *)
+    Not unlike http/af, the user should be familiar with HTTP, and the basic
+    principles of memory management and vectorized IO in order to use this
+    library. *)
 
 open Result
 
@@ -20,17 +20,32 @@ open Result
     and what is expected by the client as a successful result.
 
     See {{:https://tools.ietf.org/html/rfc7231#section-4} RFC7231§4} for more
-    details. *)
+    details.
+
+    This module is a proxy to [Httpaf.Method] and is included in http2/af for
+    convenience. *)
 module Method : module type of Httpaf.Method
 
 
 (** Response Status Codes
 
-   The status-code element is a three-digit integer code giving the result of
-   the attempt to understand and satisfy the request.
+    The status-code element is a three-digit integer code giving the result of
+    the attempt to understand and satisfy the request.
 
-   See {{:https://tools.ietf.org/html/rfc7231#section-6} RFC7231§6} for more
-   details. *)
+    See {{:https://tools.ietf.org/html/rfc7231#section-6} RFC7231§6} for more
+    details.
+
+    For the most part, this module is a proxy to [Httpaf.Status]. Its
+    [informational] type, however, removes support for the
+    [Switching_protocols] tag, as per the HTTP/2 spec (relevant portion
+    reproduced below).
+
+    From RFC7540§8.1.1:
+      HTTP/2 removes support for the 101 (Switching Protocols) informational
+      status code ([RFC7231], Section 6.2.2).
+
+    See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1}
+    for more details. *)
 module Status : sig
   type informational = [ | `Continue ]
   (** The 1xx (Informational) class of status code indicates an interim
@@ -78,7 +93,8 @@ module Status : sig
     | Httpaf.Status.client_error
     | Httpaf.Status.server_error
     ]
-  (** The status codes defined in the HTTP 1.1 RFCs *)
+  (** The status codes defined in the HTTP/1.1 RFCs, excluding the [Switching
+      Protocols] status as per the HTTP/2 RFC. *)
 
   type t = [
     | standard
@@ -103,28 +119,28 @@ module Status : sig
       codes, it will still raise [Failure]. *)
 
   val is_informational : t -> bool
-  (** [is_informational t] is true iff [t] belongs to the Informational class
+  (** [is_informational t] is [true] iff [t] belongs to the Informational class
       of status codes. *)
 
   val is_successful : t -> bool
-  (** [is_successful t] is true iff [t] belongs to the Successful class of
+  (** [is_successful t] is [true] iff [t] belongs to the Successful class of
       status codes. *)
 
   val is_redirection : t -> bool
-  (** [is_redirection t] is true iff [t] belongs to the Redirection class of
+  (** [is_redirection t] is [true] iff [t] belongs to the Redirection class of
       status codes. *)
 
   val is_client_error : t -> bool
-  (** [is_client_error t] is true iff [t] belongs to the Client Error class of
-      status codes. *)
+  (** [is_client_error t] is [true] iff [t] belongs to the Client Error class
+      of status codes. *)
 
   val is_server_error : t -> bool
-  (** [is_server_error t] is true iff [t] belongs to the Server Error class of
-      status codes. *)
+  (** [is_server_error t] is [true] iff [t] belongs to the Server Error class
+      of status codes. *)
 
   val is_error : t -> bool
-  (** [is_server_error t] is true iff [t] belongs to the Client Error or Server
-      Error class of status codes. *)
+  (** [is_server_error t] is [true] iff [t] belongs to the Client Error or
+      Server Error class of status codes. *)
 
   val to_string : t -> string
   val of_string : string -> t
@@ -135,11 +151,19 @@ end
 
 (** Header Fields
 
-    Each header field consists of a case-insensitive {b field name} and a {b
-    field value}. The order in which header fields {i with differing field
-    names} are received is not significant. However, it is good practice to
-    send header fields that contain control data first so that implementations
-    can decide when not to handle a message as early as possible.
+    Each header field consists of a lowercase {b field name} and a {b field
+    value}. Per the HTTP/2 specification, header field names {b must} be
+    converted to lowercase prior to their encoding in HTTP/2 (see
+    {{:https://tools.ietf.org/html/rfc7540#section-8.1.2} RFC7540§8.1.2} for
+    more details). http2/af does {b not} convert field names to lowercase; it
+    is therefore the responsibility of the caller of the functions contained in
+    this module to use lowercase names for header fields.
+
+    The order in which header fields {i with differing field names}
+    are received is not significant, except for pseudo-header fields, which
+    {b must} appear in header blocks before regular fields (see
+    {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.1} RFC7540§8.1.2.1}
+    for more details).
 
     A sender MUST NOT generate multiple header fields with the same field name
     in a message unless either the entire field value for that header field is
@@ -161,12 +185,11 @@ end
     See {{:https://tools.ietf.org/html/rfc7230#section-3.2} RFC7230§3.2} for
     more details. *)
 module Headers : sig
-  (* TODO: make note saying this module assumes all headers to be lowercase, as per
-  the http2 spec *)
   type t
+  (** The type of a group of header fields. *)
 
   type name = string
-  (** The type of a case-insensitive header name. *)
+  (** The type of a lowercase header name. *)
 
   type value = string
   (** The type of a header value. *)
@@ -205,17 +228,23 @@ module Headers : sig
       in {i reverse} transmission order. *)
 
   val add : t -> ?sensitive:bool -> name -> value -> t
-  (** [add t name value] is a collection of header fields that is the same as
-      [t] except with [(name, value)] added at the end of the trasmission order.
+  (** [add t ?sensitive name value] is a collection of header fields that is
+      the same as [t] except with [(name, value)] added at the end of the
+      trasmission order. Additionally, [sensitive] specifies whether this
+      header field should not be compressed by HPACK and instead encoded as
+      a never-indexed literal (see
+      {{:https://tools.ietf.org/html/rfc7541#section-7.1.3} RFC7541§7.1.3} for
+      more details).
+
       The following equations should hold:
 
         {ul
         {- [get (add t name value) name = Some value] }} *)
 
-  val add_unless_exists : t -> name -> value -> t
-  (** [add_unless_exists t name value] is a collection of header fields that is
-      the same as [t] if [t] already inclues [name], and otherwise is
-      equivalent to [add t name value]. *)
+  val add_unless_exists : t -> ?sensitive:bool -> name -> value -> t
+  (** [add_unless_exists t ?sensitive name value] is a collection of header
+      fields that is the same as [t] if [t] already inclues [name], and
+      otherwise is equivalent to [add t ?sensitive name value]. *)
 
   val add_list : t -> (name * value) list -> t
   (** [add_list t assoc] is a collection of header fields that is the same as
@@ -243,13 +272,13 @@ module Headers : sig
       equal to [name]. If [t] contains multiple header fields whose name is
       [name], they will all be removed. *)
 
-  val replace : t -> name -> value -> t
-  (** [replace t name value] is a collection of header fields that is the same
-      as [t] except with all header fields with a name equal to [name] removed
-      and replaced with a single header field whose name is [name] and whose
-      value is [value]. This new header field will appear in the transmission
-      order where the first occurrence of a header field with a name matching
-      [name] was found.
+  val replace : t -> ?sensitive:bool -> name -> value -> t
+  (** [replace t ?sensitive name value] is a collection of header fields that
+      is the same as [t] except with all header fields with a name equal to
+      [name] removed and replaced with a single header field whose name is
+      [name] and whose value is [value]. This new header field will appear in
+      the transmission order where the first occurrence of a header field with
+      a name matching [name] was found.
 
       If no header field with a name equal to [name] is present in [t], then
       the result is simply [t], unchanged. *)
@@ -257,8 +286,8 @@ module Headers : sig
   (** {3 Destructors} *)
 
   val mem : t -> name -> bool
-  (** [mem t name] is true iff [t] includes a header field with a name that is
-      equal to [name]. *)
+  (** [mem t name] is [true] iff [t] includes a header field with a name that
+      is equal to [name]. *)
 
   val get : t -> name -> value option
   (** [get t name] returns the last header from [t] with name [name], or [None]
@@ -294,14 +323,14 @@ module Body : sig
     -> on_eof  : (unit -> unit)
     -> on_read : (Bigstringaf.t -> off:int -> len:int -> unit)
     -> unit
-  (* [schedule_read t ~on_eof ~on_read] will setup [on_read] and [on_eof] as
-     callbacks for when bytes are available in [t] for the application to
-     consum, or when the input channel has been closed and no further bytes
-     will be received by the application.
+  (** [schedule_read t ~on_eof ~on_read] will setup [on_read] and [on_eof] as
+      callbacks for when bytes are available in [t] for the application to
+      consume, or when the input channel has been closed and no further bytes
+      will be received by the application.
 
-     Once either of these callbacks have been called, they become inactive. The
-     application is responsible for scheduling subsequent reads, either within
-     the [on_read] callback or by some other mechanism. *)
+      Once either of these callbacks have been called, they become inactive.
+      The application is responsible for scheduling subsequent reads, either
+      within the [on_read] callback or by some other mechanism. *)
 
   val write_char : [`write] t -> char -> unit
   (** [write_char w char] copies [char] into an internal buffer. If possible,
@@ -319,19 +348,19 @@ module Body : sig
       writes before transmission. *)
 
   val schedule_bigstring : [`write] t -> ?off:int -> ?len:int -> Bigstringaf.t -> unit
-  (** [schedule_bigstring w ?off ?len bs] schedules [bs] to be
-      transmitted at the next opportunity without performing a copy. [bs]
-      should not be modified until a subsequent call to {!flush} has
-      successfully completed. *)
+  (** [schedule_bigstring w ?off ?len bs] schedules [bs] to be transmitted at
+      the next opportunity without performing a copy. [bs] should not be
+      modified until a subsequent call to {!flush} has successfully
+      completed. *)
 
   val flush : [`write] t -> (unit -> unit) -> unit
   (** [flush t f] makes all bytes in [t] available for writing to the awaiting
       output channel. Once those bytes have reached that output channel, [f]
       will be called.
 
-      The type of the output channel is runtime-dependent, as are guarantees about
-      whether those packets have been queued for deliver or have actually been
-      received by the intended recipient. *)
+      The type of the output channel is runtime-dependent, as are guarantees
+      about whether those packets have been queued for delivery or have
+      actually been received by the intended recipient. *)
 
   val close_reader : [`read] t -> unit
   (** [close_reader t] closes [t], indicating that any subsequent input
@@ -343,9 +372,8 @@ module Body : sig
       to the output channel. *)
 
   val is_closed : _ t -> bool
-  (** [is_closed t] is true if {!close} has been called on [t] and [false]
+  (** [is_closed t] is [true] if {!close} has been called on [t] and [false]
       otherwise. A closed [t] may still have pending output. *)
-
 end
 
 
@@ -372,21 +400,22 @@ end
 
 (** Response
 
-    A server-generated message to a {Request}. *)
+    A server-generated message to a {!Request.t}. *)
 module Response : sig
   type t =
     { status  : Status.t
-    ; reason  : string
     ; headers : Headers.t }
 
   val create
-    :  ?reason:string     (** default is determined by {!Status.default_reason_phrase} *)
-    -> ?headers:Headers.t (** default is {!Headers.empty} *)
+    :  ?headers:Headers.t (** default is {!Headers.empty} *)
     -> Status.t
     -> t
-  (** [create ?reason ?version ?headers status] creates an HTTP response with
-      the given parameters. For typical use cases, it's sufficient to provide
-      values for [headers] and [status]. *)
+  (** [create ?headers status] creates an HTTP response with the given
+      parameters. Unlike the [Response] type in http/af, http2/af does not
+      define a way for responses to carry reason phrases or protocol version.
+
+      See {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.4}
+      RFC7540§8.1.2.4} for more details. *)
 
   val pp_hum : Format.formatter -> t -> unit
 end
@@ -408,34 +437,55 @@ module Reqd : sig
   (** Responding
 
       The following functions will initiate a response for the corresponding
-      request in [t]. Depending on the state of the current connection, and the
-      header values of the response, this may cause the connection to close or
-      to perisist for reuse by the client.
+      request in [t]. When the response is fully transmitted to the wire, the
+      stream completes.
 
-      See {{:https://tools.ietf.org/html/rfc7230#section-6.3} RFC7230§6.3} for
-      more details. *)
+      From {{:https://tools.ietf.org/html/rfc7540#section-8.1} RFC7540§8.1}:
+        An HTTP request/response exchange fully consumes a single stream. *)
 
   val respond_with_string    : t -> Response.t -> string -> unit
   val respond_with_bigstring : t -> Response.t -> Bigstringaf.t -> unit
   val respond_with_streaming : ?flush_headers_immediately:bool -> t -> Response.t -> [`write] Body.t
 
   val push : t -> Request.t -> t
-  (** Exception Handling *)
+  (** Pushing
+
+      HTTP/2 allows a server to pre-emptively send (or "push") responses (along
+      with corresponding "promised" requests) to a client in association with a
+      previous client-initiated request. This can be useful when the server
+      knows the client will need to have those responses available in order to
+      fully process the response to the original request.
+
+      [push reqd request] creates a new (pushed) request descriptor that allows
+      responding to the "promised" request. This function raises an exception
+      if server push is not enabled for the connection.
+
+      See {{:https://tools.ietf.org/html/rfc7540#section-8.2} RFC7540§8.2} for
+      more details. *)
+
+  (** {3 Exception Handling} *)
 
   val report_exn : t -> exn -> unit
   val try_with : t -> (unit -> unit) -> (unit, exn) result
 end
 
-(** {2 Buffer Size Configuration} *)
+(** {2 HTTP/2 Configuration} *)
 module Config : sig
   type t =
-    { read_buffer_size          : int  (** Defaults to [16384] *)
+    { read_buffer_size          : int
+      (** [read_buffer_size] specifies the size of the largest frame payload
+          that the sender is willing to receive, in octets. Defaults to
+          [16384] *)
     ; request_body_buffer_size  : int  (** Defaults to [4096] *)
     ; response_buffer_size      : int  (** Defaults to [1024] *)
     ; response_body_buffer_size : int  (** Defaults to [4096] *)
     ; enable_server_push        : bool (** Defaults to [true] *)
-    ; max_concurrent_streams    : int  (** Defaults to [] *)
-    ; initial_window_size       : int  (** Defaults to [] *)
+    ; max_concurrent_streams    : int
+      (** [max_concurrent_streams] specifies the maximum number of streams that
+          the sender will allow the peer to initiate. Defaults to [1^31 - 1] *)
+    ; initial_window_size       : int
+      (** [initial_window_size] specifies the initial window size for flow
+          control tokens. Defaults to [65535] *)
     }
 
   val default : t
@@ -449,7 +499,7 @@ module Server_connection : sig
   type t
 
   type error =
-    [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
+    [ `Bad_request | `Internal_server_error | `Exn of exn ]
 
   type request_handler = Reqd.t -> unit
 
@@ -486,7 +536,7 @@ module Server_connection : sig
   val yield_reader : t -> (unit -> unit) -> unit
   (** [yield_reader t continue] registers with the connection to call
       [continue] when reading should resume. {!yield_reader} should be called
-      after {next_read_operation} returns a [`Yield] value. *)
+      after {!next_read_operation} returns a [`Yield] value. *)
 
   val next_write_operation : t -> [
     | `Write of Bigstringaf.t IOVec.t list
@@ -497,20 +547,20 @@ module Server_connection : sig
 
   val report_write_result : t -> [`Ok of int | `Closed] -> unit
   (** [report_write_result t result] reports the result of the latest write
-      attempt to the connection. {report_write_result} should be called after a
-      call to {next_write_operation} that returns a [`Write buffer] value.
+      attempt to the connection. {!report_write_result} should be called after
+      a call to {!next_write_operation} that returns a [`Write buffer] value.
 
         {ul
         {- [`Ok n] indicates that the caller successfully wrote [n] bytes of
         output from the buffer that the caller was provided by
-        {next_write_operation}. }
+        {!next_write_operation}. }
         {- [`Closed] indicates that the output destination will no longer
         accept bytes from the write processor. }} *)
 
   val yield_writer : t -> (unit -> unit) -> unit
   (** [yield_writer t continue] registers with the connection to call
       [continue] when writing should resume. {!yield_writer} should be called
-      after {next_write_operation} returns a [`Yield] value. *)
+      after {!next_write_operation} returns a [`Yield] value. *)
 
   val report_exn : t -> exn -> unit
   (** [report_exn t exn] reports that an error [exn] has been caught and
@@ -581,8 +631,8 @@ end
 
   val report_write_result : t -> [`Ok of int | `Closed] -> unit
   (** [report_write_result t result] reports the result of the latest write
-      attempt to the connection. {report_write_result} should be called after a
-      call to {next_write_operation} that returns a [`Write buffer] value.
+      attempt to the connection. {!report_write_result} should be called after a
+      call to {!next_write_operation} that returns a [`Write buffer] value.
 
         {ul
         {- [`Ok n] indicates that the caller successfully wrote [n] bytes of
@@ -594,7 +644,7 @@ end
   val yield_writer : t -> (unit -> unit) -> unit
   (** [yield_writer t continue] registers with the connection to call
       [continue] when writing should resume. {!yield_writer} should be called
-      after {next_write_operation} returns a [`Yield] value. *)
+      after {!next_write_operation} returns a [`Yield] value. *)
 
   val report_exn : t -> exn -> unit
   (** [report_exn t exn] reports that an error [exn] has been caught and

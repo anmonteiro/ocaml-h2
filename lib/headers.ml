@@ -63,13 +63,11 @@ let rec mem t name =
   | _             -> false
 
 (* TODO: do we need to keep a list of never indexed fields? *)
-let add t ?sensitive name value =
-  let sensitive = match sensitive with
-  | None -> false
-  | Some sensitive -> sensitive
-  in
+let add t ?(sensitive=false) name value =
   { name; value; sensitive }::t
+
 let add_list t ls = (of_rev_list ls) @ t (* XXX(seliopou): do better here *)
+
 let add_multi =
   let rec loop_outer t lss =
     match lss with
@@ -82,10 +80,13 @@ let add_multi =
   in
   loop_outer
 
-let add_unless_exists t name value =
-  if mem t name then t else { name; value; sensitive = false }::t
+let add_unless_exists t ?(sensitive=false) name value =
+  if mem t name then
+    t
+  else
+    { name; value; sensitive }::t
 
-let replace t name value =
+let replace t ?(sensitive=false) name value =
   let rec loop t n nv seen =
     match t with
     | [] ->
@@ -97,7 +98,7 @@ let replace t name value =
         else nv::loop t n nv true
       else nv'::loop t n nv false
   in
-  try loop t name { name; value; sensitive = false } false
+  try loop t name { name; value; sensitive } false
   with Local -> t
 
 let remove t name =
