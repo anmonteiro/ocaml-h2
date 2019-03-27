@@ -14,5 +14,5 @@ let app =
   http2_server @@ conduit_direct stack
 
 let () =
-  register "http2af_unikernel"
+  register "h2_unikernel"
     [ server $ default_console $ default_posix_clock $ app ]
