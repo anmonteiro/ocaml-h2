@@ -42,7 +42,7 @@ let repeat (Streams.PriorityTreeNode.Connection root) queue num =
     else
       match Streams.PriorityQueue.pop q with
       | None -> failwith "invalid queue"
-      | Some ((k, (Stream p as p_node)), q') ->
+      | Some ((k, (Streams.PriorityTreeNode.Stream p as p_node)), q') ->
         (* simulate writing 100 bytes *)
         root.t_last <- p.t;
         Streams.update_t p_node 100;

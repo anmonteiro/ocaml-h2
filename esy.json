@@ -51,7 +51,7 @@
         }
       }
     },
-    "@esy-packages/esy-openssl": "esy-packages/esy-openssl#100f884",
+    "@esy-packages/esy-openssl": "esy-packages/esy-openssl#9813f1b",
     "@opam/ssl": "anmonteiro/ocaml-ssl:ssl.opam#917b768",
     "@opam/httpaf": "inhabitedtype/httpaf:httpaf.opam#53042e5"
   }

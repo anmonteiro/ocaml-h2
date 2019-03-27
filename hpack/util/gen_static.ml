@@ -6,14 +6,15 @@ let let_ name body =
   (Str.value Nonrecursive
       [ Vb.mk (Pat.var {txt=name; loc = !default_loc}) body ])
 
-module IntMap = Map.Make (struct
-    type t = int
-    let compare = compare
-  end)
-
-module StringMap = Map.Make (String)
-
 module CharSet = Set.Make (Char)
+
+module Hashtbl = struct
+  include Hashtbl
+
+  let[@inline] find_opt h key =
+  try Some (find h key)
+  with Not_found -> None
+end
 
 let token_of_name =
   String.map @@ function
@@ -34,14 +35,15 @@ let mk_tokens static_table =
   List.rev tokens
 
 let add_name name i names =
-  StringMap.update name begin function
-  | Some i' -> Some (min i i')
-  | None -> Some i
-  end names
+  let new_val = match Hashtbl.find_opt names name with
+  | Some i' -> min i i'
+  | None -> i
+  in
+  Hashtbl.replace names name new_val
 
 let find_pos names =
-  let n = StringMap.cardinal names in
-  let names = StringMap.bindings names |> List.map fst in
+  let n = Hashtbl.length names in
+  let names = Hashtbl.fold (fun k _ lst -> k :: lst) names [] in
   let rec loop pos =
       if
         List.map (fun name -> name.[pos]) names
@@ -52,16 +54,18 @@ let find_pos names =
   loop 0
 
 let make_token_map static_table =
-  Array.fold_left begin fun map (i, name, _) ->
+  let tbl = Hashtbl.create 60 in
+  Array.iter (fun (i, name, _) ->
     let length = String.length name in
-    IntMap.update length begin function
-    | Some names -> Some (add_name name i names)
-    | None -> Some (StringMap.singleton name i)
-    end map
-  end IntMap.empty static_table
-  |> IntMap.bindings
-  |> List.map @@ fun (length, names) ->
-  (length, find_pos names, StringMap.bindings names)
+    let string_tbl = match Hashtbl.find_opt tbl length with
+    | Some string_tbl -> string_tbl
+    | None -> Hashtbl.create 10
+    in
+    Hashtbl.add string_tbl name i;
+  ) static_table;
+  Hashtbl.fold (fun length names ret ->
+    let bindings = Hashtbl.fold (fun k v lst -> (k, v) :: lst) names [] in
+    (length, find_pos names, bindings) :: ret) tbl []
 
 let mk_static_table static_table =
   let items = Array.fold_left (fun acc (_, name, value) ->
@@ -93,7 +97,7 @@ let mk_lookup_token token_map =
             }
           ])
         (List.concat
-        [ List.map begin fun (length, pos, names) ->
+        [ List.map (fun (length, pos, names) ->
             Exp.case
               (Pat.constant (Pconst_integer (string_of_int length, None)))
               (Exp.match_
@@ -133,8 +137,8 @@ let mk_lookup_token token_map =
                     (Pat.any ())
                     (Exp.constant (Pconst_integer ("-1", None)))
                   ]
-                ]))
-          end token_map
+                ])))
+          token_map
         ; [ Exp.case
             (Pat.any ())
             (Exp.constant (Pconst_integer ("-1", None)))

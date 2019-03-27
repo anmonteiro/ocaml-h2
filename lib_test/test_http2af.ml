@@ -425,7 +425,7 @@ module Server_connection_tests = struct
     in
     let frame_wire = Test_common.serialize_frame settings in
     ignore @@ parse_frame_bigstring frame_wire (function
-      | Ok { Frame.frame_payload = Settings Settings.[ InitialWindowSize, v ]; _ } ->
+      | Ok { Frame.frame_payload = Settings [ Settings.InitialWindowSize, v ]; _ } ->
         (* The protocol says it should read a uint32 here, but because the
          * largest value it accepts is 2^31 - 1 we work around that by checking
          * for negative numbers (that have overflown). We avoid adding a new

@@ -13,6 +13,9 @@ opam-steps: &opam-steps
   steps:
     - checkout
     - run:
+        name: "Pull Submodules"
+        command: git submodule update --init --recursive
+    - run:
         name: "Note OCAML_VERSION for cache"
         command: echo $OCAML_VERSION > ../ocaml-version
     - restore_cache:
@@ -27,9 +30,10 @@ opam-steps: &opam-steps
     - run:
         name: "Install deps"
         command: |
-          sudo apt-get install -y pkg-config libgmp-dev
+          sudo apt-get install -y pkg-config libgmp-dev autotools-dev autoconf lsof
           opam update
           opam install -y dune
+          opam install -t --deps-only .
     - run:
         name: 'Clean'
         command: rm -rf ./_build
@@ -46,17 +50,29 @@ opam-steps: &opam-steps
           dune runtest --no-buffer
           dune build @slowtests --no-buffer
     - run:
+        name: 'Conformance tests'
+        command: |
+          eval `opam config env`
+          curl -L https://github.com/summerwind/h2spec/releases/download/v2.2.1/h2spec_linux_amd64.tar.gz | tar xvz
+          nohup dune exec spec/lwt_h2spec_string.exe &
+          sleep 2
+          ./h2spec --strict -p 8080
+          kill $(lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
+
+          nohup dune exec spec/lwt_h2spec_bigstring.exe &
+          sleep 2
+          ./h2spec --strict -p 8080
+          kill $(lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
+
+          nohup dune exec spec/lwt_h2spec_streaming.exe &
+          sleep 2
+          ./h2spec --strict -p 8080 --timeout 3
+          kill $(lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
+    - run:
         name: 'Check git is clean'
         command: git diff --exit-code
 
 jobs:
-  4.03.0:
-    docker:
-      - image: ocaml/opam2:debian-9-ocaml-4.03
-    environment:
-      - TERM: dumb
-      - OCAML_VERSION: "4.03.0"
-    <<: *opam-steps
   4.04.2:
     docker:
       - image: ocaml/opam2:debian-9-ocaml-4.04
@@ -87,12 +103,15 @@ jobs:
     <<: *opam-steps
   esy:
     docker:
-      - image: circleci/node:7.10
+      - image: circleci/node:11.9
     environment:
       - TERM: dumb
       - NPM_CONFIG_PREFIX: "~/.npm-global"
     steps:
       - checkout
+      - run:
+          name: "Pull Submodules"
+          command: git submodule update --init --recursive
       - run:
           name: 'Note esy.lock checksum for cache'
           command: find esy.lock -type f -exec md5sum {} \; | sort -k 2 | md5sum > ../esy-checksum
@@ -101,8 +120,10 @@ jobs:
       - restore_cache:
           <<: *esy_post_build_cache_key
       - run:
-          name: "Install esy"
-          command: npm install -g esy@0.4.3
+          name: "Install esy + system deps"
+          command: |
+            sudo apt-get install texinfo
+            npm install -g esy
       - run:
           name: 'esy install'
           command: ~/.npm-global/bin/esy install
@@ -136,7 +157,6 @@ workflows:
   version: 2
   build-deploy:
     jobs:
-      - 4.03.0
       - 4.04.2
       - 4.05.0
       - 4.06.1
