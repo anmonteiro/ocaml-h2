@@ -115,7 +115,7 @@ let frame_testable = (module struct
     in
     `Assoc (("type", `Int (Frame.FrameType.serialize frame_type)) :: others)
 
-  let frame_to_yojson Frame.{frame_header; frame_payload} =
+  let frame_to_yojson { Frame.frame_header; frame_payload } =
     let { Frame.payload_length; flags; stream_id; frame_type } = frame_header
     in
     `Assoc
