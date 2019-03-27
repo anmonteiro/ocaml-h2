@@ -102,9 +102,7 @@ jobs:
           <<: *esy_post_build_cache_key
       - run:
           name: "Install esy + system deps"
-          command: |
-            sudo apt-get install -y perl
-            npm install -g esy
+          command: npm install -g esy
       - run:
           name: 'esy install'
           command: ~/.npm-global/bin/esy

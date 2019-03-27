@@ -26,7 +26,7 @@
   },
   "resolutions": {
     "@opam/conf-libev": "esy-packages/libev:package.json#86d244e",
-    "@opam/conf-autoconf": "esy-packages/esy-autoconf:package.json#772d9c9",
+    "@opam/conf-autoconf": "esy-packages/esy-autoconf:package.json#3106e34",
     "@opam/conf-gmp": {
       "source": "esy-packages/esy-gmp:package.json#03309d6",
       "override": {
@@ -51,7 +51,7 @@
         }
       }
     },
-    "@esy-packages/esy-openssl": "esy-packages/esy-openssl#6053f67",
+    "@esy-packages/esy-openssl": "esy-packages/esy-openssl#27abbe6",
     "@opam/ssl": "anmonteiro/ocaml-ssl:ssl.opam#917b768",
     "@opam/httpaf": "inhabitedtype/httpaf:httpaf.opam#53042e5"
   }
