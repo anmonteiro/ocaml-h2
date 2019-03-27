@@ -51,7 +51,7 @@ client library will also be provided.
 
 ## Usage
 
-TBD, see the examples folder for now.
+TBD, see the examples folder and the [`.mli` file](./lib/http2af.mli) for now.
 
 ## Development
 
