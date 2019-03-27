@@ -20,6 +20,11 @@ Install the library and its dependencies via [OPAM][opam]:
 ```bash
 opam install http2af
 ```
+
+## Usage
+
+TBD, see the examples folder and the [`.mli` file](./lib/http2af.mli) for now.
+
 ## Conformance
 
 One of http2/af's goals is to be 100% compliant with the HTTP/2 specification.
@@ -48,10 +53,6 @@ off-heap buffers wherever possible, for both parsing and serialization.
 
 http2/af only currently provides a server implementation. In the future, a
 client library will also be provided.
-
-## Usage
-
-TBD, see the examples folder and the [`.mli` file](./lib/http2af.mli) for now.
 
 ## Development
 
