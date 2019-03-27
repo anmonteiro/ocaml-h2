@@ -12,6 +12,8 @@ esy_post_build_cache_key: &esy_post_build_cache_key
 opam-steps: &opam-steps
   steps:
     - checkout
+    post:
+      - git submodule update --init --recursive
     - run:
         name: "Note OCAML_VERSION for cache"
         command: echo $OCAML_VERSION > ../ocaml-version
