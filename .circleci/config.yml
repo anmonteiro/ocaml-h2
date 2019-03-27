@@ -91,6 +91,9 @@ jobs:
     steps:
       - checkout
       - run:
+          name: "Pull Submodules"
+          command: git submodule update --init --recursive
+      - run:
           name: 'Note esy.lock checksum for cache'
           command: find esy.lock -type f -exec md5sum {} \; | sort -k 2 | md5sum > ../esy-checksum
       - restore_cache:
