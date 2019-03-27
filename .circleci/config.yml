@@ -98,8 +98,10 @@ jobs:
       - restore_cache:
           <<: *esy_post_build_cache_key
       - run:
-          name: "Install esy"
-          command: npm install -g esy
+          name: "Install esy + system deps"
+          command: |
+            sudo apt-get install -y pkg-config libgmp-dev autotools-dev autoconf
+            npm install -g esy
       - run:
           name: 'esy install'
           command: ~/.npm-global/bin/esy install
