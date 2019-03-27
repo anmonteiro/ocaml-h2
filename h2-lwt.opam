@@ -17,3 +17,7 @@ depends: [
   "lwt"
 ]
 synopsis: "Lwt support for h2"
+description: """
+h2 is an implementation of the HTTP/2 specification entirely in OCaml. h2-lwt
+provides an Lwt runtime implementation for h2.
+"""

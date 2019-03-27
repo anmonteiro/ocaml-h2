@@ -20,3 +20,8 @@ build: [
 ]
 synopsis:
   "An HPACK (Header Compression for HTTP/2) implementation in OCaml"
+description: """
+hpack is an implementation of the HPACK: Header Compression for HTTP/2
+specification (RFC7541) written in OCaml. It uses Angstrom and Faraday for
+parsing and serialization, respectively.
+"""
