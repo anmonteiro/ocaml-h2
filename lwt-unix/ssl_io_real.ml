@@ -2,7 +2,7 @@ open Lwt.Infix
 
 let () = Ssl.init ()
 
-module Io : Http2af_lwt.IO with
+module Io : H2_lwt.IO with
     type socket = Lwt_ssl.socket
     and type addr = Unix.sockaddr = struct
   type socket = Lwt_ssl.socket
@@ -69,9 +69,9 @@ module Io : Http2af_lwt.IO with
     begin match Lwt_unix.state (Lwt_ssl.get_fd ssl) with
     | Aborted _
     | Closed ->
-      Http2af.Server_connection.shutdown connection
+      H2.Server_connection.shutdown connection
     | Opened ->
-      Http2af.Server_connection.report_exn connection exn
+      H2.Server_connection.report_exn connection exn
     end;
     Lwt.return_unit
 end

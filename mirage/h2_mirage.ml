@@ -1,6 +1,6 @@
 open Lwt.Infix
 
-module Io : Http2af_lwt.IO with
+module Io : H2_lwt.IO with
     type socket = Conduit_mirage.Flow.flow
     and type addr = unit = struct
   type socket = Conduit_mirage.Flow.flow
@@ -73,12 +73,12 @@ module Io : Http2af_lwt.IO with
      *   not required for the initiator of the close to wait for the
      *   responding close_notify alert before closing the read side of
      *   the connection. *)
-    Http2af.Server_connection.report_exn connection exn;
+    H2.Server_connection.report_exn connection exn;
     Lwt.return_unit
 end
 
 module Server = struct
-  include Http2af_lwt.Server (Io)
+  include H2_lwt.Server (Io)
 
   let create_connection_handler ?config ~request_handler ~error_handler =
     fun flow ->
@@ -88,7 +88,7 @@ module Server = struct
 end
 
 module type Server_intf = sig
-  open Http2af
+  open H2
 
   val create_connection_handler
     :  ?config : Config.t

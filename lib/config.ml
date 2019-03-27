@@ -47,7 +47,7 @@ let default =
        header to prevent backtracking, therefore the entire payload can fit the
        read buffer. The default is 16384, and can't be lower than that.
 
-       Note: http2/af does not check that MAX_FRAME_SIZE is lower than 16384
+       Note: h2 does not check that MAX_FRAME_SIZE is lower than 16384
        octets. In the case that a lower value than permitted is set, peers will
        reject the setting and close the connection with a PROTOCOL_ERROR.
 

@@ -1,4 +1,4 @@
-open Http2af__
+open H2__
 
 let read_all path =
   let file = open_in path in

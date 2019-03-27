@@ -1,7 +1,7 @@
 open Lwt.Infix
-open Http2af
+open H2
 
-module type HTTP2 = Http2af_mirage.Server_intf
+module type HTTP2 = H2_mirage.Server_intf
 
 module Dispatch (C: Mirage_types_lwt.CONSOLE) (Http2: HTTP2) = struct
 

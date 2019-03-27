@@ -1,6 +1,6 @@
 (library
- (name        http2af)
- (public_name http2af)
+ (name h2)
+ (public_name h2)
  (libraries
    angstrom faraday bigstringaf httpaf result psq hpack)
  (flags (:standard -safe-string)))

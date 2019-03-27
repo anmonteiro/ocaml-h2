@@ -1,4 +1,4 @@
-open Http2af__
+open H2__
 open Test_common
 
 let pp_priority fmt { Priority.weight; stream_dependency; exclusive } =

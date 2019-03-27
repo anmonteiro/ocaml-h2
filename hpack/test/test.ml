@@ -56,7 +56,7 @@ let encode_file fixtures_dir (story, file) =
   let _, cases = parse_file file in
   let result = encode cases in
   let json = `Assoc
-    [ "description", `String "Encoded by http2/af's HPACK implementation"
+    [ "description", `String "Encoded by h2's HPACK implementation"
     ; "cases", `List (
         result |> List.map @@ fun (seq, wire, headers) ->
         `Assoc [

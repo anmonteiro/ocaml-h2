@@ -1,6 +1,6 @@
 open Test_common
-open Http2af
-open Http2af__
+open H2
+open H2__
 
 module Headers_tests = struct
   let test_headers_roundtrip_ordering () =
@@ -691,7 +691,7 @@ module Server_connection_tests = struct
 end
 
 let () =
-  Alcotest.run "http2af unit tests"
+  Alcotest.run "ocaml-h2 unit tests"
     [ "headers", Headers_tests.suite
     ; "server_connection", Server_connection_tests.suite
     ]

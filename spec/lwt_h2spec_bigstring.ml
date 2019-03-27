@@ -11,7 +11,7 @@ let set_interval s f destroy =
   set_interval_loop s f 2
 
 let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
-  let open Http2af in
+  let open H2 in
 
   let request_handler : Unix.sockaddr -> Reqd.t -> unit =
       fun _client_address request_descriptor ->
@@ -80,7 +80,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
 
   let error_handler :
       Unix.sockaddr ->
-      ?request:Http2af.Request.t ->
+      ?request:H2.Request.t ->
       _ ->
       (Headers.t -> [`write] Body.t) ->
         unit =
@@ -100,7 +100,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
     Body.close_writer response_body
   in
 
-  Http2af_lwt_unix.Server.create_connection_handler
+  H2_lwt_unix.Server.create_connection_handler
     ?config:None
     ~request_handler
     ~error_handler

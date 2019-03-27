@@ -1,4 +1,4 @@
-open Http2af
+open H2
 
 
 (* The function that results from [create_connection_handler] should be passed

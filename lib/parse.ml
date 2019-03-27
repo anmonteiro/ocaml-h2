@@ -558,7 +558,7 @@ module Reader = struct
 
   let start t state =
       match state with
-      | AU.Done _         -> failwith "http2af.Parse.unable to start parser"
+      | AU.Done _         -> failwith "h2.Parse.unable to start parser"
       | Fail(0, marks, msg) ->
         t.parse_state <- Fail (`Parse(marks, msg))
       | Partial { committed = 0; continue } ->
