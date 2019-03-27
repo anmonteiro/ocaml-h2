@@ -131,3 +131,7 @@ $ esy b dune runtest
 ## License
 
 Distributed under the 3-Clause BSD License, see [LICENSE](./LICENSE).
+
+This source distribution includes work based on
+[http/af](https://github.com/inhabitedtype/httpaf). http/af's license file is
+included in [httpaf.LICENSE](./httpaf.LICENSE)
