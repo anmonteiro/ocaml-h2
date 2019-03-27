@@ -33,6 +33,6 @@
     }
   },
   "dependencies": {
-    "@esy-packages/esy-autoconf": "esy-packages/esy-autoconf:package.json#3106e34"
+    "@esy-packages/esy-autoconf": "esy-packages/esy-autoconf:package.json#71a8836"
   }
 }
