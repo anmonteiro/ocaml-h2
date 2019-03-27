@@ -23,8 +23,9 @@ opam install h2
 
 ## Usage
 
-TBD, see the [`examples`](./examples) folder and the [`.mli`
-file](./lib/h2.mli) for now.
+There's generated documentation [here](https://anmonteiro.github.io/ocaml-h2/)
+
+Examples TBD, see the [`examples`](./examples) folder.
 
 ## Conformance
 
