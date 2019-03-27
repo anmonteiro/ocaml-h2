@@ -27,7 +27,7 @@ opam-steps: &opam-steps
     - run:
         name: "Install deps"
         command: |
-          sudo apt-get install -y pkg-config libgmp-dev autoconf
+          sudo apt-get install -y pkg-config libgmp-dev autotools
           opam update
           opam install -y dune
           opam install -t --deps-only .
