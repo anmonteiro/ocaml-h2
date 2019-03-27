@@ -8,7 +8,6 @@ dev-repo: "git+https://github.com/anmonteiro/h2.git"
 build: [
   ["dune" "subst"] {pinned}
   ["dune" "build" "-p" name "-j" jobs]
-  ["dune" "runtest" "-p" name] {with-test}
 ]
 depends: [
   "ocaml" {>= "4.04"}
