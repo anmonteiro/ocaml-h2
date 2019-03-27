@@ -17,7 +17,6 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
       fun _client_address request_descriptor ->
 
     let request = Reqd.request request_descriptor in
-    Printf.eprintf "tony: %s %s\n%!" (Method.to_string request.meth) request.target;
     match (request.meth, request.target) with
     | `POST, "/" ->
       (* let request_body = Reqd.request_body request_descriptor in *)

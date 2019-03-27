@@ -65,11 +65,6 @@ module Io : Http2af_lwt.IO with
      *   not required for the initiator of the close to wait for the
      *   responding close_notify alert before closing the read side of
      *   the connection. *)
-    Printf.eprintf "EXN SOMETHING: %B %s %s\n%!"
-      (Lwt_unix.state socket == Lwt_unix.Closed)
-      (Printexc.to_string exn)
-      (Printexc.get_backtrace ());
-
     begin match Lwt_unix.state socket with
     | Aborted _
     | Closed ->

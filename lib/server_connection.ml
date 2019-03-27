@@ -106,7 +106,6 @@ let make_active_frame_reader t =
 let handle_error t = function
   | Error.ConnectionError (error, data) ->
     if not t.did_send_go_away then begin
-      Printf.eprintf "REPORTING CONNECTION ERROR %ld %S\n%!" (Error.serialize error) data;
       (* From RFC7540§5.4.1:
            An endpoint that encounters a connection error SHOULD first send a
            GOAWAY frame (Section 6.8) with the stream identifier of the last
@@ -135,7 +134,6 @@ let handle_error t = function
       wakeup_writer t
     end
   | StreamError (stream_id, error) ->
-    Printf.eprintf "REPORTING STREAM ERROR ON %ld %ld\n%!" stream_id (Error.serialize error);
     begin match Streams.find t.streams stream_id with
     | Some reqd ->
       Reqd.reset_stream reqd error;
@@ -880,11 +878,6 @@ let process_goaway_frame t _frame payload =
   let bytes = Bytes.create len in
   Bigstringaf.unsafe_blit_to_bytes debug_data ~src_off:0 bytes ~dst_off:0 ~len;
   let debug_data_str = Bytes.unsafe_to_string bytes in
-  Printf.eprintf "GOAWAY %ld %ld %d %s\n%!"
-    last_stream_id
-    (Error.serialize error)
-    len
-    debug_data_str;
   (* TODO(anmonteiro): I think we need to allow lower numbered streams to
    * complete. *)
   shutdown t
@@ -1024,12 +1017,8 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
     }
   in
   let writer = Writer.create response_buffer_size in
-  let rec init_handler = fun ({ Frame.frame_header; _ } as recv_frame) settings_list ->
+  let rec init_handler = fun recv_frame settings_list ->
     let t = Lazy.force t in
-    Printf.eprintf "BEING CALLED. %d %d %d\n%!"
-      (frame_header.stream_id |> Int32.to_int)
-      frame_header.payload_length
-      (List.length settings_list);
     t.reader <- make_active_frame_reader t;
     (* Check if the settings for the connection are different than the default
      * HTTP/2 settings. In the event that they are, we need to send a non-empty

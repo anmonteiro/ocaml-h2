@@ -33,7 +33,6 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
         Body.schedule_read
           request_body
           ~on_eof:(fun () ->
-            Printf.eprintf "WRITIN'\n%!";
             let response =
               Response.create
                 ~headers:(Headers.of_list [
@@ -45,7 +44,6 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
             Reqd.respond_with_string request_descriptor response "non-empty data."
             )
           ~on_read:(fun request_data ~off ~len ->
-            Printf.eprintf "READIN' %s\n%!" (Bigstringaf.substring request_data ~off ~len);
             respond ())
       in
       respond ()
@@ -58,7 +56,6 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
         | Some request_content_type -> request_content_type
         | None -> "application/octet-stream"
       in
-      Printf.eprintf "WRITIN'\n%!";
       let request_body = Reqd.request_body request_descriptor in
       Body.close_reader request_body;
       let response =
@@ -84,7 +81,6 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
         unit =
       fun _client_address ?request:_ error start_response ->
 
-        Printf.eprintf "HAVE TO HANDLE THE ERROR!\n%!";
     let response_body = start_response Headers.empty in
 
     begin match error with

@@ -432,7 +432,6 @@ let _report_error ?request t s exn error_code =
     reset_stream t error_code;
     Writer.close_and_drain t.writer
   | (Fixed _ | Complete _ | Streaming _ | Waiting _), _ ->
-    Printf.eprintf "Got an error and didn't handle it\n%!";
     (* XXX(seliopou): Once additional logging support is added, log the error
      * in case it is not spurious. *)
     (* Still need to send an RST_STREAM frame. Set t.error_code with

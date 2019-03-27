@@ -31,7 +31,6 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
         Body.schedule_read
           request_body
           ~on_eof:(fun () ->
-            Printf.eprintf "WRITIN'\n%!";
             let response =
               Response.create
                 ~headers:(Headers.of_list [
@@ -43,7 +42,6 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
             Reqd.respond_with_string request_descriptor response "non-empty data."
             )
           ~on_read:(fun request_data ~off ~len ->
-            Printf.eprintf "READIN' %s\n%!" (Bigstringaf.substring request_data ~off ~len);
             respond ())
       in
       respond ()
@@ -73,7 +71,6 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
           request_body
           ~on_eof:(fun () ->
             set_interval 1 (fun () ->
-            Printf.eprintf "WRITIN'\n%!";
             Body.write_string response_body "FOO";
             (* Body.flush response_body ignore; *)
             true
@@ -82,7 +79,6 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
             (fun () -> Body.close_writer response_body)
           )
           ~on_read:(fun request_data ~off ~len ->
-            Printf.eprintf "WRITIN'\n%!";
             Body.write_bigstring response_body request_data ~off ~len;
             respond ())
       in

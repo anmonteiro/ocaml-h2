@@ -124,9 +124,7 @@ module Server  (Io: IO) = struct
       Lwt.async (fun () ->
         Lwt.catch
           read_loop_step
-          (fun exn ->
-            Printf.eprintf "exn read \n%!";
-            report_exn exn))
+          report_exn)
     in
 
 
@@ -154,9 +152,7 @@ module Server  (Io: IO) = struct
       Lwt.async (fun () ->
         Lwt.catch
           write_loop_step
-          (fun exn ->
-            Printf.eprintf "exn write \n%!";
-            report_exn exn))
+          report_exn)
     in
 
 
@@ -168,13 +164,6 @@ module Server  (Io: IO) = struct
 
   let create_connection_handler ?(config=Config.default) ~request_handler ~error_handler =
     fun client_addr socket ->
-      (* Lwt_unix.setsockopt socket Lwt_unix.TCP_NODELAY true;
-      let foo = match Lwt_unix.getsockname socket with
-      | Lwt_unix.ADDR_UNIX s -> Format.sprintf "unix: %s" s
-      | Lwt_unix.ADDR_INET (addr, port) ->
-        Format.sprintf "inet: %s:%d" Unix.(string_of_inet_addr addr) port
-      in
-      Format.eprintf "Connection create: %sd@." foo; *)
       let connection =
         Server_connection.create
           ~config

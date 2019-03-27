@@ -73,9 +73,6 @@ module Io : Http2af_lwt.IO with
      *   not required for the initiator of the close to wait for the
      *   responding close_notify alert before closing the read side of
      *   the connection. *)
-    Printf.eprintf "EXN SOMETHING: %s %s\n%!"
-      (Printexc.to_string exn)
-      (Printexc.get_backtrace ());
     Http2af.Server_connection.report_exn connection exn;
     Lwt.return_unit
 end
