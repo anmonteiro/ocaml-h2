@@ -63,7 +63,7 @@ type value = int
 
 type settings_list = (key * value) list
 
-let from_key = function
+let serialize_key = function
   | HeaderTableSize -> 0x1
   | EnablePush -> 0x2
   | MaxConcurrentStreams -> 0x3
@@ -71,7 +71,7 @@ let from_key = function
   | MaxFrameSize -> 0x5
   | MaxHeaderListSize -> 0x6
 
-let to_key = function
+let parse_key = function
   | 0x1 -> Some HeaderTableSize
   | 0x2 -> Some EnablePush
   | 0x3 -> Some MaxConcurrentStreams
@@ -138,3 +138,29 @@ let default_settings =
   ; max_header_list_size = None
   }
 
+let settings_for_the_connection settings =
+  let settings_list =
+    if settings.max_frame_size <> default_settings.max_frame_size then
+      [ MaxFrameSize, settings.max_frame_size ]
+    else
+      []
+  in
+  let settings_list =
+    if settings.max_concurrent_streams <> default_settings.max_concurrent_streams then
+      (MaxConcurrentStreams, settings.max_concurrent_streams) :: settings_list
+    else
+      settings_list
+  in
+  let settings_list =
+    if settings.initial_window_size <> default_settings.initial_window_size then
+      (InitialWindowSize, settings.initial_window_size) :: settings_list
+    else
+      settings_list
+  in
+  let settings_list =
+    if settings.enable_push <> default_settings.enable_push then
+      (EnablePush, if settings.enable_push then 1 else 0) :: settings_list
+    else
+      settings_list
+  in
+  settings_list

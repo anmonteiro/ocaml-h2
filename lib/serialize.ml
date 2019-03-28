@@ -193,9 +193,13 @@ let write_settings_frame t info settings =
   let rec write_settings_payload = function
     | [] -> ()
     | (key, value) :: xs ->
-        BE.write_uint16 t (Settings.from_key key);
-        BE.write_uint32 t (Int32.of_int value);
-        write_settings_payload xs
+      (* From RFC7540§6.5.1:
+           The payload of a SETTINGS frame consists of zero or more parameters,
+           each consisting of an unsigned 16-bit setting identifier and an
+           unsigned 32-bit value. *)
+      BE.write_uint16 t (Settings.serialize_key key);
+      BE.write_uint32 t (Int32.of_int value);
+      write_settings_payload xs
   in
   let header =
     { Frame
@@ -297,35 +301,16 @@ let write_continuation_frame t info ?len iovecs =
   write_frame_header t header;
   bounded_schedule_iovecs t ~len iovecs
 
-(* TODO: write proper settings frame. This function should only write the preface,
- * and `Reader.write_connection_preface` should additionally write the settings.*)
 let write_connection_preface t =
   (* From RFC7540§3.5:
        In HTTP/2, each endpoint is required to send a connection preface as a
        final confirmation of the protocol in use and to establish the initial
-       settings for the HTTP/2 connection. *)
-  write_string t "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
-  let frame_info =
-    { flags = Flags.default_flags
-    ; stream_id = Int32.zero
-    ; padding = None
-      (* Doesn't matter for SETTINGS frames. *)
-    ; max_frame_payload = 0
-    }
-  in
-  write_settings_frame t frame_info []
+       settings for the HTTP/2 connection. [...] The client connection preface
+       starts with a sequence of 24 octets, [...] the string
+       PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n. *)
+  write_string t "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 
 module Writer = struct
-  let make_frame_info
-    ?padding
-    ?(flags=Flags.default_flags)
-    ?(max_frame_size=Config.default.read_buffer_size) stream_id =
-    { flags
-    ; stream_id
-    ; padding
-    ; max_frame_payload = max_frame_size
-    }
-
   type t =
     { buffer                : Bigstringaf.t
       (* The buffer that the encoder uses for buffered writes. Managed by the
@@ -351,8 +336,23 @@ module Writer = struct
 
   let faraday t = t.encoder
 
-  let write_connection_preface t =
-    write_connection_preface t.encoder
+  let make_frame_info
+    ?padding
+    ?(flags=Flags.default_flags)
+    ?(max_frame_size=Config.default.read_buffer_size) stream_id =
+    { flags
+    ; stream_id
+    ; padding
+    ; max_frame_payload = max_frame_size
+    }
+
+  let write_connection_preface t settings_list =
+    write_connection_preface t.encoder;
+    let frame_info = make_frame_info Stream_identifier.connection in
+    (* From RFC7540§3.5:
+         This sequence MUST be followed by a SETTINGS frame (Section 6.5),
+         which MAY be empty. *)
+    write_settings_frame t.encoder frame_info settings_list
 
   let chunk_data_frames ?(off=0) ~f frame_info total_length =
     let { max_frame_payload; _ } = frame_info in

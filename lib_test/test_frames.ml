@@ -94,7 +94,9 @@ let frame_testable = (module struct
       ["error_code", `Int (Error.serialize error_code |> Int32.to_int)]
     | Settings settings_list ->
       [ "settings"
-      , `List (List.map (fun (k, v) -> `List [`Int (Settings.from_key k); `Int v]) settings_list)
+      , `List (List.map (fun (k, v) ->
+          `List [`Int (Settings.serialize_key k); `Int v])
+          settings_list)
       ]
     | PushPromise (stream_identifier, fragment) ->
       [ "header_block_fragment", `String (bs_to_string fragment)
@@ -182,7 +184,7 @@ let frame_payload_of_json frame_type json =
   | Settings ->
     let settings = List.map (fun setting_json ->
       let setting = Json.to_list setting_json in
-      let key_id = match Json.to_int (List.hd setting) |> Settings.to_key with
+      let key_id = match Json.to_int (List.hd setting) |> Settings.parse_key with
       | Some key_id -> key_id
       | None -> raise (Invalid_argument "settings key id")
       in

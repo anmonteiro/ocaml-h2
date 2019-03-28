@@ -45,13 +45,12 @@ type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
 
 type reader_state =
-  | New of Reader.connection_preface
+  | New of Reader.client_connection_preface
   | Active of Reader.frame
 
 type t =
   { settings                       : Settings.t
   ; mutable reader                 : reader_state
-  ; active_connection_handler      : t -> (Frame.t, Error.t) result -> unit
   ; writer                         : Writer.t
   ; config                         : Config.t
   ; request_handler                : request_handler
@@ -66,6 +65,9 @@ type t =
   ; mutable did_send_go_away       : bool
   ; wakeup_writer  : (unit -> unit) ref
   ; wakeup_reader  : (unit -> unit) list ref
+    (* From RFC7540§4.3:
+         Header compression is stateful. One compression context and one
+         decompression context are used for the entire connection. *)
   ; encoder : Hpack.Encoder.t
   ; decoder : Hpack.Decoder.t
   }
@@ -133,9 +135,6 @@ let shutdown t =
   shutdown_writer t;
   wakeup_reader t;
   wakeup_writer t
-
-let make_active_frame_reader t =
-  Active (Reader.frame (t.active_connection_handler t))
 
 let handle_error t = function
   | Error.ConnectionError (error, data) ->
@@ -1050,45 +1049,15 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
     }
   in
   let writer = Writer.create response_buffer_size in
-  let rec init_handler = fun recv_frame settings_list ->
+  let rec connection_preface_handler = fun recv_frame settings_list ->
     let t = Lazy.force t in
-    t.reader <- make_active_frame_reader t;
+    t.reader <- Active (Reader.frame (frame_handler t));
     (* Check if the settings for the connection are different than the default
      * HTTP/2 settings. In the event that they are, we need to send a non-empty
      * SETTINGS frame advertising our configuration. *)
-    let settings =
-      let settings_list =
-        if settings.max_frame_size <> Settings.default_settings.max_frame_size then
-          Settings.[ MaxFrameSize, settings.max_frame_size ]
-        else
-          []
-      in
-      let settings_list =
-        if settings.max_concurrent_streams <> Settings.default_settings.max_concurrent_streams then
-          Settings.(MaxConcurrentStreams, settings.max_concurrent_streams) :: settings_list
-        else
-          settings_list
-      in
-      let settings_list =
-        if settings.initial_window_size <> Settings.default_settings.initial_window_size then
-          Settings.(InitialWindowSize, settings.initial_window_size) :: settings_list
-        else
-          settings_list
-      in
-      let settings_list =
-        if settings.enable_push <> Settings.default_settings.enable_push then
-          Settings.(EnablePush, if settings.enable_push then 1 else 0) :: settings_list
-        else
-          settings_list
-      in
-      settings_list
-    in
+    let settings = Settings.settings_for_the_connection settings in
     (* This is the connection preface. We don't set the ack flag. *)
-    let frame_info =
-      Writer.make_frame_info
-        ~flags:Flags.default_flags
-        Stream_identifier.connection
-    in
+    let frame_info = Writer.make_frame_info Stream_identifier.connection in
     (* This is our SETTINGS frame. *)
     (* From RFC7540§3.5:
          The server connection preface consists of a potentially empty
@@ -1157,27 +1126,23 @@ stream"
                Frames of unknown types are ignored. *)
           ()
   and t = lazy
-  { settings
-  ; reader                    = New (Reader.connection_preface init_handler)
-  ; active_connection_handler = frame_handler
-  ; writer
-  ; config
-  ; request_handler
-  ; error_handler
-  ; streams                   = Streams.make_root ()
-  ; current_client_streams    = 0
-  ; max_client_stream_id      = 0l
-  ; max_pushed_stream_id      = 0l
-  ; receiving_headers_for_stream = None
-  ; did_send_go_away          = false
-  ; wakeup_writer             = ref default_wakeup_writer
-  ; wakeup_reader             = ref []
-  (* From RFC7540§4.3:
-       Header compression is stateful. One compression context and one
-       decompression context are used for the entire connection. *)
-  ; encoder = Hpack.Encoder.(create settings.header_table_size)
-  ; decoder = Hpack.Decoder.(create settings.header_table_size)
-  }
+    { settings
+    ; reader = New (Reader.client_connection_preface connection_preface_handler)
+    ; writer
+    ; config
+    ; request_handler
+    ; error_handler
+    ; streams = Streams.make_root ()
+    ; current_client_streams = 0
+    ; max_client_stream_id = 0l
+    ; max_pushed_stream_id = 0l
+    ; receiving_headers_for_stream = None
+    ; did_send_go_away = false
+    ; wakeup_writer = ref default_wakeup_writer
+    ; wakeup_reader = ref []
+    ; encoder = Hpack.Encoder.(create settings.header_table_size)
+    ; decoder = Hpack.Decoder.(create settings.header_table_size)
+    }
   in Lazy.force t
 
 let next_read_operation t =
