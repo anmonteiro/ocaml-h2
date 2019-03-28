@@ -68,28 +68,28 @@ let decode_int prefix n =
   else
     let rec loop i m =
       any_uint8 >>= fun b ->
-      let i = i + (b land 127) lsl m in
-      if b land 0b10000000 == 0b10000000 then
-        loop i (m + 7)
-      else return i
+        let i = i + (b land 127) lsl m in
+        if b land 0b10000000 == 0b10000000 then
+          loop i (m + 7)
+        else return i
     in
     loop i 0
 
 let decode_string =
-  any_uint8 >>= begin fun h ->
-  (* From RFC7541§5.2:
-       The number of octets used to encode the string literal, encoded as an
-       integer with a 7-bit prefix (see Section 5.1). *)
-  decode_int h 7 >>= fun string_length ->
-  take string_length >>| fun string_data ->
-  (* From RFC7541§5.2:
-       A one-bit flag, H, indicating whether or not the octets of the string
-       are Huffman encoded. *)
-  if h land 0b10000000 == 0 then
-    Ok string_data
-  else
-    Huffman.decode string_data
-  end
+  any_uint8 >>= fun h ->
+    (* From RFC7541§5.2:
+         The number of octets used to encode the string literal, encoded as an
+         integer with a 7-bit prefix (see Section 5.1). *)
+    decode_int h 7 >>= fun string_length ->
+      lift (fun string_data ->
+        (* From RFC7541§5.2:
+          A one-bit flag, H, indicating whether or not the octets of the
+           string are Huffman encoded. *)
+        if h land 0b10000000 == 0 then
+          Ok string_data
+        else
+          Huffman.decode string_data)
+        (take string_length)
 
 let get_indexed_field table index =
   let static_table_size = Static_table.table_size in
@@ -146,13 +146,13 @@ let decode_headers ({ table; _ } as t) =
     if is_eof then
       ok acc
     else
-    any_uint8 <* commit >>= fun b ->
+    any_uint8 >>= fun b ->
     if b land 128 != 0 then begin
       (* From RFC7541§6.1: Indexed Header Field Representation
            An indexed header field starts with the '1' 1-bit pattern, followed
            by the index of the matching header field, represented as an integer
            with a 7-bit prefix (see Section 5.1). *)
-      decode_int b 7 <* commit >>= fun index ->
+      decode_int b 7 >>= fun index ->
       match get_indexed_field table index with
       | Ok (name, value) ->
         loop ({ name; value; sensitive = false } :: acc) true
@@ -163,7 +163,7 @@ let decode_headers ({ table; _ } as t) =
            starts with the '01' 2-bit pattern. In this case, the index of the
            entry is represented as an integer with a 6-bit prefix (see Section
            5.1). *)
-      decode_header_field table b 6 <* commit >>= function
+      decode_header_field table b 6 >>= function
       | Ok (name, value) ->
         (* From RFC7541§6.2.1: Literal Header Field with Incremental Indexing
              A literal header field with incremental indexing representation
@@ -177,7 +177,7 @@ let decode_headers ({ table; _ } as t) =
            A literal header field without indexing representation starts with
            the '0000' 4-bit pattern. In this case, the index of the entry is
            represented as an integer with a 4-bit prefix (see Section 5.1). *)
-      decode_header_field table b 4 <* commit >>= function
+      decode_header_field table b 4 >>= function
       | Ok (name, value) ->
         loop ({ name; value; sensitive = false } :: acc) true
       | Error e -> error e
@@ -187,7 +187,7 @@ let decode_headers ({ table; _ } as t) =
            the '0001' 4-bit pattern.
           The encoding of the representation is identical to the literal header
           field without indexing (see Section 6.2.2). *)
-      decode_header_field table b 4 <* commit >>= function
+      decode_header_field table b 4 >>= function
       | Ok (name, value) ->
         loop ({ name; value; sensitive = true } :: acc) true
       | Error e -> error e

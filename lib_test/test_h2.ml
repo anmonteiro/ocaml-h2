@@ -121,15 +121,13 @@ module Server_connection_tests = struct
     parse_frame_bigstring (bs_of_string wire)
 
   let preface =
-    let f = Faraday.create 0x1000 in
-    Serialize.write_connection_preface f;
-    Faraday.serialize_to_string f
+    let writer = Serialize.Writer.create 0x400 in
+    Serialize.Writer.write_connection_preface writer [];
+    Faraday.serialize_to_string (Serialize.Writer.faraday writer)
 
   let handle_preface t =
     let preface_len = String.length preface in
-    let preface =
-      read t (Bigstringaf.of_string preface ~off:0 ~len:preface_len) ~off:0 ~len:preface_len
-    in
+    let preface = read t (bs_of_string preface) ~off:0 ~len:preface_len in
     Alcotest.(check int) "read preface returns preface length" preface_len preface;
     match next_write_operation t with
     | `Write iovecs ->

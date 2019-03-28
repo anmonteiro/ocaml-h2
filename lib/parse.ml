@@ -40,6 +40,15 @@ type parse_context =
   ; mutable did_report_stream_error : bool
   }
 
+let error e =
+  Error e
+
+let connection_error error_code msg =
+  error Error.(ConnectionError (error_code, msg))
+
+let stream_error error_code stream_id =
+  error Error.(StreamError (stream_id, error_code))
+
 let frame_length =
   lift3
     (fun x y z ->
@@ -56,54 +65,59 @@ let frame_type =
        frame that has a type that is unknown. *)
   lift Frame.FrameType.parse any_uint8
 
-let frame_flags =
+let flags =
   (* From RFC7540§4.1:
        Flags: An 8-bit field reserved for boolean flags specific to the frame
        type. *)
   any_uint8
 
-let extract_stream_id s =
+let parse_stream_identifier n =
   (* From RFC7540§4.1:
        Stream Identifier: A stream identifier (see Section 5.1.1) expressed as
        an unsigned 31-bit integer. The value 0x0 is reserved for frames that
        are associated with the connection as a whole as opposed to an
        individual stream. *)
-  Int32.(logand s (sub (shift_left 1l 31) 1l))
+  Int32.(logand n (sub (shift_left 1l 31) 1l))
 
-let stream_identifier = lift extract_stream_id BE.any_int32
+let stream_identifier = lift parse_stream_identifier BE.any_int32
 
 let parse_frame_header =
   lift4
     (fun payload_length frame_type flags stream_id ->
       { Frame.flags; payload_length; stream_id; frame_type })
-    frame_length frame_type frame_flags stream_identifier
+    frame_length frame_type flags stream_identifier
   <?> "frame_header"
+  (* TODO: explain why we commit here. *)
   <* commit
 
-let parse_payload_with_padding { Frame.payload_length; flags; _ } parse_fn =
-  if Flags.test_padded flags then
+let parse_padded_payload { Frame.payload_length; flags; _ } parser =
+  if Flags.test_padded flags then begin
     any_uint8 >>= fun pad_length ->
-    (* From RFC7540§6.1:
-         Pad Length: An 8-bit field containing the length of the frame padding
-         in units of octets.
-         Data: Application data. The amount of data is the remainder of the
-         frame payload after subtracting the length of the other fields that
-         are present.
-     *)
-    let body_length = payload_length - pad_length - 1 in
-    if body_length < 0 then
       (* From RFC7540§6.1:
-           If the length of the padding is the length of the frame payload or
-           greater, the recipient MUST treat this as a connection error
-           (Section 5.4.1) of type PROTOCOL_ERROR. *)
-      advance (payload_length - 1) >>| fun () ->
-        Error Error.(ConnectionError (ProtocolError, "Padding size exceeds payload size"))
-    else begin
-      parse_fn body_length
-      <* commit
-      <* advance pad_length
-    end
-  else parse_fn payload_length
+           Pad Length: An 8-bit field containing the length of the frame
+           padding in units of octets.
+
+           Data: Application data. The amount of data is the remainder of the
+           frame payload after subtracting the length of the other fields that
+           are present.
+
+           Padding: Padding octets that contain no application semantic
+           value. *)
+      if pad_length >= payload_length then
+        (* From RFC7540§6.1:
+             If the length of the padding is the length of the frame payload or
+             greater, the recipient MUST treat this as a connection error
+             (Section 5.4.1) of type PROTOCOL_ERROR. *)
+        advance (payload_length - 1) >>| fun () ->
+          connection_error ProtocolError "Padding size exceeds payload size"
+      else begin
+        (* Subtract the octet that contains the length of padding, and the
+         * padding octets. *)
+        let relevant_length = payload_length - 1 - pad_length in
+        parser relevant_length <* advance pad_length
+      end
+  end else
+    parser payload_length
 
 let parse_data_frame ({ Frame.stream_id; payload_length; _ } as frame_header) =
   if Stream_identifier.is_connection stream_id then
@@ -113,47 +127,27 @@ let parse_data_frame ({ Frame.stream_id; payload_length; _ } as frame_header) =
          respond with a connection error (Section 5.4.1) of type
          PROTOCOL_ERROR. *)
     advance payload_length >>| fun () ->
-      Error Error.(ConnectionError (ProtocolError, "Data frames must be associated with a stream"))
+      connection_error
+        ProtocolError "Data frames must be associated with a stream"
   else
     let parse_data length =
       lift (fun x -> Ok (Frame.Data x)) (take_bigstring length)
     in
-    parse_payload_with_padding frame_header parse_data
+    parse_padded_payload frame_header parse_data
 
 let parse_priority =
-  lift2
-    (fun stream_dependency w ->
-      let e = Priority.test_exclusive stream_dependency in
+  lift2 (fun stream_dependency weight ->
+    let e = Priority.test_exclusive stream_dependency in
+    { Priority
+    . exclusive = e
       (* From RFC7540§6.3:
            An unsigned 8-bit integer representing a priority weight for the
            stream (see Section 5.3). Add one to the value to obtain a weight
            between 1 and 256. *)
-      let weight = w + 1 in
-      let p =
-        { Priority
-        . exclusive = e
-        ; weight
-        ; stream_dependency = extract_stream_id stream_dependency}
-      in
-      p )
+    ; weight = weight + 1
+    ; stream_dependency = parse_stream_identifier stream_dependency
+    })
     BE.any_int32 any_uint8
-
-let parse_priority_frame { Frame.payload_length; stream_id; _ } =
-  if Stream_identifier.is_connection stream_id then
-    (* From RFC7540§6.3:
-         The PRIORITY frame always identifies a stream. If a PRIORITY frame is
-         received with a stream identifier of 0x0, the recipient MUST respond
-         with a connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
-    advance payload_length >>| fun () ->
-      Error Error.(ConnectionError (ProtocolError, "PRIORITY must be associated with a stream"))
-  else if payload_length <> 5 then
-    (* From RFC7540§6.3:
-         A PRIORITY frame with a length other than 5 octets MUST be treated as
-         a stream error (Section 5.4.2) of type FRAME_SIZE_ERROR. *)
-    advance payload_length >>| fun () ->
-      Error Error.(StreamError (stream_id, FrameSizeError))
-  else
-    parse_priority >>| fun x -> Ok (Frame.Priority x)
 
 let parse_headers_frame frame_header =
   let { Frame.payload_length; stream_id; flags; _ } = frame_header in
@@ -164,23 +158,41 @@ let parse_headers_frame frame_header =
          respond with a connection error (Section 5.4.1) of type
          PROTOCOL_ERROR. *)
     advance payload_length >>| fun () ->
-      Error
-        Error.(ConnectionError
-          (ProtocolError, "HEADERS must be associated with a stream"))
+      connection_error ProtocolError "HEADERS must be associated with a stream"
   else
-    let parse_fn =
+    let parse_headers length =
       if Flags.test_priority flags then
-        fun length ->
-          lift2
-            (fun priority headers ->
-              Ok (Frame.Headers (Some priority, headers)))
-            parse_priority
-            (take_bigstring (length - 5))
+        lift2
+          (fun priority headers ->
+            Ok (Frame.Headers (Some priority, headers)))
+          parse_priority
+          (* See RFC7540§6.3:
+               Stream Dependency (4 octets) + Weight (1 octet). *)
+          (take_bigstring (length - 5))
       else
-        fun length ->
-          lift (fun x -> Ok (Frame.Headers (None, x))) (take_bigstring length)
+        lift (fun headers_block ->
+          Ok (Frame.Headers (None, headers_block)))
+          (take_bigstring length)
     in
-    parse_payload_with_padding frame_header parse_fn
+    parse_padded_payload frame_header parse_headers
+
+let parse_priority_frame { Frame.payload_length; stream_id; _ } =
+  if Stream_identifier.is_connection stream_id then
+    (* From RFC7540§6.3:
+         The PRIORITY frame always identifies a stream. If a PRIORITY frame is
+         received with a stream identifier of 0x0, the recipient MUST respond
+         with a connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
+    advance payload_length >>| fun () ->
+      connection_error
+        ProtocolError "PRIORITY must be associated with a stream"
+  else if payload_length <> 5 then
+    (* From RFC7540§6.3:
+         A PRIORITY frame with a length other than 5 octets MUST be treated as
+         a stream error (Section 5.4.2) of type FRAME_SIZE_ERROR. *)
+    advance payload_length >>| fun () ->
+      stream_error FrameSizeError stream_id
+  else
+    lift (fun x -> Ok (Frame.Priority x)) parse_priority
 
 let parse_error_code =
   lift Error.parse BE.any_int32
@@ -193,17 +205,15 @@ let parse_rst_stream_frame { Frame.payload_length; stream_id; _ } =
          treat this as a connection error (Section 5.4.1) of type
          PROTOCOL_ERROR. *)
     advance payload_length >>| fun () ->
-      Error
-        Error.(ConnectionError
-          (ProtocolError, "RST_STREAM must be associated with a stream"))
+      connection_error
+        ProtocolError "RST_STREAM must be associated with a stream"
   else if payload_length != 4 then
     (* From RFC7540§6.4:
          A RST_STREAM frame with a length other than 4 octets MUST be treated
          as a connection error (Section 5.4.1) of type FRAME_SIZE_ERROR. *)
     advance payload_length >>| fun () ->
-      Error
-        Error.(ConnectionError
-          (FrameSizeError, "RST_STREAM payload must be 4 octets in length"))
+      connection_error
+        FrameSizeError "RST_STREAM payload must be 4 octets in length"
   else
     lift (fun x -> Ok (Frame.RSTStream x)) parse_error_code
 
@@ -214,35 +224,34 @@ let parse_settings_frame { Frame.payload_length; stream_id; flags; _ } =
          is anything other than 0x0, the endpoint MUST respond with a
          connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
     advance payload_length >>| fun () ->
-      Error
-        Error.(ConnectionError
-          (ProtocolError, "SETTINGS must be associated with stream id 0x0"))
+      connection_error
+        ProtocolError "SETTINGS must be associated with stream id 0x0"
   else if payload_length mod 6 != 0 then
     (* From RFC7540§6.5:
          A SETTINGS frame with a length other than a multiple of 6 octets MUST
          be treated as a connection error (Section 5.4.1) of type
          FRAME_SIZE_ERROR. *)
     advance payload_length >>| fun () ->
-      Error
-        Error.(ConnectionError
-          (FrameSizeError, "SETTINGS payload size must be a multiple of 6"))
+      connection_error
+        FrameSizeError "SETTINGS payload size must be a multiple of 6"
   else if Flags.test_ack flags && payload_length != 0 then
     (* From RFC7540§6.5:
          Receipt of a SETTINGS frame with the ACK flag set and a length field
          value other than 0 MUST be treated as a connection error
          (Section 5.4.1) of type FRAME_SIZE_ERROR. *)
     advance payload_length >>| fun () ->
-      Error
-        Error.(ConnectionError
-          (FrameSizeError, "SETTINGS with ACK must be empty"))
-  else
+     connection_error FrameSizeError "SETTINGS with ACK must be empty"
+  else begin
+    (* From RFC7540§6.5.1:
+         The payload of a SETTINGS frame consists of zero or more parameters,
+         each consisting of an unsigned 16-bit setting identifier and an
+         unsigned 32-bit value. *)
     let num_settings = payload_length / 6 in
     let parse_setting =
-      lift2
-        (fun k v ->
-          match Settings.to_key k with
-          | Some s -> Some (s, Int32.to_int v)
-          | None -> None)
+      lift2 (fun k v ->
+        match Settings.parse_key k with
+        | Some s -> Some (s, Int32.to_int v)
+        | None -> None)
         BE.any_uint16 BE.any_int32
     in
     (* Note: This ignores unknown settings.
@@ -250,19 +259,22 @@ let parse_settings_frame { Frame.payload_length; stream_id; flags; _ } =
        From RFC7540§6.5.3:
          Unsupported parameters MUST be ignored.
      *)
-    count num_settings parse_setting >>| fun xs ->
-    let rec filter_opt acc = function
-    | [] -> acc []
-    | Some x :: xs ->
-      (filter_opt [@ocaml.tailcall]) (fun ys -> acc (x :: ys)) xs
-    | None :: xs -> filter_opt acc xs
-    in
-    (* From RFC7540§6.5.3:
-         The values in the SETTINGS frame MUST be processed in the order they
-         appear, with no other frame processing between values. *)
-    Ok (Frame.Settings (filter_opt (fun x -> x) xs))
+    lift (fun xs ->
+      let rec filter_opt acc = function
+        | [] -> acc []
+        | Some x :: xs ->
+            filter_opt (fun ys -> acc (x :: ys)) xs
+        | None :: xs -> filter_opt acc xs
+      in
+      (* From RFC7540§6.5.3:
+        The values in the SETTINGS frame MUST be processed in the order they
+           appear, with no other frame processing between values. *)
+      Ok (Frame.Settings (filter_opt (fun x -> x) xs)))
+    (count num_settings parse_setting)
+  end
 
-let parse_push_promise_frame ({ Frame.payload_length; stream_id; _ } as frame_header) =
+let parse_push_promise_frame frame_header =
+  let { Frame.payload_length; stream_id; _ } = frame_header in
   if Stream_identifier.is_connection stream_id then
     (* From RFC7540§6.6:
          The stream identifier of a PUSH_PROMISE frame indicates the
@@ -270,9 +282,7 @@ let parse_push_promise_frame ({ Frame.payload_length; stream_id; _ } as frame_he
          specifies the value 0x0, a recipient MUST respond with a
          connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
     advance payload_length >>| fun () ->
-      Error
-        Error.(ConnectionError
-          (ProtocolError, "PUSH must be associated with a stream"))
+      connection_error ProtocolError "PUSH must be associated with a stream"
   else
     let parse_fn length =
       lift2
@@ -282,9 +292,8 @@ let parse_push_promise_frame ({ Frame.payload_length; stream_id; _ } as frame_he
                  A receiver MUST treat the receipt of a PUSH_PROMISE that
                  promises an illegal stream identifier (Section 5.1.1) as a
                  connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
-            Error
-              Error.(ConnectionError
-                (ProtocolError, "PUSH must not promise stream id 0x0"))
+            connection_error
+              ProtocolError "PUSH must not promise stream id 0x0"
           else if Stream_identifier.is_request promised_stream_id then
             (* From RFC7540§6.6:
                  A receiver MUST treat the receipt of a PUSH_PROMISE that
@@ -293,16 +302,15 @@ let parse_push_promise_frame ({ Frame.payload_length; stream_id; _ } as frame_he
 
               Note: An odd-numbered stream is an invalid stream identifier for
               the server, and only the server can send PUSH_PROMISE frames. *)
-            Error
-              Error.(ConnectionError
-                (ProtocolError,
-                 "PUSH must be associated with an even-numbered stream id"))
+            connection_error
+              ProtocolError
+              "PUSH must be associated with an even-numbered stream id"
           else
             Ok Frame.(PushPromise (promised_stream_id, fragment)))
         stream_identifier
         (take_bigstring (length - 4))
     in
-    parse_payload_with_padding frame_header parse_fn
+    parse_padded_payload frame_header parse_fn
 
 let parse_ping_frame { Frame.payload_length; stream_id; _ } =
   if not (Stream_identifier.is_connection stream_id) then
@@ -312,18 +320,15 @@ let parse_ping_frame { Frame.payload_length; stream_id; _ } =
          0x0, the recipient MUST respond with a connection error
          (Section 5.4.1) of type PROTOCOL_ERROR. *)
     advance payload_length >>| fun () ->
-      Error
-        Error.(ConnectionError
-          (ProtocolError, "PING must be associated with stream id 0x0"))
+      connection_error
+        ProtocolError "PING must be associated with stream id 0x0"
   else if payload_length != 8 then
     (* From RFC7540§6.7:
          Receipt of a PING frame with a length field value other than 8 MUST
          be treated as a connection error (Section 5.4.1) of type
          FRAME_SIZE_ERROR. *)
     advance payload_length >>| fun () ->
-      Error
-        Error.(ConnectionError
-          (FrameSizeError, "PING payload must be 8 octets in length"))
+      connection_error FrameSizeError "PING payload must be 8 octets in length"
   else
     lift (fun x -> Ok (Frame.Ping x))
       (take_bigstring payload_length)
@@ -335,9 +340,8 @@ let parse_go_away_frame { Frame.payload_length; stream_id; _ } =
          endpoint MUST treat a GOAWAY frame with a stream identifier other than
          0x0 as a connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
     advance payload_length >>| fun () ->
-      Error
-        Error.(ConnectionError
-          (ProtocolError, "GOAWAY must be associated with stream id 0x0"))
+      connection_error
+        ProtocolError "GOAWAY must be associated with stream id 0x0"
   else
     lift3
       (fun last_stream_id err debug_data ->
@@ -352,9 +356,8 @@ let parse_window_update_frame { Frame.stream_id; payload_length; _ } =
        as a connection error (Section 5.4.1) of type FRAME_SIZE_ERROR. *)
   if payload_length != 4 then
     advance payload_length >>| fun () ->
-      Error
-        Error.(ConnectionError
-          (FrameSizeError, "WINDOW_UPDATE payload must be 4 octets in length"))
+      connection_error
+        FrameSizeError "WINDOW_UPDATE payload must be 4 octets in length"
   else
   lift (fun uint ->
     let window_size_increment = Util.clear_bit (Int32.to_int uint) 31 in
@@ -364,12 +367,10 @@ let parse_window_update_frame { Frame.stream_id; payload_length; _ } =
            flow-control window increment of 0 as a stream error (Section 5.4.2)
            of type PROTOCOL_ERROR; errors on the connection flow-control window
            MUST be treated as a connection error (Section 5.4.1). *)
-      let error = if Stream_identifier.is_connection stream_id then
-        Error.(ConnectionError (ProtocolError, "Window update must not be 0"))
+      if Stream_identifier.is_connection stream_id then
+        connection_error ProtocolError "Window update must not be 0"
       else
-        Error.(StreamError (stream_id, ProtocolError))
-      in
-      Error error
+        stream_error ProtocolError stream_id
     end else
       Ok (Frame.WindowUpdate window_size_increment))
   BE.any_int32
@@ -382,9 +383,8 @@ let parse_continuation_frame { Frame.payload_length; stream_id; _ } =
          the recipient MUST respond with a connection error (Section 5.4.1) of
          type PROTOCOL_ERROR. *)
     advance payload_length >>| fun () ->
-      Error
-        Error.(ConnectionError
-          (ProtocolError, "CONTINUATION must be associated with a stream"))
+      connection_error
+        ProtocolError "CONTINUATION must be associated with a stream"
   else
     lift (fun block_fragment -> Ok (Frame.Continuation block_fragment))
       (take_bigstring payload_length)
@@ -411,34 +411,35 @@ let parse_frame_payload ({ Frame.frame_type; _ } as frame_header) =
 
 let parse_frame parse_context =
   parse_frame_header >>= fun ({ Frame.payload_length; _ } as frame_header) ->
-  parse_context.frame_header <- Some frame_header;
-  (* If we're parsing a new frame, we didn't yet send a stream error on it *)
-  parse_context.did_report_stream_error <- false;
-  (* Payload could be 0 (e.g. empty SETTINGS frame). This always succeeds. *)
-  Angstrom.Unsafe.peek 0 (fun bs ~off:_ ~len:_ ->
-    (* We do unbuffered parsing and the bigarray we read input from is
-       allocated based on the maximum frame payload negotiated by HTTP/2
-       communication. If the underlying buffer is smaller than what
-       the frame can fit, we want to skip the remaining input and skip to the
-       next frame.
+    (* If we're parsing a new frame, we didn't yet send a stream error on it *)
+    parse_context.did_report_stream_error <- false;
+    parse_context.frame_header <- Some frame_header;
+    (* Payload could be 0 (e.g. empty SETTINGS frame). This always succeeds. *)
+    Angstrom.Unsafe.peek 0 (fun bs ~off:_ ~len:_ ->
+      (* h2 does unbuffered parsing and the bigarray we read input from is
+         allocated based on the maximum frame payload negotiated by HTTP/2
+         communication. If the underlying buffer is smaller than what
+         the frame can fit, we want to skip the remaining input and skip to the
+         next frame.
 
-       From RFC7540§5.4.2:
-         A stream error is an error related to a specific stream that does not
-         affect processing of other streams.
-     *)
-    let is_frame_size_error = payload_length > Bigstringaf.length bs in
-    if is_frame_size_error then
-      parse_context.remaining_bytes_to_skip <-
-        parse_context.remaining_bytes_to_skip + payload_length)
-  >>= fun () ->
-    parse_frame_payload frame_header >>| function
-      | Ok frame_payload ->
-        Ok { Frame
-           . frame_header
-           ; frame_payload
-           }
-      | Error e -> Error e
+         From RFC7540§5.4.2:
+           A stream error is an error related to a specific stream that does
+           not affect processing of other streams. *)
+      let is_frame_size_error = payload_length > Bigstringaf.length bs in
+      if is_frame_size_error then
+        parse_context.remaining_bytes_to_skip <-
+          parse_context.remaining_bytes_to_skip + payload_length)
+    >>= fun () ->
+      lift (function
+        | Ok frame_payload ->
+          Ok { Frame
+             . frame_header
+             ; frame_payload
+             }
+        | Error e -> Error e)
+        (parse_frame_payload frame_header)
 
+(* This is the client connection preface. *)
 let connection_preface =
   (* From RFC7540§3.5:
        In HTTP/2, each endpoint is required to send a connection preface as a
@@ -476,8 +477,9 @@ module Reader = struct
        * error. *)
     }
 
-  type connection_preface  = parse_error t
-  type frame  = parse_error t
+  type client_connection_preface = parse_error t
+  type server_connection_preface = parse_error t
+  type frame = parse_error t
 
   let create parser parse_context =
     { parser
@@ -486,45 +488,48 @@ module Reader = struct
     ; parse_context
     }
 
-  let connection_preface handler =
-    let parse_context =
-      { frame_header = None
-      ; remaining_bytes_to_skip = 0
-      ; did_report_stream_error = false
-      }
-    in
-    let parser =
-      connection_preface *> commit >>= fun () ->
+  let create_parse_context () =
+    { frame_header = None
+    ; remaining_bytes_to_skip = 0
+    ; did_report_stream_error = false
+    }
+
+  let settings_preface handler parse_context =
+    (* From RFC7540§3.5:
+         [...] the connection preface starts with the string
+         PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n). This sequence MUST be followed by
+         a SETTINGS frame (Section 6.5), which MAY be empty. *)
+    parse_frame parse_context >>| function
+    | Ok ({ frame_payload = Frame.Settings settings_list; _ } as frame) ->
+      handler frame settings_list;
+      Ok ()
+    | Ok _ ->
       (* From RFC7540§3.5:
-           [...] the connection preface starts with the string
-           PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n). This sequence MUST be followed by
-           a SETTINGS frame (Section 6.5), which MAY be empty. *)
-      parse_frame parse_context >>| function
-      | Ok ({ frame_payload = Frame.Settings settings_list; _ } as frame) ->
-        handler frame settings_list;
-        Ok ()
-      | Ok _ ->
-        (* From RFC7540§3.5:
-             Clients and servers MUST treat an invalid connection preface as a
-             connection error (Section 5.4.1) of type PROTOCOL_ERROR. A GOAWAY
-             frame (Section 6.8) MAY be omitted in this case, since an invalid
-             preface indicates that the peer is not using HTTP/2. *)
-        Error
-          (`Error
-            Error.(ConnectionError
-              (ProtocolError, "Invalid connection preface")))
-      | Error e ->
-        Error (`Error e)
+           Clients and servers MUST treat an invalid connection preface as a
+           connection error (Section 5.4.1) of type PROTOCOL_ERROR. A GOAWAY
+           frame (Section 6.8) MAY be omitted in this case, since an invalid
+           preface indicates that the peer is not using HTTP/2. *)
+      Error
+        (`Error
+          Error.(ConnectionError
+            (ProtocolError, "Invalid connection preface")))
+    | Error e ->
+      Error (`Error e)
+
+  let client_connection_preface handler =
+    let parse_context = create_parse_context () in
+    let parser =
+      connection_preface *> settings_preface handler parse_context
     in
     create parser parse_context
 
+  let server_connection_preface handler =
+    let parse_context = create_parse_context () in
+    let parser = settings_preface handler parse_context in
+    create parser parse_context
+
   let frame handler =
-    let parse_context =
-      { frame_header = None
-      ; remaining_bytes_to_skip = 0
-      ; did_report_stream_error = false
-      }
-    in
+    let parse_context = create_parse_context () in
     let parser =
       skip_many (parse_frame parse_context <* commit >>| handler)
       >>| fun () -> Ok ()
