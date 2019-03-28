@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": "git+https://github.com/anmonteiro/ocaml-h2",
   "dependencies": {
-    "ocaml": " >= 4.3.0",
+    "ocaml": " >= 4.4.0",
     "@opam/dune": "*",
     "@opam/lwt": "4.1.0",
     "@opam/bigstringaf": "*",

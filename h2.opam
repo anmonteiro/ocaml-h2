@@ -19,7 +19,6 @@ depends: [
   "bigstringaf" {>= "0.5.0"}
   "angstrom" {>= "0.11.2"}
   "faraday" {>= "0.5.0"}
-  "result"
   "psq"
   "hpack"
   "httpaf"
