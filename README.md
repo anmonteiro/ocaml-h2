@@ -84,11 +84,8 @@ directory structure is as follows:
 ### Cloning the repository
 
 ```shell
-# Clone the repository
-$ git clone git@github.com:anmonteiro/h2.git
-# cd into the directory and clone the submodules (http2 standard test cases)
-$ cd h2
-$ git submodule update --init --recursive
+# Use --recurse-submodules to get the test git submodules
+$ git clone git@github.com:anmonteiro/ocaml-h2.git --recurse-submodules
 ```
 
 ### Using OPAM
