@@ -83,9 +83,9 @@ type closed_reason =
   | ResetByThem of Error.error_code
 
 type 'a active_stream =
-  { request_state                : 'a
-  ; response_body_buffer_size    : int
+  { body_buffer_size    : int
   ; encoder                      : Hpack.Encoder.t
+  ; request_info                 : 'a
   ; mutable response_state       : response_state
   ; mutable wait_for_first_flush : bool
     (* We're not doing anything with these yet, we could probably have a
@@ -132,16 +132,16 @@ let initial_ttl = 10
 
 let create_active_request active_stream request request_body =
   { active_stream with
-    request_state =
+    request_info =
       { request
       ; request_body
       ; request_body_bytes = Int64.zero
       }
   }
 
-let create_active_stream encoder response_body_buffer_size create_push_stream =
-  { request_state = ()
-  ; response_body_buffer_size
+let create_active_stream encoder body_buffer_size create_push_stream =
+  { request_info = ()
+  ; body_buffer_size
   ; encoder
   ; response_state  = Waiting (ref default_waiting)
   ; wait_for_first_flush = true
@@ -170,9 +170,9 @@ let request t =
   | Idle
   | Open (PartialHeaders _)
   | Open (FullHeaders _) -> assert false
-  | Open (ActiveRequest { request_state = { request; _ }; _ })
-  | HalfClosed { request_state = { request; _ }; _ }
-  | Reserved { request_state = { request; _ }; _ } -> request
+  | Open (ActiveRequest { request_info = { request; _ }; _ })
+  | HalfClosed { request_info = { request; _ }; _ }
+  | Reserved { request_info = { request; _ }; _ } -> request
   | Closed _ -> assert false
 
 let request_body t =
@@ -180,8 +180,8 @@ let request_body t =
   | Idle
   | Open (PartialHeaders _)
   | Open (FullHeaders _) -> assert false
-  | Open (ActiveRequest { request_state = { request_body; _ }; _ })
-  | HalfClosed { request_state = { request_body; _ }; _ } ->
+  | Open (ActiveRequest { request_info = { request_body; _ }; _ })
+  | HalfClosed { request_info = { request_body; _ }; _ } ->
     request_body
   | Reserved _ ->
     (* From RFC7540§8.1:
@@ -192,7 +192,7 @@ let request_body t =
 let response t =
   match t.stream_state with
   | Idle
-  | Open (PartialHeaders _) -> assert false
+  | Open (PartialHeaders _) -> None
   | Open (FullHeaders { response_state; _ })
   | Open (ActiveRequest { response_state; _ })
   | HalfClosed { response_state; _ }
@@ -203,7 +203,7 @@ let response t =
     | Fixed { response; _ }
     | Complete response -> Some response
     end
-  | Closed _ -> assert false
+  | Closed _ -> None
 
 let response_exn t =
   match t.stream_state with
@@ -220,7 +220,8 @@ let response_exn t =
     | Fixed { response; _ }
     | Complete response -> response
     end
-  | Closed _ -> assert false
+  | Closed _ ->
+    failwith "h2.Reqd.response_exn: response has not started"
 
 let send_fixed_response t s response data =
   match s.response_state with
@@ -300,7 +301,7 @@ let send_streaming_response ~flush_headers_immediately t s response =
     let frame_info =
       Writer.make_frame_info ~max_frame_size:t.max_frame_size t.id
     in
-    let response_body_buffer = Bigstringaf.create s.response_body_buffer_size
+    let response_body_buffer = Bigstringaf.create s.body_buffer_size
     in
     let response_body = Body.create response_body_buffer in
     Writer.write_response_headers t.writer s.encoder frame_info response;
@@ -314,7 +315,7 @@ let send_streaming_response ~flush_headers_immediately t s response =
   | Complete _ ->
     failwith "h2.Reqd.respond_with_streaming: response already complete"
 
-let unsafe_respond_with_streaming ~flush_headers_immediately t response =
+let unsafe_respond_with_streaming t ~flush_headers_immediately response =
   match t.stream_state with
   | Idle
   | Open (PartialHeaders _) -> assert false
@@ -336,7 +337,7 @@ let unsafe_respond_with_streaming ~flush_headers_immediately t response =
     response_body
   | Closed _ -> assert false
 
-let respond_with_streaming ?(flush_headers_immediately=false) t response =
+let respond_with_streaming t ?(flush_headers_immediately=false) response =
   if fst t.error_code <> `Ok then
     failwith "h2.Reqd.respond_with_streaming: invalid state, currently handling error";
   unsafe_respond_with_streaming ~flush_headers_immediately t response
@@ -353,10 +354,10 @@ let start_push_stream t s request =
       frame_info
       ~promised_id:promised_reqd.id
       request;
-    let { encoder; response_body_buffer_size; create_push_stream; _ } = s in
+    let { encoder; body_buffer_size; create_push_stream; _ } = s in
     let active_stream = create_active_stream
         encoder
-        response_body_buffer_size
+        body_buffer_size
         create_push_stream
     in
     (* From RFC7540§8.2:
@@ -480,8 +481,8 @@ let report_error t exn error_code =
   | Open (PartialHeaders _) -> assert false
   | Open (FullHeaders s) ->
     _report_error t s exn error_code
-  | Open (ActiveRequest ({ request_state = { request; request_body; _ }; _ } as s))
-  | HalfClosed ({ request_state = { request; request_body; _ }; _ } as s) ->
+  | Open (ActiveRequest ({ request_info = { request; request_body; _ }; _ } as s))
+  | HalfClosed ({ request_info = { request; request_body; _ }; _ } as s) ->
     Body.close_reader request_body;
     _report_error t s ~request exn error_code
   | Closed _ -> ()
@@ -521,20 +522,9 @@ let on_more_output_available t f =
       Body.when_ready_to_write response_body f
     | Fixed _ -> ()
     | Complete _ ->
-      failwith "httpaf.Reqd.on_more_output_available: response already complete"
+      failwith "h2.Reqd.on_more_output_available: response already complete"
     end
   | Closed _ -> assert false
-
-let requires_input t =
-  match t.stream_state with
-  | Idle
-  | Reserved _
-  | Open (PartialHeaders _)
-  | Open (FullHeaders _) -> true
-  | Open (ActiveRequest { request_state = { request_body; _}; _ }) ->
-    not (Body.is_closed request_body)
-  | HalfClosed _ -> false
-  | Closed _ -> false
 
 let response_body_requires_output response_body =
   not (Body.is_closed response_body)
@@ -561,9 +551,6 @@ let requires_output t =
     | Waiting _ -> true
     end
   | Closed _ -> false
-
-let is_complete t =
-  not (requires_input t || requires_output t)
 
 let flush_request_body t =
   let request_body = request_body t in

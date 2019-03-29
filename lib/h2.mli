@@ -479,7 +479,7 @@ module Reqd : sig
 
   val respond_with_string    : t -> Response.t -> string -> unit
   val respond_with_bigstring : t -> Response.t -> Bigstringaf.t -> unit
-  val respond_with_streaming : ?flush_headers_immediately:bool -> t -> Response.t -> [`write] Body.t
+  val respond_with_streaming : t -> ?flush_headers_immediately:bool -> Response.t -> [`write] Body.t
 
   val push : t -> Request.t -> t
   (** Pushing

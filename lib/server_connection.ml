@@ -591,11 +591,11 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
     match Streams.get_node t.streams stream_id with
     | Some (Stream { reqd; _ } as stream) ->
       begin match reqd.Reqd.stream_state with
-      | Open (ActiveRequest ({ request_state; _ } as stream_state)) ->
+      | Open (ActiveRequest ({ request_info; _ } as stream_state)) ->
         let request_body = Reqd.request_body reqd in
-        request_state.request_body_bytes <-
-          Int64.(add request_state.request_body_bytes (of_int (Bigstringaf.length bstr)));
-        let request = request_state.request in
+        request_info.request_body_bytes <-
+          Int64.(add request_info.request_body_bytes (of_int (Bigstringaf.length bstr)));
+        let request = request_info.request in
         if not Streams.(allowed_to_receive t.streams stream payload_length) then begin
           (* From RFC7540§6.9:
               A receiver MAY respond with a stream error (Section 5.4.2) or
@@ -609,7 +609,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
             when
               (* we're getting more than the client declared? *)
               Int64.compare
-                request_state.request_body_bytes
+                request_info.request_body_bytes
                 (Message.content_length_of_string content_length)
               > 0 ->
               (* Give back connection-level flow-controlled bytes (we use payload
