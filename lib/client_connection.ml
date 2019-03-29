@@ -126,8 +126,10 @@ let shutdown_reader t =
   end
 
 let flush_request_body t =
-  if Body.has_pending_output t.request_body then
+  (* if Body.has_pending_output t.request_body then
     Body.transfer_to_writer t.request_body t.writer
+      ~max_frame_size:t.settings.max_frame_size *)
+  ()
 
 let shutdown_writer t =
   flush_request_body t;
