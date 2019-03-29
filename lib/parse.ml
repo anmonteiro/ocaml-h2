@@ -49,14 +49,14 @@ let connection_error error_code msg =
 let stream_error error_code stream_id =
   error Error.(StreamError (stream_id, error_code))
 
+let parse_uint24 o1 o2 o3 =
+  (o1 lsl 16) lor (o2 lsl 8) lor o3
+
 let frame_length =
-  lift3
-    (fun x y z ->
-      (* From RFC7540§4.1:
-           Length: The length of the frame payload expressed as an unsigned
-           24-bit integer. *)
-      (x lsl 16) lor (y lsl 8) lor z)
-    any_uint8 any_uint8 any_uint8
+  (* From RFC7540§4.1:
+       Length: The length of the frame payload expressed as an unsigned 24-bit
+       integer. *)
+  lift3 parse_uint24 any_uint8 any_uint8 any_uint8
 
 let frame_type =
   (* From RFC7540§4.1:
@@ -131,7 +131,7 @@ let parse_data_frame ({ Frame.stream_id; payload_length; _ } as frame_header) =
         ProtocolError "Data frames must be associated with a stream"
   else
     let parse_data length =
-      lift (fun x -> Ok (Frame.Data x)) (take_bigstring length)
+      lift (fun bs -> Ok (Frame.Data bs)) (take_bigstring length)
     in
     parse_padded_payload frame_header parse_data
 
@@ -192,7 +192,7 @@ let parse_priority_frame { Frame.payload_length; stream_id; _ } =
     advance payload_length >>| fun () ->
       stream_error FrameSizeError stream_id
   else
-    lift (fun x -> Ok (Frame.Priority x)) parse_priority
+    lift (fun priority -> Ok (Frame.Priority priority)) parse_priority
 
 let parse_error_code =
   lift Error.parse BE.any_int32
@@ -215,7 +215,7 @@ let parse_rst_stream_frame { Frame.payload_length; stream_id; _ } =
       connection_error
         FrameSizeError "RST_STREAM payload must be 4 octets in length"
   else
-    lift (fun x -> Ok (Frame.RSTStream x)) parse_error_code
+    lift (fun error_code -> Ok (Frame.RSTStream error_code)) parse_error_code
 
 let parse_settings_frame { Frame.payload_length; stream_id; flags; _ } =
   if not (Stream_identifier.is_connection stream_id) then
@@ -284,33 +284,36 @@ let parse_push_promise_frame frame_header =
     advance payload_length >>| fun () ->
       connection_error ProtocolError "PUSH must be associated with a stream"
   else
-    let parse_fn length =
-      lift2
-        (fun promised_stream_id fragment ->
-          if Stream_identifier.is_connection promised_stream_id then
-            (* From RFC7540§6.6:
-                 A receiver MUST treat the receipt of a PUSH_PROMISE that
-                 promises an illegal stream identifier (Section 5.1.1) as a
-                 connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
-            connection_error
-              ProtocolError "PUSH must not promise stream id 0x0"
-          else if Stream_identifier.is_request promised_stream_id then
-            (* From RFC7540§6.6:
-                 A receiver MUST treat the receipt of a PUSH_PROMISE that
-                 promises an illegal stream identifier (Section 5.1.1) as a
-                 connection error (Section 5.4.1) of type PROTOCOL_ERROR.
+    let parse_push_promise length =
+      lift2 (fun promised_stream_id fragment ->
+        if Stream_identifier.is_connection promised_stream_id then
+          (* From RFC7540§6.6:
+               A receiver MUST treat the receipt of a PUSH_PROMISE that
+               promises an illegal stream identifier (Section 5.1.1) as a
+               connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
+          connection_error
+            ProtocolError "PUSH must not promise stream id 0x0"
+        else if Stream_identifier.is_request promised_stream_id then
+          (* From RFC7540§6.6:
+               A receiver MUST treat the receipt of a PUSH_PROMISE that
+               promises an illegal stream identifier (Section 5.1.1) as a
+               connection error (Section 5.4.1) of type PROTOCOL_ERROR.
 
-              Note: An odd-numbered stream is an invalid stream identifier for
-              the server, and only the server can send PUSH_PROMISE frames. *)
-            connection_error
-              ProtocolError
-              "PUSH must be associated with an even-numbered stream id"
-          else
-            Ok Frame.(PushPromise (promised_stream_id, fragment)))
-        stream_identifier
-        (take_bigstring (length - 4))
+            Note: An odd-numbered stream is an invalid stream identifier for
+            the server, and only the server can send PUSH_PROMISE frames. *)
+          connection_error
+            ProtocolError
+            "PUSH must be associated with an even-numbered stream id"
+        else
+          Ok Frame.(PushPromise (promised_stream_id, fragment)))
+      stream_identifier
+      (* From RFC7540§6.6:
+           The PUSH_PROMISE frame includes the unsigned 31-bit identifier of
+           the stream the endpoint plans to create along with a set of headers
+           that provide additional context for the stream. *)
+      (take_bigstring (length - 4))
     in
-    parse_padded_payload frame_header parse_fn
+    parse_padded_payload frame_header parse_push_promise
 
 let parse_ping_frame { Frame.payload_length; stream_id; _ } =
   if not (Stream_identifier.is_connection stream_id) then
@@ -330,7 +333,7 @@ let parse_ping_frame { Frame.payload_length; stream_id; _ } =
     advance payload_length >>| fun () ->
       connection_error FrameSizeError "PING payload must be 8 octets in length"
   else
-    lift (fun x -> Ok (Frame.Ping x))
+    lift (fun bs -> Ok (Frame.Ping bs))
       (take_bigstring payload_length)
 
 let parse_go_away_frame { Frame.payload_length; stream_id; _ } =
