@@ -45,9 +45,7 @@ type response_handler = Response.t -> [`read] Body.t  -> unit
 type error_handler = error -> unit
 
 type reader_state =
-    (* TODO: consider getting rid of this state *)
-  | Uninitialized
-  | New of Reader.frame
+  | New of Reader.server_connection_preface
   | Active of Reader.frame
 
 type state =
@@ -55,17 +53,22 @@ type state =
   | Received_response of Response.t * [`read] Body.t
   | Closed
 
-type t =
-  { settings         : Settings.t
+(*
   ; request          : Request.t
   ; request_body     : [ `write ] Body.t
   ; response_handler : (Response.t -> [`read] Body.t -> unit)
   ; error_handler    : (error -> unit)
-  ; mutable reader   : reader_state
-  ; writer : Writer.t
   ; state  : state ref
   ; mutable error_code : [ `Ok | error ]
+ *)
+
+(* TODO: ping handler *)
+type t =
+  { settings         : Settings.t
+  ; mutable reader   : reader_state
+  ; writer : Writer.t
   ; mutable current_stream_id : Stream_identifier.t
+  ; mutable receiving_headers_for_stream : Stream_identifier.t option
   ; mutable did_send_go_away : bool
   ; wakeup_writer  : (unit -> unit) ref
   ; wakeup_reader  : (unit -> unit) list ref
@@ -80,11 +83,9 @@ let is_active t =
   match t.reader with
   | Active _ -> true
   | New _ -> false
-  | Uninitialized -> false
 
 let reader t =
   match t.reader with
-  | Uninitialized -> assert false
   | New reader -> reader
   | Active reader -> reader
 
@@ -118,14 +119,15 @@ let wakeup_reader t =
 
 let shutdown_reader t =
   Reader.force_close (reader t);
-  begin match !(t.state) with
+  ()
+  (* begin match !(t.state) with
   | Awaiting_response | Closed -> ()
   | Received_response(_, response_body) ->
     Body.close_reader response_body;
     Body.execute_read response_body;
-  end
+  end *)
 
-let flush_request_body t =
+let flush_request_body _t =
   (* if Body.has_pending_output t.request_body then
     Body.transfer_to_writer t.request_body t.writer
       ~max_frame_size:t.settings.max_frame_size *)
@@ -134,7 +136,8 @@ let flush_request_body t =
 let shutdown_writer t =
   flush_request_body t;
   Writer.close t.writer;
-  Body.close_writer t.request_body
+  ()
+  (* Body.close_writer t.request_body *)
 
 let shutdown t =
   shutdown_reader t;
@@ -274,16 +277,14 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
     | Some error -> handle_error t error
   end
 
-let create ?(config=Config.default) request ~error_handler ~response_handler =
-  let state = ref Awaiting_response in
-  let request_method = request.Request.meth in
-  let handler response body =
-    state := Received_response(response, body);
-    response_handler response body
-  in
-  let request_body =
-    Body.create (Bigstringaf.create config.request_body_buffer_size)
-  in
+(* Unlike e.g. http/af where a new connection is created per request, we create
+   a single connection where all requests go through. HTTP/2 allows concurrency
+   to exist on the connection level.
+
+   From RFC7540§1:
+     HTTP/2 [...] allows interleaving of request and response messages on the
+     same connection and uses an efficient coding for HTTP header fields. *)
+let create ?(config=Config.default) () =
   let settings =
     { Settings
     . default_settings
@@ -302,51 +303,62 @@ let create ?(config=Config.default) request ~error_handler ~response_handler =
     | Error e ->
       handle_error t e
     | Ok ({ Frame.frame_payload; frame_header } as frame) ->
-      match frame_payload with
-      | Headers (priority, headers_block) ->
-        process_headers_frame t frame ?priority headers_block
-      | Data bs ->
-        process_data_frame t frame bs
-      | Priority priority ->
-        process_priority_frame t frame priority
-      | RSTStream error_code ->
-        process_rst_stream_frame t frame error_code
-      | Settings settings ->
-        process_settings_frame t frame settings
-      | PushPromise _ ->
-        (* From RFC7540§8.2:
-             A client cannot push. Thus, servers MUST treat the receipt of a
-             PUSH_PROMISE frame as a connection error (Section 5.4.1) of type
+      match t.receiving_headers_for_stream with
+      | Some stream_id
+        when not (Stream_identifier.(stream_id === frame_header.stream_id)) ||
+             frame_header.frame_type != Continuation ->
+        (* From RFC7540§6.2:
+             A HEADERS frame without the END_HEADERS flag set MUST be followed
+             by a CONTINUATION frame for the same stream. A receiver MUST treat
+             the receipt of any other type of frame or a frame on a different
+             stream as a connection error (Section 5.4.1) of type
              PROTOCOL_ERROR. *)
-        report_connection_error
-          t ~additional_debug_data:"Client cannot push" Error.ProtocolError
-      | Ping data ->
-        process_ping_frame t frame data
-      | GoAway (last_stream_id, error, debug_data) ->
-        process_goaway_frame t frame (last_stream_id, error, debug_data)
-      | WindowUpdate window_size ->
-        process_window_update_frame t frame window_size
-      | Continuation headers_block ->
-        process_continuation_frame t frame headers_block
-      | Unknown _ ->
-        (* From RFC7540§5.1:
-             Frames of unknown types are ignored. *)
-        ()
+        report_connection_error t
+          ~additional_debug_data:"HEADERS or PUSH_PROMISE without the \
+END_HEADERS flag set must be followed by a CONTINUATION frame for the same \
+stream"
+          Error.ProtocolError
+      | _ ->
+        match frame_payload with
+        | Headers (priority, headers_block) ->
+          process_headers_frame t frame ?priority headers_block
+        | Data bs ->
+          process_data_frame t frame bs
+        | Priority priority ->
+          process_priority_frame t frame priority
+        | RSTStream error_code ->
+          process_rst_stream_frame t frame error_code
+        | Settings settings ->
+          process_settings_frame t frame settings
+        | PushPromise _ ->
+          (* From RFC7540§8.2:
+               A client cannot push. Thus, servers MUST treat the receipt of a
+               PUSH_PROMISE frame as a connection error (Section 5.4.1) of type
+               PROTOCOL_ERROR. *)
+          report_connection_error
+            t ~additional_debug_data:"Client cannot push" Error.ProtocolError
+        | Ping data ->
+          process_ping_frame t frame data
+        | GoAway (last_stream_id, error, debug_data) ->
+          process_goaway_frame t frame (last_stream_id, error, debug_data)
+        | WindowUpdate window_size ->
+          process_window_update_frame t frame window_size
+        | Continuation headers_block ->
+          process_continuation_frame t frame headers_block
+        | Unknown _ ->
+          (* From RFC7540§5.1:
+               Frames of unknown types are ignored. *)
+          ()
   and t = lazy
     { settings
-    ; request
-    ; request_body
-    ; response_handler
-    ; error_handler
-    ; error_code = `Ok
       (* From RFC7540§5.1.1:
            Streams initiated by a client MUST use odd-numbered stream
            identifiers *)
     ; current_stream_id = -1l
     ; did_send_go_away = false
-    ; reader = Uninitialized
+    ; receiving_headers_for_stream = None
+    ; reader = New (Reader.server_connection_preface preface_handler)
     ; writer = Writer.create Config.default.response_buffer_size
-    ; state
     ; wakeup_writer             = ref default_wakeup_writer
     ; wakeup_reader             = ref []
     (* From RFC7540§4.3:
@@ -366,7 +378,7 @@ let create ?(config=Config.default) request ~error_handler ~response_handler =
   (* We can start reading frames once the connection preface has been written
    * to the wire. *)
   Writer.flush t.writer (fun () ->
-    t.reader <- New (Reader.frame (frame_handler t)));
+    t.reader <- Active (Reader.frame (frame_handler t)));
 
   (* If a higher value for initial window size is configured, add more
    * tokens to the connection (we have no streams at this point). *)
