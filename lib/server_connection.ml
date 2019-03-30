@@ -192,9 +192,10 @@ let set_error_and_handle ?request t stream error error_code =
   wakeup_writer t
 
 let report_exn t exn =
-  if not (is_shutdown t) then
+  if not (is_shutdown t) then begin
     let additional_debug_data = Printexc.to_string exn in
     report_connection_error t ~additional_debug_data Error.InternalError
+  end
 
 let on_stream_closed t = fun () ->
   t.current_client_streams <- t.current_client_streams - 1
@@ -250,15 +251,10 @@ let method_and_path_or_malformed headers =
        CONNECT request (Section 8.3). *)
   (* TODO: handle CONNECT requests *)
   | [ meth ], [ _ ], [ path ] ->
-    begin match Headers.(get headers "connection", get headers "TE") with
-    | Some _, _ -> None
-    | _, Some value when value <> "trailers" -> None
-    | _ ->
-      if Headers.valid_request_headers headers then
-        Some (meth, path)
-      else
-        None
-    end
+    if Headers.valid_request_headers headers then
+      Some (meth, path)
+    else
+      None
   | _ -> None
 
 let handle_headers t ~end_stream reqd headers =
@@ -410,10 +406,10 @@ let open_stream t frame_header ?priority headers_block =
     report_connection_error t Error.ProtocolError
   else begin
     (* From RFC7540§6.2:
-         The HEADERS frame (type=0x1) is used to open a stream (Section 5.1), and
-         additionally carries a header block fragment. HEADERS frames can be sent
-         on a stream in the "idle", "reserved (local)", "open", or "half-closed
-         (remote)" state. *)
+         The HEADERS frame (type=0x1) is used to open a stream (Section 5.1),
+         and additionally carries a header block fragment. HEADERS frames can
+         be sent on a stream in the "idle", "reserved (local)", "open", or
+         "half-closed (remote)" state. *)
     let reqd = match Streams.get_node t.streams stream_id with
     | None ->
       let reqd =
@@ -515,7 +511,10 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
                HEADERS frames can be sent on a stream in the "idle", "reserved
                (local)", "open", or "half-closed (remote)" state. *)
           open_stream t frame_header ?priority headers_block
-        | Open (PartialHeaders _) -> assert false
+        | Open (PartialHeaders _) ->
+          (* This case is unreachable because we check that partial HEADERS
+           * states must be followed by CONTINUATION frames elsewhere. *)
+          assert false
         (* if we're getting a HEADERS frame at this point, they must be
          * trailers, and the END_STREAM flag needs to be set. *)
         | Open (FullHeaders rs) ->
