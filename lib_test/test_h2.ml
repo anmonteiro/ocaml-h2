@@ -35,13 +35,12 @@ module Server_connection_tests = struct
   open Server_connection
 
   module Read_operation = struct
-    type t = [ `Read | `Yield | `Close | `Error of Error.t]
+    type t = [ `Read | `Close | `Error of Error.t]
 
     let pp_hum fmt t =
       let str =
         match t with
         | `Read -> "Read"
-        | `Yield -> "Yield"
         | `Error (Error.ConnectionError (e, msg)) ->
           Format.sprintf "ConnectionError: %ld %S" (Error.serialize e) msg
         | `Error (Error.StreamError (stream_id, e)) ->
