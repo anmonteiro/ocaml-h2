@@ -32,26 +32,24 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
+module AB = Angstrom.Buffered
 module Reader = Parse.Reader
 module Writer = Serialize.Writer
+module Streams = Streams.Client_streams
 
 type error =
   [ `Malformed_response of string
-  | `Invalid_response_body_length of Response.t
   | `Exn of exn
   ]
 
 type response_handler = Response.t -> [`read] Body.t  -> unit
+(* TODO: we'll need a connection-level error handler that terminates the
+ * connection and one for each individual stream. *)
 type error_handler = error -> unit
 
 type reader_state =
   | New of Reader.server_connection_preface
   | Active of Reader.frame
-
-type state =
-  | Awaiting_response
-  | Received_response of Response.t * [`read] Body.t
-  | Closed
 
 (*
   ; request          : Request.t
@@ -59,15 +57,18 @@ type state =
   ; response_handler : (Response.t -> [`read] Body.t -> unit)
   ; error_handler    : (error -> unit)
   ; state  : state ref
-  ; mutable error_code : [ `Ok | error ]
  *)
 
 (* TODO: ping handler *)
+(* TODO: connection-level error handler *)
 type t =
   { settings         : Settings.t
   ; mutable reader   : reader_state
-  ; writer : Writer.t
+  ; writer           : Writer.t
+  ; config           : Config.t
+  ; streams          : Streams.t
   ; mutable current_stream_id : Stream_identifier.t
+  ; mutable current_server_streams : int
   ; mutable receiving_headers_for_stream : Stream_identifier.t option
   ; mutable did_send_go_away : bool
   ; wakeup_writer  : (unit -> unit) ref
@@ -75,8 +76,8 @@ type t =
     (* From RFC7540§4.3:
          Header compression is stateful. One compression context and one
          decompression context are used for the entire connection. *)
-  ; encoder : Hpack.Encoder.t
-  ; decoder : Hpack.Decoder.t
+  ; hpack_encoder : Hpack.Encoder.t
+  ; hpack_decoder : Hpack.Decoder.t
   }
 
 let is_active t =
@@ -179,7 +180,7 @@ let handle_error t = function
   | StreamError (stream_id, error) ->
     begin match Streams.find t.streams stream_id with
     | Some reqd ->
-      Reqd.reset_stream reqd error;
+      Respd.reset_stream reqd error;
     | None ->
       (* Possible if the stream was going to enter the Idle state (first time
        * we saw e.g. a PRIORITY frame for it) but had e.g. a
@@ -194,6 +195,226 @@ let report_connection_error t ?(additional_debug_data="") error =
 
 let report_stream_error t stream_id error =
   handle_error t (StreamError (stream_id, error))
+
+let set_error_and_handle t stream error error_code =
+  Respd.report_error stream error error_code;
+  wakeup_writer t
+
+let report_exn t exn =
+  if not (is_shutdown t) then begin
+    let additional_debug_data = Printexc.to_string exn in
+    report_connection_error t ~additional_debug_data Error.InternalError
+  end
+
+let handle_headers t ~end_stream respd headers =
+  (* From RFC7540§5.1.2:
+       Endpoints MUST NOT exceed the limit set by their peer. An endpoint that
+       receives a HEADERS frame that causes its advertised concurrent stream
+       limit to be exceeded MUST treat this as a stream error (Section 5.4.2)
+       of type PROTOCOL_ERROR or REFUSED_STREAM. *)
+  if t.current_server_streams + 1 > t.settings.max_concurrent_streams then
+    (* From RFC7540§8.1.4:
+         The REFUSED_STREAM error code can be included in a RST_STREAM frame to
+         indicate that the stream is being closed prior to any processing
+         having occurred. Any request that was sent on the reset stream can be
+         safely retried. *)
+    report_stream_error t respd.Respd.id Error.RefusedStream
+  else begin
+    (* From RFC7540§5.1.2:
+         Streams that are in the "open" state or in either of the "half-closed"
+         states count toward the maximum number of streams that an endpoint is
+         permitted to open. *)
+    let active_stream =
+      Reqd.create_active_stream
+        t.hpack_encoder
+        t.config.response_body_buffer_size
+    in
+    respd.state <- Open FullHeaders;
+    t.receiving_headers_for_stream <- None;
+    t.current_server_streams <- t.current_server_streams + 1;
+    (* From RFC7540§8.1.2.4:
+         For HTTP/2 responses, a single :status pseudo-header field is defined
+         that carries the HTTP status code field (see [RFC7231], Section 6).
+         This pseudo-header field MUST be included in all responses; otherwise,
+         the response is malformed (Section 8.1.2.6). *)
+    match Headers.get_multi_pseudo headers "method" with
+    | [ status ] ->
+      begin match end_stream, Message.unique_content_length_values headers with
+      | true, [ content_length ]
+        when
+          Int64.compare
+            (Message.content_length_of_string content_length)
+            0L
+          != 0 ->
+        (* From RFC7540§8.1.2.6:
+             A request or response is also malformed if the value of a
+             content-length header field does not equal the sum of the DATA
+             frame payload lengths that form the body. *)
+        let message =
+          "The value of the content-length header field does not equal the length of the body"
+        in
+        set_error_and_handle t respd (`Malformed_response message) ProtocolError;
+      | _ ->
+        let response = Response.create ~headers (Status.of_string status) in
+        let response_body = if end_stream then
+          Body.empty
+        else
+          (* TODO: Initializing the response body with an empty bigstring trades
+           * an allocation here vs. when the first data frame arrives. This
+           * would probably make sense if this were HTTP/1 because we wouldn't
+           * know whether the response had a body or not, but in HTTP/2 we
+           * clearly do. It's probably fine to just allocate here if we know
+           * we're gonna get data. *)
+          Body.create Bigstringaf.empty
+        in
+        let response_info =
+          { Respd
+          . response
+          ; response_body
+          }
+        in
+        if end_stream then begin
+          (* From RFC7540§5.1:
+               [...] an endpoint receiving an END_STREAM flag causes the stream
+               state to become "half-closed (remote)". *)
+          respd.state <- HalfClosed new_stream_state;
+          (* Deliver EOF to the request body, as the handler might be waiting
+           * on it to produce a response. *)
+          Body.close_reader response_body;
+        end else begin
+          respd.state <- Open (ActiveRequest new_stream_state);
+        end;
+        t.request_handler reqd;
+        wakeup_writer t
+      end
+    | _ ->
+      (* From RFC7540§8.1.2.6:
+           For malformed requests, a server MAY send an HTTP response prior to
+           closing or resetting the stream. *)
+      let message =
+        "HTTP/2 responses must include a single `:status` pseudo-header"
+      in
+      set_error_and_handle t respd (`Malformed_response message) ProtocolError;
+  end
+
+let handle_headers_block t respd partial_headers flags headers_block =
+  let open AB in
+  let end_headers = Flags.test_end_header flags in
+  (* From RFC7540§6.10:
+       An endpoint receiving HEADERS, PUSH_PROMISE, or CONTINUATION
+       frames needs to reassemble header blocks and perform decompression
+       even if the frames are to be discarded *)
+  let parse_state' =
+    AB.feed partial_headers.Stream.parse_state (`Bigstring headers_block)
+  in
+  if end_headers then begin
+    let parse_state' = AB.feed parse_state' `Eof in
+    match parse_state' with
+    | Done (_, Ok headers) ->
+      (* `handle_headers` will take care of transitioning the stream state *)
+      handle_headers t ~end_stream:partial_headers.end_stream respd headers
+    (* From RFC7540§4.3:
+         A decoding error in a header block MUST be treated as a connection
+         error (Section 5.4.1) of type COMPRESSION_ERROR. *)
+    | Done (_, Error _)
+    | Partial _ ->
+      report_connection_error t Error.CompressionError
+    | Fail (_, _, message) ->
+      report_connection_error t ~additional_debug_data:message Error.CompressionError
+  end else
+    partial_headers.parse_state <- parse_state'
+
+(* TODO: reprioritize stream? *)
+let handle_first_response_bytes t respd frame_header ?priority:_ headers_block =
+  let open Streams in
+  let { Frame.flags; stream_id; _ } = frame_header in
+  let end_headers = Flags.test_end_header flags in
+  let headers_block_length = Bigstringaf.length headers_block in
+  let initial_buffer_size = if end_headers then
+    headers_block_length
+  else
+    (* Conservative estimate that there's only going to be one CONTINUATION
+     * frame. *)
+    2 * headers_block_length
+  in
+  let partial_headers =
+    { Stream
+    . parse_state = AB.parse ~initial_buffer_size (Hpack.Decoder.decode_headers t.hpack_decoder)
+    ; end_stream = Flags.test_end_stream flags
+    }
+  in
+  respd.Respd.state <- Open (PartialHeaders partial_headers);
+  if not end_headers then
+    t.receiving_headers_for_stream <- Some stream_id;
+  handle_headers_block t respd partial_headers flags headers_block
+
+let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
+  let { Frame.stream_id; _ } = frame_header in
+  match priority with
+  | Some { Priority.stream_dependency; _ }
+    when Stream_identifier.(stream_dependency === stream_id) ->
+    (* From RFC7540§5.3.1:
+         A stream cannot depend on itself. An endpoint MUST treat this as a
+         stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
+    report_stream_error t stream_id Error.ProtocolError
+  | _ ->
+    match Streams.find t.streams stream_id with
+    | None ->
+      (* TODO: What does it mean to receive a response for a stream that's no
+       * longer in the priority tree? Either:
+       * 1. we canceled a request and the response was already in flight.
+       * 2. we're getting a response for a request we didn't send?! *)
+      assert false
+    | Some respd ->
+      match respd.state with
+      | Idle ->
+        (* From RFC7540§6.2:
+             HEADERS frames can be sent on a stream in the "idle", "reserved
+             (local)", "open", or "half-closed (remote)" state. *)
+        report_connection_error t Error.ProtocolError
+      | Open Awaiting_response ->
+        handle_first_response_bytes t respd frame_header ?priority headers_block
+      | Open (PartialHeaders _) ->
+          assert false
+      (* if we're getting a HEADERS frame at this point, they must be
+       * trailers, and the END_STREAM flag needs to be set. *)
+      | Open (FullHeaders rs) ->
+        process_trailer_headers t respd rs frame_header headers_block
+      | Open (ActiveRequest rs) ->
+        process_trailer_headers t respd rs frame_header headers_block
+      | HalfClosed _
+        (* From RFC7540§5.1:
+             half-closed (remote): [...] If an endpoint receives additional
+             frames, other than WINDOW_UPDATE, PRIORITY, or RST_STREAM, for a
+             stream that is in this state, it MUST respond with a stream
+             error (Section 5.4.2) of type STREAM_CLOSED. *)
+      | Closed { reason = ResetByThem _; _ } ->
+        (* From RFC7540§5.1:
+             closed: [...] An endpoint that receives any frame other than
+             PRIORITY after receiving a RST_STREAM MUST treat that as a
+             stream error (Section 5.4.2) of type STREAM_CLOSED. *)
+        report_stream_error t stream_id Error.StreamClosed
+      (* From RFC7540§5.1:
+           reserved (local): [...] Receiving any type of frame other than
+           RST_STREAM, PRIORITY, or WINDOW_UPDATE on a stream in this state
+           MUST be treated as a connection error (Section 5.4.1) of type
+           PROTOCOL_ERROR. *)
+      | Reserved _
+      | Closed _ ->
+        (* From RFC7540§5.1:
+             Similarly, an endpoint that receives any frames after receiving
+             a frame with the END_STREAM flag set MUST treat that as a
+             connection error (Section 5.4.1) of type STREAM_CLOSED [...]. *)
+        report_connection_error t Error.StreamClosed
+
+let process_data_frame t { Frame.frame_header; _ } bstr =
+  ()
+
+let process_priority_frame t { Frame.frame_header; _ } priority =
+  ()
+
+let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
+  ()
 
 let process_settings_frame t { Frame.frame_header; _ } settings =
   let open Streams in
@@ -217,7 +438,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
                size of the header compression table used to decode header
                blocks, in octets. *)
           t.settings.header_table_size <- x;
-          Hpack.Encoder.set_capacity t.encoder x;
+          Hpack.Encoder.set_capacity t.hpack_encoder x;
         | EnablePush, x ->
           (* We've already verified that this setting is either 0 or 1 in the
            * call to `Settings.check_settings_list` above. *)
@@ -257,9 +478,9 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
           end
         | MaxFrameSize, x ->
           t.settings.max_frame_size <- x;
-          Streams.iter ~f:(fun (Stream { reqd; _ }) ->
-            if Reqd.requires_output reqd then
-              reqd.max_frame_size <- x)
+          Streams.iter ~f:(fun (Stream { streamd; _ }) ->
+            if Respd.requires_output streamd then
+              streamd.max_frame_size <- x)
             t.streams
         | MaxHeaderListSize, x ->
           t.settings.max_header_list_size <- Some x)
@@ -277,6 +498,21 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
     | Some error -> handle_error t error
   end
 
+let process_push_promise_frame t frame promised_stream_id headers_block =
+  ()
+
+let process_ping_frame t { Frame.frame_header; _ } payload =
+  ()
+
+let process_goaway_frame t _frame payload =
+  ()
+
+let process_window_update_frame t { Frame.frame_header; _ } window_increment =
+  ()
+
+let process_continuation_frame t { Frame.frame_header; _ } headers_block =
+  ()
+
 (* Unlike e.g. http/af where a new connection is created per request, we create
    a single connection where all requests go through. HTTP/2 allows concurrency
    to exist on the connection level.
@@ -284,7 +520,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
    From RFC7540§1:
      HTTP/2 [...] allows interleaving of request and response messages on the
      same connection and uses an efficient coding for HTTP header fields. *)
-let create ?(config=Config.default) () =
+let create ?(config=Config.default) =
   let settings =
     { Settings
     . default_settings
@@ -330,13 +566,8 @@ stream"
           process_rst_stream_frame t frame error_code
         | Settings settings ->
           process_settings_frame t frame settings
-        | PushPromise _ ->
-          (* From RFC7540§8.2:
-               A client cannot push. Thus, servers MUST treat the receipt of a
-               PUSH_PROMISE frame as a connection error (Section 5.4.1) of type
-               PROTOCOL_ERROR. *)
-          report_connection_error
-            t ~additional_debug_data:"Client cannot push" Error.ProtocolError
+        | PushPromise (promised_stream_id, bs) ->
+          process_push_promise_frame t frame promised_stream_id bs
         | Ping data ->
           process_ping_frame t frame data
         | GoAway (last_stream_id, error, debug_data) ->
@@ -351,21 +582,25 @@ stream"
           ()
   and t = lazy
     { settings
+    ; config = config
       (* From RFC7540§5.1.1:
            Streams initiated by a client MUST use odd-numbered stream
            identifiers *)
     ; current_stream_id = -1l
+    ; current_server_streams = 0
     ; did_send_go_away = false
     ; receiving_headers_for_stream = None
     ; reader = New (Reader.server_connection_preface preface_handler)
+    (* TODO: `response_buffer_size`?! *)
     ; writer = Writer.create Config.default.response_buffer_size
+    ; streams = Streams.make_root ()
     ; wakeup_writer             = ref default_wakeup_writer
     ; wakeup_reader             = ref []
     (* From RFC7540§4.3:
          Header compression is stateful. One compression context and one
          decompression context are used for the entire connection. *)
-    ; encoder = Hpack.Encoder.(create settings.header_table_size)
-    ; decoder = Hpack.Decoder.(create settings.header_table_size)
+    ; hpack_encoder = Hpack.Encoder.(create settings.header_table_size)
+    ; hpack_decoder = Hpack.Decoder.(create settings.header_table_size)
     }
   in
   let t = Lazy.force t in
@@ -393,34 +628,39 @@ stream"
   t
 
 let request t request ~error_handler ~response_handler =
-  let state = ref Awaiting_response in
-  let request_method = request.Request.meth in
-  let handler response body =
-    state := Received_response(response, body);
-    response_handler response body
+  let max_frame_size = t.settings.max_frame_size in
+  let request_body = Body.create (Bigstringaf.create max_frame_size) in
+  t.current_stream_id <- Int32.add t.current_stream_id 2l;
+  let stream_id = t.current_stream_id in
+  let respd =
+    Respd.create
+      stream_id
+      request
+      request_body
+      ~max_frame_size
+      t.writer
+      error_handler
+      response_handler
+      ignore
   in
-  let request_body = Body.create (Bigstringaf.create config.request_body_buffer_size) in
-  let t =
-    { request
-    ; request_body
-    ; response_handler
-    ; error_handler
-    ; error_code = `Ok
-    ; reader = Reader.response ~request_method handler
-    ; writer = Writer.create ()
-    ; state }
+  (* TODO: priority *)
+  Streams.add t.streams
+    (* ?priority *)
+    ~initial_window_size:t.settings.initial_window_size
+    respd;
+  let frame_info =
+    Writer.make_frame_info
+      ~max_frame_size:max_frame_size
+      ~flags:Flags.default_flags
+      stream_id
   in
-  Writer.write_request t.writer request;
-  request_body, t
-
-let set_error_and_handle t error =
-  shutdown t;
-  t.state := Closed;
-  t.error_code <- (error :> [`Ok | error]);
-  t.error_handler error
-
-let report_exn t exn =
-  set_error_and_handle t (`Exn exn)
+  Writer.write_request_headers t.writer t.hpack_encoder frame_info request;
+  Writer.flush t.writer (fun () ->
+    respd.state <- Open Awaiting_response);
+  wakeup_writer t;
+  (* TODO: closing the request body puts the stream on half-closed (local)
+   * state *)
+  request_body
 
 let flush_response_body t =
   match !(t.state) with

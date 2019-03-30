@@ -626,8 +626,7 @@ end
 
 (** {2 Client Connection} *)
 
-(* module Client_connection : sig
-
+module Client_connection : sig
   type t
 
   type error =
@@ -637,12 +636,16 @@ end
 
   type error_handler = error -> unit
 
-  val request
+  val create
     :  ?config:Config.t
+    -> t
+
+  val request
+    :  t
     -> Request.t
     -> error_handler:error_handler
     -> response_handler:response_handler
-    -> [`write] Body.t * t
+    -> [`write] Body.t
 
   val next_read_operation : t -> [ `Read | `Close ]
   (** [next_read_operation t] returns a value describing the next operation
@@ -698,7 +701,5 @@ end
   (**/**)
   val shutdown : t -> unit
   (**/**)
-end *)
-
-(**/**)
+end
 

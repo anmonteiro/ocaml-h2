@@ -35,6 +35,7 @@
 module AB = Angstrom.Buffered
 module Reader = Parse.Reader
 module Writer = Serialize.Writer
+module Streams = Streams.Server_streams
 
 type request_handler = Reqd.t -> unit
 
@@ -269,7 +270,7 @@ let handle_headers t ~end_stream reqd headers =
         t.config.response_body_buffer_size
         (create_push_stream t)
     in
-    reqd.stream_state <- Open (FullHeaders active_stream);
+    reqd.state <- Open (FullHeaders active_stream);
     t.current_client_streams <- t.current_client_streams + 1;
     match method_and_path_or_malformed headers with
     | None ->
@@ -312,12 +313,12 @@ let handle_headers t ~end_stream reqd headers =
           (* From RFC7540§5.1:
                [...] an endpoint receiving an END_STREAM flag causes the stream
                state to become "half-closed (remote)". *)
-          reqd.stream_state <- HalfClosed new_stream_state;
+          reqd.state <- HalfClosedRemote new_stream_state;
           (* Deliver EOF to the request body, as the handler might be waiting
            * on it to produce a response. *)
           Body.close_reader request_body;
         end else begin
-          reqd.stream_state <- Open (ActiveRequest new_stream_state);
+          reqd.state <- Open (ActiveRequest new_stream_state);
         end;
         t.request_handler reqd;
         wakeup_writer t
@@ -331,7 +332,7 @@ let handle_headers_block t ?(is_trailers=false) reqd partial_headers flags heade
        frames needs to reassemble header blocks and perform decompression
        even if the frames are to be discarded *)
   let parse_state' =
-    AB.feed partial_headers.Reqd.parse_state (`Bigstring headers_block)
+    AB.feed partial_headers.Stream.parse_state (`Bigstring headers_block)
   in
   if end_headers then begin
     t.receiving_headers_for_stream <- None;
@@ -422,7 +423,7 @@ let open_stream t frame_header ?priority headers_block =
          initial window size for new streams could have changed between adding
          the (idle) stream and opening it. *)
       stream.flow <- t.settings.initial_window_size;
-      stream.reqd
+      stream.streamd
     in
     let end_headers = Flags.test_end_header flags in
     let headers_block_length = Bigstringaf.length headers_block in
@@ -434,12 +435,12 @@ let open_stream t frame_header ?priority headers_block =
       2 * headers_block_length
     in
     let partial_headers =
-      { Reqd
+      { Stream
       . parse_state = AB.parse ~initial_buffer_size (Hpack.Decoder.decode_headers t.hpack_decoder)
       ; end_stream = Flags.test_end_stream flags
       }
     in
-    reqd.stream_state <- Open (PartialHeaders partial_headers);
+    reqd.state <- Open (PartialHeaders partial_headers);
     if not end_headers then
       t.receiving_headers_for_stream <- Some stream_id;
     handle_headers_block t reqd partial_headers flags headers_block
@@ -459,7 +460,7 @@ let process_trailer_headers t reqd response_state frame_header headers_block =
     set_error_and_handle t reqd `Bad_request ProtocolError
   end else begin
     let partial_headers =
-      { Reqd
+      { Stream
       . parse_state = AB.parse (Hpack.Decoder.decode_headers t.hpack_decoder)
         (* obviously true at this point. *)
       ; end_stream
@@ -493,7 +494,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
       match Streams.find t.streams stream_id with
       | None -> open_stream t frame_header ?priority headers_block
       | Some reqd ->
-        match reqd.stream_state with
+        match reqd.state with
         | Idle ->
           (* From RFC7540§6.2:
                HEADERS frames can be sent on a stream in the "idle", "reserved
@@ -509,7 +510,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
           process_trailer_headers t reqd rs frame_header headers_block
         | Open (ActiveRequest rs) ->
           process_trailer_headers t reqd rs frame_header headers_block
-        | HalfClosed _
+        | HalfClosedRemote _
           (* From RFC7540§5.1:
                half-closed (remote): [...] If an endpoint receives additional
                frames, other than WINDOW_UPDATE, PRIORITY, or RST_STREAM, for a
@@ -575,10 +576,10 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
          This is necessary even if the frame is in error. *)
     Streams.deduct_inflow t.streams payload_length;
     match Streams.get_node t.streams stream_id with
-    | Some (Stream { reqd; _ } as stream) ->
-      begin match reqd.Reqd.stream_state with
+    | Some (Stream { streamd; _ } as stream) ->
+      begin match streamd.Reqd.state with
       | Open (ActiveRequest ({ request_info; _ } as stream_state)) ->
-        let request_body = Reqd.request_body reqd in
+        let request_body = Reqd.request_body streamd in
         request_info.request_body_bytes <-
           Int64.(add request_info.request_body_bytes (of_int (Bigstringaf.length bstr)));
         let request = request_info.request in
@@ -606,7 +607,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
                    A request or response is also malformed if the value of a
                    content-length header field does not equal the sum of the
                    DATA frame payload lengths that form the body. *)
-              set_error_and_handle t reqd `Bad_request ProtocolError;
+              set_error_and_handle t streamd `Bad_request ProtocolError;
           | _ ->
             let end_stream = Flags.test_end_stream flags in
             (* XXX(anmonteiro): should we only give back flow control after we
@@ -620,12 +621,12 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
                    the endpoint will send for the identified stream. Setting
                    this flag causes the stream to enter one of the
                    "half-closed" states or the "closed" state (Section 5.1). *)
-              if Reqd.requires_output reqd then begin
+              if Reqd.requires_output streamd then begin
                 (* There's a potential race condition here if the request handler
                  * completes the response right after . *)
-                reqd.stream_state <- HalfClosed stream_state
+                streamd.state <- HalfClosedRemote stream_state
               end else
-                Reqd.finish_stream reqd Finished
+                Reqd.finish_stream streamd Finished
             end;
             (* From RFC7540§6.9.1:
                  The receiver of a frame sends a WINDOW_UPDATE frame as it
@@ -738,7 +739,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
   else
     match Streams.find t.streams stream_id with
     | Some reqd ->
-      begin match reqd.stream_state with
+      begin match reqd.state with
       | Idle ->
         (* From RFC7540§6.4:
              RST_STREAM frames MUST NOT be sent for a stream in the "idle"
@@ -842,9 +843,9 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
           end
         | MaxFrameSize, x ->
           t.settings.max_frame_size <- x;
-          Streams.iter ~f:(fun (Stream { reqd; _ }) ->
-            if Reqd.requires_output reqd then
-              reqd.max_frame_size <- x)
+          Streams.iter ~f:(fun (Stream { streamd; _ }) ->
+            if Reqd.requires_output streamd then
+              streamd.max_frame_size <- x)
             t.streams
         | MaxHeaderListSize, x ->
           t.settings.max_header_list_size <- Some x)
@@ -937,8 +938,8 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
     add_window_increment t t.streams window_increment
   end else begin
     match Streams.get_node t.streams stream_id with
-    | Some (Stream stream as stream_node) ->
-      begin match stream.reqd.stream_state with
+    | Some (Stream { streamd; _ } as stream_node) ->
+      begin match streamd.state with
       | Idle ->
         (* From RFC7540§5.1:
              idle: [...] Receiving any frame other than HEADERS or PRIORITY on
@@ -950,7 +951,7 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
            [...] a receiver could receive a WINDOW_UPDATE frame on a
            "half-closed (remote)" or "closed" stream. A receiver MUST NOT treat
            this as an error (see Section 5.1). *)
-      | HalfClosed _
+      | HalfClosedRemote _
       (* From RFC7540§5.1:
            reserved (local): [...] A PRIORITY or WINDOW_UPDATE frame MAY be
            received in this state. *)
@@ -984,7 +985,7 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   else
     match Streams.find t.streams stream_id with
     | Some stream ->
-      begin match stream.Reqd.stream_state with
+      begin match stream.Reqd.state with
       | Open (PartialHeaders partial_headers) ->
         handle_headers_block t stream partial_headers flags headers_block
       | Open (ActiveRequest { trailers_parser = Some partial_headers; _ }) ->
