@@ -64,7 +64,6 @@ type t =
   ; mutable receiving_headers_for_stream : Stream_identifier.t option
   ; mutable did_send_go_away       : bool
   ; wakeup_writer  : (unit -> unit) ref
-  ; wakeup_reader  : (unit -> unit) list ref
     (* From RFC7540§4.3:
          Header compression is stateful. One compression context and one
          decompression context are used for the entire connection. *)
@@ -88,11 +87,6 @@ let is_active t =
   | Active _ -> true
   | New _ -> false
 
-let on_wakeup_reader t k =
-  if is_shutdown t
-  then failwith "on_wakeup_reader on closed conn"
-  else t.wakeup_reader := k::!(t.wakeup_reader)
-
 let on_wakeup_writer t k =
   if is_shutdown t
   then failwith "on_wakeup_writer on closed conn"
@@ -107,11 +101,6 @@ let _wakeup_writer wakeup_ref =
 
 let wakeup_writer t =
   _wakeup_writer t.wakeup_writer
-
-let wakeup_reader t =
-  let fs = !(t.wakeup_reader) in
-  t.wakeup_reader := [];
-  List.iter (fun f -> f ()) fs
 
 let shutdown_reader t =
   Reader.force_close (reader t)
@@ -133,7 +122,6 @@ let shutdown_writer t =
 let shutdown t =
   shutdown_reader t;
   shutdown_writer t;
-  wakeup_reader t;
   wakeup_writer t
 
 let handle_error t = function
@@ -1135,7 +1123,6 @@ stream"
     ; receiving_headers_for_stream = None
     ; did_send_go_away = false
     ; wakeup_writer = ref default_wakeup_writer
-    ; wakeup_reader = ref []
     ; hpack_encoder = Hpack.Encoder.(create settings.header_table_size)
     ; hpack_decoder = Hpack.Decoder.(create settings.header_table_size)
     }
@@ -1144,7 +1131,7 @@ stream"
 let next_read_operation t =
   if Reader.is_closed (reader t) then shutdown_reader t;
   match Reader.next (reader t) with
-  | `Read | `Yield | `Close as operation -> operation
+  | `Read | `Close as operation -> operation
   | `Error e ->
     match t.reader with
     | New _ ->
@@ -1181,9 +1168,6 @@ let read t bs ~off ~len =
 
 let read_eof t bs ~off ~len =
   read_with_more t bs ~off ~len Complete
-
-let yield_reader t k =
-  on_wakeup_reader t k
 
 let flush_response_body t =
   if is_active t then
