@@ -68,8 +68,8 @@ type t =
     (* From RFC7540§4.3:
          Header compression is stateful. One compression context and one
          decompression context are used for the entire connection. *)
-  ; encoder : Hpack.Encoder.t
-  ; decoder : Hpack.Decoder.t
+  ; hpack_encoder : Hpack.Encoder.t
+  ; hpack_decoder : Hpack.Decoder.t
   }
 
 let reader t =
@@ -281,7 +281,7 @@ let handle_headers t ~end_stream reqd headers =
          permitted to open. *)
     let active_stream =
       Reqd.create_active_stream
-        t.encoder
+        t.hpack_encoder
         t.config.response_body_buffer_size
         (create_push_stream t)
     in
@@ -451,7 +451,7 @@ let open_stream t frame_header ?priority headers_block =
     in
     let partial_headers =
       { Reqd
-      . parse_state = AB.parse ~initial_buffer_size (Hpack.Decoder.decode_headers t.decoder)
+      . parse_state = AB.parse ~initial_buffer_size (Hpack.Decoder.decode_headers t.hpack_decoder)
       ; end_stream = Flags.test_end_stream flags
       }
     in
@@ -476,7 +476,7 @@ let process_trailer_headers t reqd response_state frame_header headers_block =
   end else begin
     let partial_headers =
       { Reqd
-      . parse_state = AB.parse (Hpack.Decoder.decode_headers t.decoder)
+      . parse_state = AB.parse (Hpack.Decoder.decode_headers t.hpack_decoder)
         (* obviously true at this point. *)
       ; end_stream
       }
@@ -549,7 +549,6 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
 
 let send_window_update: type a. t -> a Streams.PriorityTreeNode.node -> int -> unit =
   fun t stream n ->
-  let open Streams in
   let send_window_update_frame stream_id n =
     let valid_inflow = Streams.add_inflow stream n in
     assert valid_inflow;
@@ -559,10 +558,7 @@ let send_window_update: type a. t -> a Streams.PriorityTreeNode.node -> int -> u
   if n > 0 then begin
     let n = ref n in
     let max_window_size = Settings.WindowSize.max_window_size in
-    let stream_id = match stream with
-    | Connection _ -> Stream_identifier.connection
-    | Stream { reqd; _ } -> reqd.id
-    in
+    let stream_id = Streams.stream_id stream in
     while !n >= max_window_size do
       send_window_update_frame stream_id max_window_size;
       n := !n - max_window_size
@@ -816,7 +812,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
                size of the header compression table used to decode header
                blocks, in octets. *)
           t.settings.header_table_size <- x;
-          Hpack.Encoder.set_capacity t.encoder x;
+          Hpack.Encoder.set_capacity t.hpack_encoder x;
         | EnablePush, x ->
           (* We've already verified that this setting is either 0 or 1 in the
            * call to `Settings.check_settings_list` above. *)
@@ -918,9 +914,10 @@ let add_window_increment: type a. t -> a Streams.PriorityTreeNode.node -> int ->
   fun t stream increment ->
     let open Streams in
     let did_add = Streams.add_flow stream increment in
-    let stream_id, new_flow = match stream with
-    | Connection { flow; _ } -> Stream_identifier.connection, flow
-    | Stream { flow; reqd; _ } -> reqd.id, flow
+    let stream_id = Streams.stream_id stream in
+    let new_flow = match stream with
+    | Connection { flow; _ } -> flow
+    | Stream { flow; _ } -> flow
     in
     if did_add then begin
       if new_flow > 0 then
@@ -1140,8 +1137,8 @@ stream"
     ; did_send_go_away = false
     ; wakeup_writer = ref default_wakeup_writer
     ; wakeup_reader = ref []
-    ; encoder = Hpack.Encoder.(create settings.header_table_size)
-    ; decoder = Hpack.Decoder.(create settings.header_table_size)
+    ; hpack_encoder = Hpack.Encoder.(create settings.header_table_size)
+    ; hpack_decoder = Hpack.Decoder.(create settings.header_table_size)
     }
   in Lazy.force t
 

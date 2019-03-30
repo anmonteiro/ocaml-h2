@@ -221,7 +221,7 @@ let response_exn t =
     | Complete response -> response
     end
   | Closed _ ->
-    failwith "h2.Reqd.response_exn: response has not started"
+    assert false
 
 let send_fixed_response t s response data =
   match s.response_state with
@@ -532,8 +532,8 @@ let response_body_requires_output response_body =
 
 let requires_output t =
   match t.stream_state with
-  | Idle
-  | Reserved _ -> false
+  | Idle -> false
+  | Reserved _ -> true
   (* From RFC7540§8.1:
        A server can send a complete response prior to the client sending an
        entire request if the response does not depend on any portion of the
@@ -565,7 +565,7 @@ let write_buffer_data writer ~off ~len frame_info buffer =
   | `Bigstring bstr ->
     Writer.schedule_data writer ~off ~len frame_info bstr
 
-let flush_response_body ~max_bytes t =
+let flush_response_body t ~max_bytes =
   match t.stream_state with
   | Open (FullHeaders { response_state; _ })
   | Open (ActiveRequest { response_state; _ })
