@@ -35,7 +35,6 @@
 open H2
 open Lwt.Infix
 
-(* Based on the Buffer module in httpaf_async.ml. *)
 module Buffer : sig
   type t
 
@@ -116,82 +115,7 @@ end
 
 module Config = H2.Config
 
-module Server  (Io: IO) = struct
-  let start_read_write_loops
-    ?(readf=Io.read)
-    ?(writev=Io.writev)
-    ~config
-    ~socket
-    connection =
-    let report_exn = Io.report_exn connection socket in
-
-    let read_buffer = Buffer.create config.Config.read_buffer_size in
-    let read_loop_exited, notify_read_loop_exited = Lwt.wait () in
-
-    let read_loop () =
-      let rec read_loop_step () =
-        match Server_connection.next_read_operation connection with
-        | `Read ->
-          Buffer.put ~f:(readf socket) read_buffer >>= begin function
-          | `Eof ->
-            Buffer.get read_buffer ~f:(fun bigstring ~off ~len ->
-              Server_connection.read_eof connection bigstring ~off ~len)
-            |> ignore;
-            read_loop_step ()
-          | `Ok _ ->
-            Buffer.get read_buffer ~f:(fun bigstring ~off ~len ->
-              Server_connection.read connection bigstring ~off ~len)
-            |> ignore;
-            read_loop_step ()
-          end
-
-        | `Close ->
-          Lwt.wakeup_later notify_read_loop_exited ();
-          Io.shutdown_receive socket;
-          Lwt.return_unit
-      in
-
-      Lwt.async (fun () ->
-        Lwt.catch
-          read_loop_step
-          report_exn)
-    in
-
-
-    let writev = writev socket in
-    let write_loop_exited, notify_write_loop_exited = Lwt.wait () in
-
-    let rec write_loop () =
-      let rec write_loop_step () =
-        match Server_connection.next_write_operation connection with
-        | `Write io_vectors ->
-          writev io_vectors >>= fun result ->
-          Server_connection.report_write_result connection result;
-          write_loop_step ()
-
-        | `Yield ->
-          Server_connection.yield_writer connection write_loop;
-          Lwt.return_unit
-
-        | `Close _ ->
-          Lwt.wakeup_later notify_write_loop_exited ();
-          Io.shutdown_send socket;
-          Lwt.return_unit
-      in
-
-      Lwt.async (fun () ->
-        Lwt.catch
-          write_loop_step
-          report_exn)
-    in
-
-
-    read_loop ();
-    write_loop ();
-    Lwt.join [read_loop_exited; write_loop_exited] >>= fun () ->
-
-    Io.close socket
-
+module Server (Io: IO) = struct
   let create_connection_handler ?(config=Config.default) ~request_handler ~error_handler =
     fun client_addr socket ->
       let connection =
@@ -200,7 +124,73 @@ module Server  (Io: IO) = struct
           ~error_handler:(error_handler client_addr)
           (request_handler client_addr)
       in
-      start_read_write_loops ~config ~socket connection
+      let report_exn = Io.report_exn connection socket in
+
+      let read_buffer = Buffer.create config.Config.read_buffer_size in
+      let read_loop_exited, notify_read_loop_exited = Lwt.wait () in
+
+      let read_loop () =
+        let rec read_loop_step () =
+          match Server_connection.next_read_operation connection with
+          | `Read ->
+            Buffer.put ~f:(Io.read socket) read_buffer >>= begin function
+            | `Eof ->
+              Buffer.get read_buffer ~f:(fun bigstring ~off ~len ->
+                Server_connection.read_eof connection bigstring ~off ~len)
+              |> ignore;
+              read_loop_step ()
+            | `Ok _ ->
+              Buffer.get read_buffer ~f:(fun bigstring ~off ~len ->
+                Server_connection.read connection bigstring ~off ~len)
+              |> ignore;
+              read_loop_step ()
+            end
+
+          | `Close ->
+            Lwt.wakeup_later notify_read_loop_exited ();
+            Io.shutdown_receive socket;
+            Lwt.return_unit
+        in
+
+        Lwt.async (fun () ->
+          Lwt.catch
+            read_loop_step
+            report_exn)
+      in
+
+
+      let writev = Io.writev socket in
+      let write_loop_exited, notify_write_loop_exited = Lwt.wait () in
+
+      let rec write_loop () =
+        let rec write_loop_step () =
+          match Server_connection.next_write_operation connection with
+          | `Write io_vectors ->
+            writev io_vectors >>= fun result ->
+            Server_connection.report_write_result connection result;
+            write_loop_step ()
+
+          | `Yield ->
+            Server_connection.yield_writer connection write_loop;
+            Lwt.return_unit
+
+          | `Close _ ->
+            Lwt.wakeup_later notify_write_loop_exited ();
+            Io.shutdown_send socket;
+            Lwt.return_unit
+        in
+
+        Lwt.async (fun () ->
+          Lwt.catch
+            write_loop_step
+            report_exn)
+      in
+
+      read_loop ();
+      write_loop ();
+      Lwt.join [read_loop_exited; write_loop_exited] >>= fun () ->
+
+      Io.close socket
 end
 
 
