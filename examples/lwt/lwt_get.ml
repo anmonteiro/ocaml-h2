@@ -53,9 +53,9 @@ let () =
     >>= fun () ->
 
     let request_headers =
-      Request.create `GET "/lol"
-        ~scheme:"http"
-        ~headers:Headers.(add_list empty ["host", host; "other", "omg"])
+      Request.create `GET "/"
+        ~scheme:"https"
+        ~headers:Headers.(add_list empty [":authority", host])
     in
 
     let response_received, notify_response_received = Lwt.wait () in

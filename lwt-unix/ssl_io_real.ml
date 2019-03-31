@@ -117,6 +117,7 @@ let make_client ?client socket =
   | None ->
     let client_ctx = Ssl.create_context Ssl.SSLv23 Ssl.Client_context in
     Ssl.disable_protocols client_ctx [Ssl.SSLv23];
+    Ssl.set_context_alpn_protos client_ctx ["h2"];
     Ssl.honor_cipher_order client_ctx;
     Lwt_ssl.ssl_connect socket client_ctx
 

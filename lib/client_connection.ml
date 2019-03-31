@@ -125,9 +125,7 @@ let flush_request_body t =
 
 let shutdown_writer t =
   flush_request_body t;
-  Writer.close t.writer;
-  ()
-  (* Body.close_writer t.request_body *)
+  Writer.close t.writer
 
 let shutdown t =
   shutdown_reader t;
@@ -135,6 +133,7 @@ let shutdown t =
 
 let handle_error t = function
   | Error.ConnectionError (error, data) ->
+    (* TODO: this needs to call the connection-level error handler *)
     if not t.did_send_go_away then begin
       (* From RFC7540§5.4.1:
            An endpoint that encounters a connection error SHOULD first send a
@@ -167,6 +166,8 @@ let handle_error t = function
       wakeup_writer t
     end
   | StreamError (stream_id, error) ->
+    (* TODO: This branch probably needs to report the error to the stream error
+     * handler, and additionally deliver EOF to the response body *)
     begin match Streams.find t.streams stream_id with
     | Some reqd ->
       Respd.reset_stream reqd error;
@@ -562,8 +563,51 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
 let process_priority_frame _t { Frame.frame_header = _ ; _ } _priority =
   ()
 
-let process_rst_stream_frame _t { Frame.frame_header = _ ; _ } _error_code =
-  ()
+let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
+  let { Frame.stream_id; _ } = frame_header in
+  match Streams.find t.streams stream_id with
+  | Some respd ->
+    begin match respd.state with
+    | Idle ->
+      (* From RFC7540§6.4:
+           RST_STREAM frames MUST NOT be sent for a stream in the "idle"
+           state. If a RST_STREAM frame identifying an idle stream is
+           received, the recipient MUST treat this as a connection error
+           (Section 5.4.1) of type PROTOCOL_ERROR. *)
+      report_connection_error t Error.ProtocolError
+    | _ ->
+      (* From RFC7540§6.4:
+           The RST_STREAM frame fully terminates the referenced stream and
+           causes it to enter the "closed" state. After receiving a
+           RST_STREAM on a stream, the receiver MUST NOT send additional
+           frames for that stream, with the exception of PRIORITY.
+
+         Note:
+           This match branch also accepts streams in the `Closed` state. We
+           do that to comply with the following:
+
+         From RFC7540§6.4:
+           [...] after sending the RST_STREAM, the sending endpoint MUST be
+           prepared to receive and process additional frames sent on the
+           stream that might have been sent by the peer prior to the arrival
+           of the RST_STREAM. *)
+      Respd.finish_stream respd (ResetByThem error_code)
+    end
+  | None ->
+    (* We might have removed the stream from the hash table. If its stream
+     * id is strictly smaller than the max client stream id we've seen, then
+       it must have been closed. *)
+    if Stream_identifier.(stream_id >= t.current_stream_id) then begin
+      (* From RFC7540§6.4:
+           RST_STREAM frames MUST NOT be sent for a stream in the "idle"
+           state. If a RST_STREAM frame identifying an idle stream is
+           received, the recipient MUST treat this as a connection error
+           (Section 5.4.1) of type PROTOCOL_ERROR.
+
+         Note:
+           If we didn't find the stream in the hash table it must be "idle". *)
+      report_connection_error t Error.ProtocolError
+    end
 
 let process_settings_frame t { Frame.frame_header; _ } settings =
   let open Streams in
@@ -681,59 +725,121 @@ let process_ping_frame t { Frame.frame_header; _ } payload =
     wakeup_writer t
   end
 
-let process_goaway_frame _t _frame _payload =
-  ()
+let process_goaway_frame t _frame payload =
+  let (_last_stream_id, _error, debug_data) = payload in
+  let len = Bigstringaf.length debug_data in
+  let bytes = Bytes.create len in
+  Bigstringaf.unsafe_blit_to_bytes debug_data ~src_off:0 bytes ~dst_off:0 ~len;
+  (* TODO(anmonteiro): I think we need to allow lower numbered streams to
+   * complete. *)
+  shutdown t
 
-let process_window_update_frame _t { Frame.frame_header = _; _ } _window_increment =
-  ()
+let add_window_increment: type a. t -> a Streams.PriorityTreeNode.node -> int -> unit =
+  fun t stream increment ->
+    let open Streams in
+    let did_add = Streams.add_flow stream increment in
+    let stream_id = Streams.stream_id stream in
+    let new_flow = match stream with
+    | Connection { flow; _ } -> flow
+    | Stream { flow; _ } -> flow
+    in
+    if did_add then begin
+      if new_flow > 0 then
+        (* Don't bother waking up the writer if the new flow doesn't allow
+         * the stream to write. *)
+        wakeup_writer t;
+    end else begin
+      if Stream_identifier.is_connection stream_id then
+        report_connection_error t
+          ~additional_debug_data:(Printf.sprintf
+            "Window size for stream would exceed %d"
+            Settings.WindowSize.max_window_size)
+          Error.FlowControlError
+      else
+        report_stream_error t stream_id Error.FlowControlError
+    end
+
+let process_window_update_frame t { Frame.frame_header; _ } window_increment =
+  let open Streams in
+  let { Frame.stream_id; _ } = frame_header in
+  (* From RFC7540§6.9:
+       The WINDOW_UPDATE frame can be specific to a stream or to the entire
+       connection. In the former case, the frame's stream identifier indicates
+       the affected stream; in the latter, the value "0" indicates that the
+       entire connection is the subject of the frame. *)
+  if Stream_identifier.is_connection stream_id then begin
+    add_window_increment t t.streams window_increment
+  end else begin
+    match Streams.get_node t.streams stream_id with
+    | Some (Stream { streamd; _ } as stream_node) ->
+      begin match streamd.state with
+      | Idle ->
+        (* From RFC7540§5.1:
+             idle: [...] Receiving any frame other than HEADERS or PRIORITY on
+             a stream in this state MUST be treated as a connection error
+             (Section 5.4.1) of type PROTOCOL_ERROR. *)
+        report_connection_error t Error.ProtocolError
+      | Active _
+      (* From RFC7540§5.1:
+           reserved (local): [...] A PRIORITY or WINDOW_UPDATE frame MAY be
+           received in this state. *)
+      | Reserved _ ->
+        add_window_increment t stream_node window_increment
+      | Closed _ ->
+        (* From RFC7540§5.1:
+             Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received
+             in this state, though endpoints MAY choose to treat frames that
+             arrive a significant time after sending END_STREAM as a connection
+             error (Section 5.4.1) of type PROTOCOL_ERROR. *)
+        ()
+      end
+    | None ->
+      (* From RFC7540§5.1:
+           idle: [...] Receiving any frame other than HEADERS or PRIORITY on
+           a stream in this state MUST be treated as a connection error
+           (Section 5.4.1) of type PROTOCOL_ERROR. *)
+      report_connection_error t Error.ProtocolError
+  end
 
 let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
-  if not (Stream_identifier.is_request stream_id) then
-    (* From RFC7540§5.1.1:
-         Streams initiated by a client MUST use odd-numbered stream
-         identifiers. [...] An endpoint that receives an unexpected stream
-         identifier MUST respond with a connection error (Section 5.4.1) of
-         type PROTOCOL_ERROR. *)
-    report_connection_error t Error.ProtocolError
-  else
-    match Streams.find t.streams stream_id with
-    | Some stream ->
-      begin match stream.Respd.state with
-      | Active
-          ({ response_state = PartialHeaders partial_headers; _ }
-           as active_request) ->
-        handle_headers_block t stream active_request partial_headers flags headers_block
-      | Active
-          ({ response_state =
-               ActiveResponse
-                 { trailers_parser = Some partial_headers; _ }; _ }
-           as active_request) ->
-        handle_trailer_headers t stream active_request partial_headers flags headers_block
-      | _ ->
-        (* TODO: maybe need to handle the case where the stream has been closed
-         * due to a stream error. *)
-        (* From RFC7540§6.10:
-             A RST_STREAM is the last frame that an endpoint can send on a
-             stream. The peer that sends the RST_STREAM frame MUST be prepared
-             to receive any frames that were sent or enqueued for sending by
-             the remote peer. These frames can be ignored, except where they
-             modify connection state (such as the state maintained for header
-             compression (Section 4.3) or flow control). *)
-        report_connection_error t Error.ProtocolError
-      end
-    | None ->
+  match Streams.find t.streams stream_id with
+  | Some stream ->
+    begin match stream.Respd.state with
+    | Active
+        ({ response_state = PartialHeaders partial_headers; _ }
+         as active_request) ->
+      handle_headers_block t stream active_request partial_headers flags headers_block
+    | Active
+        ({ response_state =
+             ActiveResponse
+               { trailers_parser = Some partial_headers; _ }; _ }
+         as active_request) ->
+      handle_trailer_headers t stream active_request partial_headers flags headers_block
+    | _ ->
+      (* TODO: maybe need to handle the case where the stream has been closed
+       * due to a stream error. *)
       (* From RFC7540§6.10:
-           A CONTINUATION frame MUST be preceded by a HEADERS, PUSH_PROMISE or
-           CONTINUATION frame without the END_HEADERS flag set. A recipient that
-           observes violation of this rule MUST respond with a connection error
-           (Section 5.4.1) of type PROTOCOL_ERROR. *)
+           A RST_STREAM is the last frame that an endpoint can send on a
+           stream. The peer that sends the RST_STREAM frame MUST be prepared
+           to receive any frames that were sent or enqueued for sending by
+           the remote peer. These frames can be ignored, except where they
+           modify connection state (such as the state maintained for header
+           compression (Section 4.3) or flow control). *)
       report_connection_error t Error.ProtocolError
+    end
+  | None ->
+    (* From RFC7540§6.10:
+         A CONTINUATION frame MUST be preceded by a HEADERS, PUSH_PROMISE or
+         CONTINUATION frame without the END_HEADERS flag set. A recipient that
+         observes violation of this rule MUST respond with a connection error
+         (Section 5.4.1) of type PROTOCOL_ERROR. *)
+    report_connection_error t Error.ProtocolError
 
-
-(* Unlike e.g. http/af where a new connection is created per request, we create
-   a single connection where all requests go through. HTTP/2 allows concurrency
-   to exist on the connection level.
+(* Unlike e.g. http/af's current Client implementation (Oneshot) where a new
+   connection is created per request, we create a single connection where all
+   requests go through. HTTP/2 allows concurrency to exist on the connection
+   level.
 
    From RFC7540§1:
      HTTP/2 [...] allows interleaving of request and response messages on the
@@ -845,6 +951,9 @@ stream"
   end;
   t
 
+let on_stream_closed t = fun () ->
+  t.current_server_streams <- t.current_server_streams - 1
+
 let request t request ~error_handler ~response_handler =
   let max_frame_size = t.settings.max_frame_size in
   let request_body = Body.create (Bigstringaf.create max_frame_size) in
@@ -859,7 +968,7 @@ let request t request ~error_handler ~response_handler =
       t.writer
       error_handler
       response_handler
-      ignore
+      (on_stream_closed t)
   in
   (* TODO: priority *)
   Streams.add t.streams

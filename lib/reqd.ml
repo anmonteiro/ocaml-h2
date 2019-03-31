@@ -374,6 +374,11 @@ let unsafe_push t request =
   | Reserved _
   | Closed _ -> assert false
 
+(* TODO: this needs a bit of documentation stating that PUSH_PROMISE frames
+ * must only be sent in open or half-closed (remote) states. In practice, it's
+ * dangerous to use this function in conjunction with one of the
+ * `respond_with_{big,}string` functions above because their response might be
+ * flushed immediately and thus close the corresponding stream. *)
 let push t request =
   if fst t.error_code <> `Ok then
     failwith "h2.Reqd.push: invalid state, currently handling error";

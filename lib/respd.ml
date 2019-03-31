@@ -32,6 +32,10 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
+(* TODO(anmonteiro): think about whether we wanna expose this module. it might
+ * be helpful to expose a way to reset streams, and I think we'd need a
+ * reference to the Respd *)
+
 module Writer = Serialize.Writer
 module AB = Angstrom.Buffered
 
@@ -255,14 +259,6 @@ let report_error t exn error_code =
   | Active { response_state = ActiveResponse s; _ } ->
     _report_error t ~response_body:s.response_body exn error_code
   | Closed _ -> ()
-
-let report_exn t exn =
-  report_error t (`Exn exn) Error.InternalError
-
-let try_with t f : (unit, exn) Result.result =
-  try f (); Ok () with exn -> report_exn t exn; Error exn
-
-(* Private API, not exposed to the user through h2.mli *)
 
 let close_request_body { request_body; _ } =
   Body.close_reader request_body

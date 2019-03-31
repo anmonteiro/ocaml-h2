@@ -841,6 +841,9 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
               Error.FlowControlError
           end
         | MaxFrameSize, x ->
+          (* XXX: We're probably not abiding entirely by this. If we get a
+           * MAX_FRAME_SIZE setting we'd need to reallocate the read buffer?
+           * This will need support from the I/O runtimes. *)
           t.settings.max_frame_size <- x;
           Streams.iter ~f:(fun (Stream { streamd; _ }) ->
             if Reqd.requires_output streamd then
@@ -849,6 +852,9 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
         | MaxHeaderListSize, x ->
           t.settings.max_header_list_size <- Some x)
         settings;
+      (* From RFC7540§6.5.2:
+           Once all values have been processed, the recipient MUST immediately
+           emit a SETTINGS frame with the ACK flag set. *)
       let frame_info =
         Writer.make_frame_info
           ~flags:Flags.(set_ack default_flags)
@@ -1109,6 +1115,9 @@ stream"
         | Continuation headers_block ->
           process_continuation_frame t frame headers_block
         | Unknown _ ->
+          (* TODO: in the future we can expose a hook for handling unknown
+           * frames, e.g. the ALTSVC frame defined in RFC7838§4
+           * (https://tools.ietf.org/html/rfc7838#section-4) *)
           (* From RFC7540§5.1:
                Frames of unknown types are ignored. *)
           ()
