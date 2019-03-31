@@ -140,7 +140,7 @@ let decode cases =
          payload smaller. We check that too. *)
   let decoder1 = Decoder.create 65536 in
   let decoder2 = Decoder.create 65536 in
-  List.iter begin fun (size, wire, headers) ->
+  List.iter (fun (size, wire, headers) ->
     Encoder.set_capacity encoder size;
 
     let decoded_headers = decode_headers decoder1 size wire in
@@ -164,26 +164,22 @@ let decode cases =
     let enc', dec' = Array.fold_left (fun (_, decoded_headers) _ ->
       let encoded_again = encode_headers encoder decoded_headers in
       let decoded_again = decode_headers decoder2 size encoded_again in
-      encoded_again, decoded_again
-
-
-    ) ("", decoded_headers') (Array.make 5 0) in
+      encoded_again, decoded_again)
+      ("", decoded_headers') (Array.make 5 0) in
 
       Alcotest.(check bool) "encoded_again payload is smaller or equal than encoded"
         true (String.length enc' <= String.length encoded);
       (* And check roundtripping again for good measure. *)
       List.iter2 (fun h1 h2 ->
         Alcotest.(check header_testable "Headers are decoded correctly" h1 h2))
-      dec' headers;
-  end
-  cases
+      dec' headers)
+    cases
 
 let rec take_n acc i ys = match i,ys with
   | 0, _ -> acc
   | _, [] -> acc
   | _, x::xs when i > 0 -> take_n  (x::acc) (i-1) xs
   | _ -> acc
-  ;;
 
 let gen_suites fixtures =
   let gen_suite filename =
@@ -207,9 +203,7 @@ let read_fixtures fixtures_dir =
   |> List.map (fun dir -> dir, Filename.concat fixtures_dir dir)
   (* don't need to decode raw-data, it's already in ocaml-hpack.  *)
   |> List.filter (fun (dir, fullpath) ->
-      Sys.is_directory fullpath && dir <> "raw-data"
-      (* && dir = "ocaml-hpack" *)
-  )
+      Sys.is_directory fullpath && dir <> "raw-data")
   |> List.map (fun (dir, fullpath) ->
     let files_in_dir =
       fullpath
@@ -218,6 +212,36 @@ let read_fixtures fixtures_dir =
       |> List.filter (fun file -> not (Sys.is_directory file) && Filename.extension file = ".json")
     in
     dir, files_in_dir)
+
+let test_evicting_table_size_0 () =
+  let hs =
+    [ { name = ":method"
+      ; value = "GET"
+      ; sensitive = false
+      }
+    ; { name = "field_not_indexed"
+      ; value= "foo"
+      ; sensitive = false
+      }
+    ]
+  in
+  let encoder = Encoder.create 0 in
+  let encoded_headers = encode_headers encoder hs in
+  Alcotest.(check bool) "Encodes to non-zero hex" true (String.length encoded_headers > 0);
+  (* From RFC7541§6.3: Dynamic Table Size Update
+       A dynamic table size update signals a change to the size of the dynamic
+       table.
+       A dynamic table size update starts with the '001' 3-bit pattern
+
+     Note: we add 0x20 at the beginning of the following wire to signal a
+     dynamic table size update of 0 before the remaining headers are
+     decoded. *)
+  let wire = h ("20" ^ (hex_of_string encoded_headers)) in
+  let decoder = Decoder.create 4096 in
+  let decoded_headers = decode_headers decoder 4096 wire in
+  List.iter2 (fun h1 h2 ->
+    Alcotest.(check header_testable "Decoded headers are roundtripped" h1 h2))
+    hs decoded_headers
 
 let () =
   let fixtures_dir = "hpack-test-case" in
@@ -233,6 +257,8 @@ let () =
   encode_raw_data fixtures_dir raw_data;
   (* Now, test decoding what we just encoded + roundtripping *)
   let fixtures = read_fixtures fixtures_dir in
-  let suites = gen_suites fixtures
-  in
-  Alcotest.run "HPACK" suites
+  let suites = gen_suites fixtures in
+  Alcotest.run "HPACK"
+    (("Hand coded HPACK tests",
+      ["Evictions from the dynamic table with 0 capacity", `Quick, test_evicting_table_size_0] )
+     :: suites)

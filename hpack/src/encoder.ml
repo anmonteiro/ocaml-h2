@@ -69,23 +69,23 @@ module BinaryFormat = struct
   (* From RFC7541§6.2.3. Literal Header Field Never Indexed
        A literal header field never-indexed representation starts with the
        '0001' 4-bit pattern. *)
-  let never_indexed = 0b00010000, 4
+  let never_indexed = 0b0001_0000, 4
 
   (* From RFC7541§6.2.2: Literal Header Field without Indexing
        A literal header field without indexing representation starts with the
        '0000' 4-bit pattern. *)
-  let without_indexing = 0b00000000, 4
+  let without_indexing = 0b0000_0000, 4
 
   (* From RFC7541§6.2.1: Literal Header Field with Incremental Indexing
        A literal header field with incremental indexing representation starts
        with the '01' 2-bit pattern. *)
-  let incremental_indexing = 0b01000000, 6
+  let incremental_indexing = 0b0100_0000, 6
 
   (* From RFC7541§6.1: Indexed Header Field Representation
        An indexed header field starts with the '1' 1-bit pattern, followed by
        the index of the matching header field, represented as an integer with
        a 7-bit prefix (see Section 5.1). *)
-  let indexed = 0b10000000, 7
+  let indexed = 0b1000_0000, 7
 
   let[@inline] is_indexed = function
     | 128 -> true

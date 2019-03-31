@@ -69,7 +69,7 @@ let decode_int prefix n =
     let rec loop i m =
       any_uint8 >>= fun b ->
         let i = i + (b land 127) lsl m in
-        if b land 0b10000000 == 0b10000000 then
+        if b land 0b1000_0000 == 0b1000_0000 then
           loop i (m + 7)
         else return i
     in
@@ -85,7 +85,7 @@ let decode_string =
         (* From RFC7541§5.2:
           A one-bit flag, H, indicating whether or not the octets of the
            string are Huffman encoded. *)
-        if h land 0b10000000 == 0 then
+        if h land 0b1000_0000 == 0 then
           Ok string_data
         else
           Huffman.decode string_data)
@@ -147,7 +147,7 @@ let decode_headers ({ table; _ } as t) =
       ok acc
     else
     any_uint8 >>= fun b ->
-    if b land 128 != 0 then begin
+    if b land 0b1000_0000 != 0 then begin
       (* From RFC7541§6.1: Indexed Header Field Representation
            An indexed header field starts with the '1' 1-bit pattern, followed
            by the index of the matching header field, represented as an integer
@@ -157,7 +157,7 @@ let decode_headers ({ table; _ } as t) =
       | Ok (name, value) ->
         loop ({ name; value; sensitive = false } :: acc) true
       | Error e -> error e
-    end else if b land 192 == 64 then begin
+    end else if b land 0b1100_0000 == 0b0100_0000 then begin
       (* From RFC7541§6.2.1: Literal Header Field with Incremental Indexing
            A literal header field with incremental indexing representation
            starts with the '01' 2-bit pattern. In this case, the index of the
@@ -172,7 +172,7 @@ let decode_headers ({ table; _ } as t) =
         Dynamic_table.add table (name, value);
         loop ({ name; value; sensitive = false } :: acc) true
       | Error e -> error e
-    end else if b land 240 == 0 then begin
+    end else if b land 0b1111_0000 == 0 then begin
       (* From RFC7541§6.2.2: Literal Header Field without Indexing
            A literal header field without indexing representation starts with
            the '0000' 4-bit pattern. In this case, the index of the entry is
@@ -181,7 +181,7 @@ let decode_headers ({ table; _ } as t) =
       | Ok (name, value) ->
         loop ({ name; value; sensitive = false } :: acc) true
       | Error e -> error e
-    end else if b land 240 == 16 then begin
+    end else if b land 0b1111_0000 == 0b0001_0000 then begin
       (* From RFC7541§6.2.3: Literal Header Field Never Indexed
            A literal header field without indexing representation starts with
            the '0001' 4-bit pattern.
@@ -191,7 +191,11 @@ let decode_headers ({ table; _ } as t) =
       | Ok (name, value) ->
         loop ({ name; value; sensitive = true } :: acc) true
       | Error e -> error e
-    end else if b land 224 == 32 then begin
+    end else if b land 0b1110_0000 == 0b0010_0000 then begin
+      (* From RFC7541§6.3: Dynamic Table Size Update
+           A dynamic table size update signals a change to the size of the
+           dynamic table.
+           A dynamic table size update starts with the '001' 3-bit pattern *)
       if saw_first_header then
         (* From RFC7541§4.2: Maximum Table Size
              A change in the maximum size of the dynamic table is signaled via
@@ -199,15 +203,12 @@ let decode_headers ({ table; _ } as t) =
              size update MUST occur at the beginning of the first header block
              following the change to the dynamic table size. *)
         error Decoding_error
-      else
-        (* From RFC7541§6.3: Dynamic Table Size Update
-             A dynamic table size update signals a change to the size of the
-             dynamic table.
-             A dynamic table size update starts with the '001' 3-bit pattern *)
+      else begin
         decode_int b 5 >>= fun capacity ->
         match set_capacity t capacity with
         | Ok () -> loop acc saw_first_header
         | Error e -> error e
+      end
     end else
       error Decoding_error
   in

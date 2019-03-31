@@ -83,6 +83,7 @@ let[@inline] entry_size name value =
        defined in Section 5.2), its value's length in octets, and 32. *)
   String.length name + String.length value + 32
 
+(* Note: Assumes table.size is positive. Doesn't perform any checking. *)
 let evict_one ({ capacity; entries; on_evict; _ } as table) =
   table.length <- table.length - 1;
   let i = (table.offset + table.length) mod capacity in
@@ -112,9 +113,11 @@ let add ({ max_size; _ } as table) (name, value) =
        from the end of the dynamic table until the size of the dynamic table is
        less than or equal to (maximum size - new entry size) or until the table
        is empty. *)
-  while table.size + entry_size > max_size do
-    evict_one table
-  done;
+  if table.size > 0 then begin
+    while table.size + entry_size > max_size do
+      evict_one table
+    done
+  end;
   (* From RFC7541§4.4:
        If the size of the new entry is less than or equal to the maximum size,
        that entry is added to the table. *)
