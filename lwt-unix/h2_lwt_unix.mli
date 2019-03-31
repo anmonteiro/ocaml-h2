@@ -34,8 +34,7 @@ open H2
 
 
 (* The function that results from [create_connection_handler] should be passed
-   to [Lwt_io.establish_server_with_client_socket]. For an example, see
-   [examples/lwt_echo_server.ml]. *)
+   to [Lwt_io.establish_server_with_client_socket]. *)
 module Server : sig
   val create_connection_handler
     :  ?config         : Config.t
@@ -72,21 +71,34 @@ module Server : sig
   end
 end
 
-(* For an example, see [examples/lwt_get.ml]. *)
-(* module Client : sig
-  val request
+module Client : sig
+  type t
+
+  val create_connection
     :  ?config          : Config.t
+    -> error_handler    : Client_connection.error_handler
     -> Lwt_unix.file_descr
+    -> t Lwt.t
+
+  val request
+    :  t
     -> Request.t
     -> error_handler    : Client_connection.error_handler
     -> response_handler : Client_connection.response_handler
     -> [`write] Body.t
 
   module TLS : sig
-    val request
+    type t
+
+    val create_connection
       :  ?client          : Tls_io.client
       -> ?config          : Config.t
+      -> error_handler    : Client_connection.error_handler
       -> Lwt_unix.file_descr
+      -> t Lwt.t
+
+    val request
+      :  t
       -> Request.t
       -> error_handler    : Client_connection.error_handler
       -> response_handler : Client_connection.response_handler
@@ -94,13 +106,20 @@ end
   end
 
   module SSL : sig
-    val request
+    type t
+
+    val create_connection
       :  ?client          : Ssl_io.client
       -> ?config          : Config.t
+      -> error_handler    : Client_connection.error_handler
       -> Lwt_unix.file_descr
+      -> t Lwt.t
+
+    val request
+      :  t
       -> Request.t
       -> error_handler    : Client_connection.error_handler
       -> response_handler : Client_connection.response_handler
       -> [`write] Body.t
   end
-end *)
+end

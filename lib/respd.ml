@@ -37,11 +37,11 @@ module AB = Angstrom.Buffered
 
 type error =
   [ `Malformed_response of string
+  | `Invalid_response_body_length of Response.t
   | `Exn of exn
   ]
 
-type error_handler =
-  error -> unit
+type error_handler = error -> unit
 type response_handler = Response.t -> [`read] Body.t  -> unit
 
 type response_info =
@@ -49,25 +49,28 @@ type response_info =
   ; response_body : [`read] Body.t
   }
 
+(* TODO: document, esp. that FullHeaders is only for error handling *)
 type response_state =
   | Awaiting_response
   | PartialHeaders of Stream.partial_headers
   | FullHeaders
   | ActiveRequest of response_info
 
-(* TODO: will probably need to handle half-closed (local) too, i.e. we're done
- * sending, but still waiting for a response. *)
-type state =
-  | Idle
+type pending_response =
     (* We purposely name this tag `HalfClosedLocal` to be explicit that once
      * a stream is in this state it means that the client has stopped sending
-     * data. The server still has data to send back.
-     *
-     * Both `HalfClosedLocal` and `Open` states share the same payload type,
-     * but we still preserve the distinct states to know whether the client has
-     * finished sending the request body. *)
-  | HalfClosedLocal of response_state
-  | Open of response_state
+     * data. The server still has data to send back. *)
+  | HalfClosedLocal
+  | Open
+
+type active_request =
+  { mutable response_state : response_state
+  ; mutable stream_state : pending_response
+  }
+
+type state =
+  | Idle
+  | Active of active_request
     (* TODO: make the `request{,_exn}` / `response{,_exn}` functions work
      * in this state. *)
   | Closed of Stream.closed
@@ -118,9 +121,8 @@ let request_body t =
 let response t =
   match t.state with
   | Idle -> None
-  | HalfClosedLocal response_info
-  | Open response_info ->
-    begin match response_info with
+  | Active { response_state; _ } ->
+    begin match response_state with
     | Awaiting_response
     | FullHeaders
     | PartialHeaders _ -> None
@@ -135,9 +137,8 @@ let response_exn t =
   match t.state with
   | Idle ->
     failwith "h2.Respd.response_exn: response has not arrived"
-  | HalfClosedLocal response_info
-  | Open response_info ->
-    begin match response_info with
+  | Active { response_state; _ } ->
+    begin match response_state with
     | Awaiting_response
     | FullHeaders
     | PartialHeaders _ ->
@@ -179,45 +180,48 @@ let reset_stream t error_code =
       Writer.flush t.writer (fun () -> finish_stream t Finished)
     | _ -> assert false *)
 
+let close_stream t =
+  match t.state with
+  | Active { stream_state = HalfClosedLocal; _ } ->
+    (* easy case, just transition to the closed state. *)
+    finish_stream t Finished
+  | Active { stream_state = Open; _ } ->
+    (* Still not done sending, reset stream with no error? *)
+    (* TODO: *)
+    ()
+  | _ -> ()
+
+let _report_error t ?response_body exn error_code =
+  match fst t.error_code with
+  | `Ok ->
+    begin match response_body with
+    | Some response_body ->
+      Body.close_reader response_body;
+      (* do we even need to execute this read? `close_reader` already does it. *)
+      Body.execute_read response_body;
+    | None -> ()
+    end;
+    (* TODO: flush the request body  *)
+    Body.close_writer t.request_body;
+    t.error_code <- (exn :> [`Ok | error]), Some error_code;
+    t.error_handler exn;
+    reset_stream t error_code
+  | `Exn _
+  | `Invalid_response_body_length _
+  | `Malformed_response _ ->
+    (* XXX: Is this even possible? *)
+    failwith "h2.Reqd.report_exn: NYI"
+
 let report_error t exn error_code =
   match t.state with
   | Idle
   | Reserved _
-  | HalfClosedLocal Awaiting_response
-  | HalfClosedLocal (PartialHeaders _)
-  | Open Awaiting_response
-  | Open (PartialHeaders _) -> assert false
-  | HalfClosedLocal FullHeaders
-  | Open FullHeaders ->
-    begin match fst t.error_code with
-    | `Ok ->
-      (* TODO: flush the request body  *)
-      Body.close_writer t.request_body;
-      t.error_code <- (exn :> [`Ok | error]), Some error_code;
-      t.error_handler exn;
-      reset_stream t error_code
-    | `Exn _
-    | `Malformed_response _ ->
-      (* XXX: Is this even possible? *)
-      failwith "h2.Reqd.report_exn: NYI"
-    end
-  | HalfClosedLocal (ActiveRequest s)
-  | Open (ActiveRequest s) ->
-    begin match fst t.error_code with
-    | `Ok ->
-      Body.close_reader s.response_body;
-      (* do we even need to execute this read? `close_reader` already does it. *)
-      Body.execute_read s.response_body;
-      (* TODO: flush the request body  *)
-      Body.close_writer t.request_body;
-      t.error_code <- (exn :> [`Ok | error]), Some error_code;
-      t.error_handler exn;
-      reset_stream t error_code
-    | `Exn _
-    | `Malformed_response _ ->
-      (* XXX: Is this even possible? *)
-      failwith "h2.Reqd.report_exn: NYI"
-    end
+  | Active { response_state = Awaiting_response | PartialHeaders _; _ } ->
+    assert false
+  | Active { response_state = FullHeaders; _ } ->
+    _report_error t exn error_code
+  | Active { response_state = ActiveRequest s; _ } ->
+    _report_error t ~response_body:s.response_body exn error_code
   | Closed _ -> ()
 
 let report_exn t exn =
@@ -248,10 +252,10 @@ let requires_output t =
   match t.state with
     (* TODO: Right now  *)
   | Idle -> true
-  | HalfClosedLocal _ -> false
+  | Active { stream_state = HalfClosedLocal; _ } -> false
     (* TODO: Does a reserved stream require output? *)
   | Reserved _ -> false
-  | Open _ ->
+  | Active { stream_state = Open; _ } ->
     request_body_requires_output t.request_body
   | Closed _ -> false
 
@@ -269,7 +273,7 @@ let write_buffer_data writer ~off ~len frame_info buffer =
 
 let flush_request_body t ~max_bytes =
   match t.state with
-  | Open response_info ->
+  | Active ({ stream_state = Open; _ } as s) ->
     let written =
       Body.transfer_to_writer t.request_body
         t.writer
@@ -277,7 +281,7 @@ let flush_request_body t ~max_bytes =
         ~max_bytes t.id
     in
     if not (request_body_requires_output t.request_body) then
-      t.state <- HalfClosedLocal response_info;
+      s.stream_state <- HalfClosedLocal;
     written
   | _ -> 0
 

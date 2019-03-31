@@ -432,10 +432,12 @@ module Request : sig
   type t =
     { meth    : Method.t
     ; target  : string
+    ; scheme  : string
     ; headers : Headers.t }
 
   val create
     :  ?headers:Headers.t (** default is {!Headers.empty} *)
+    -> scheme: string
     -> Method.t
     -> string
     -> t
@@ -630,14 +632,19 @@ module Client_connection : sig
   type t
 
   type error =
-    [ `Malformed_response of string | `Invalid_response_body_length of Response.t | `Exn of exn ]
+    [ `Malformed_response of string
+    | `Invalid_response_body_length of Response.t
+    | `Exn of exn ]
 
   type response_handler = Response.t -> [`read] Body.t  -> unit
 
   type error_handler = error -> unit
 
+  (* TODO: explain that HTTP/2 handles errors per stream and per connection,
+   * therefore we need an error handler for the whole connection. *)
   val create
     :  ?config:Config.t
+    -> error_handler:error_handler
     -> t
 
   val request

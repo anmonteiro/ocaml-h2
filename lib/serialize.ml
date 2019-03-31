@@ -477,7 +477,7 @@ module Writer = struct
       (Headers.to_hpack_list headers)
 
   let write_request_like_frame t hpack_encoder ~write_frame frame_info request =
-    let { Request.meth; target; headers } = request in
+    let { Request.meth; target; scheme; headers } = request in
     let faraday = Faraday.of_bigstring t.headers_block_buffer in
     Hpack.Encoder.encode_header hpack_encoder faraday
       { Headers
@@ -489,6 +489,13 @@ module Writer = struct
       { Headers
       . name = ":path"
       ; value = target
+      ; sensitive = false
+      };
+    (* TODO: scheme not required if method is CONNECT *)
+    Hpack.Encoder.encode_header hpack_encoder faraday
+      { Headers
+      . name = ":scheme"
+      ; value = scheme
       ; sensitive = false
       };
     encode_headers hpack_encoder faraday headers;

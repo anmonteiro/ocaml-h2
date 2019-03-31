@@ -52,13 +52,19 @@ module Server_with_conduit : sig
     (Conduit_mirage.server -> t -> unit Lwt.t) Lwt.t
 end
 
-(* For an example, see [examples/lwt_get.ml]. *)
-(* module Client : sig
-  val request
-    :  ?config : Config.t
+module Client : sig
+  type t
+
+  val create_connection
+    :  ?config          : Config.t
+    -> error_handler    : Client_connection.error_handler
     -> Conduit_mirage.Flow.flow
+    -> t Lwt.t
+
+  val request
+    :  t
     -> Request.t
-    -> error_handler : Client_connection.error_handler
+    -> error_handler    : Client_connection.error_handler
     -> response_handler : Client_connection.response_handler
-      -> [`write] Httpaf.Body.t
-end *)
+    -> [`write] Body.t
+end

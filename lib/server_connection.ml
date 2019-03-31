@@ -222,7 +222,7 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) = fun () ->
     Ok (reqd, (fun () -> wakeup_writer t))
   end
 
-let method_and_path_or_malformed headers =
+let method_path_and_scheme_or_malformed headers =
   match Headers.
     ( get_multi_pseudo headers "method"
     , get_multi_pseudo headers "scheme"
@@ -239,9 +239,9 @@ let method_and_path_or_malformed headers =
        :method, :scheme, and :path pseudo-header fields, unless it is a
        CONNECT request (Section 8.3). *)
   (* TODO: handle CONNECT requests *)
-  | [ meth ], [ _ ], [ path ] ->
+  | [ meth ], [ scheme ], [ path ] ->
     if Headers.valid_request_headers headers then
-      Some (meth, path)
+      Some (meth, path, scheme)
     else
       None
   | _ -> None
@@ -272,13 +272,13 @@ let handle_headers t ~end_stream reqd headers =
     in
     reqd.state <- Open (FullHeaders active_stream);
     t.current_client_streams <- t.current_client_streams + 1;
-    match method_and_path_or_malformed headers with
+    match method_path_and_scheme_or_malformed headers with
     | None ->
       (* From RFC7540§8.1.2.6:
            For malformed requests, a server MAY send an HTTP response prior to
            closing or resetting the stream. *)
       set_error_and_handle t reqd `Bad_request ProtocolError;
-    | Some (meth, path) ->
+    | Some (meth, path, scheme) ->
       match end_stream, Message.unique_content_length_values headers with
       | true, [ content_length ]
         when
@@ -293,7 +293,7 @@ let handle_headers t ~end_stream reqd headers =
         set_error_and_handle t reqd `Bad_request ProtocolError
       | _ ->
         let request =
-          Request.create ~headers (Httpaf.Method.of_string meth) path
+          Request.create ~scheme ~headers (Httpaf.Method.of_string meth) path
         in
         let request_body = if end_stream then
           Body.empty
@@ -1162,21 +1162,15 @@ let next_read_operation t =
              not affect processing of other streams. *)
         `Read
 
-let read_with_more t bs ~off ~len more =
-  (* if is_active t then
-    Reqd.flush_request_body (current_reqd_exn t); *)
-  Reader.read_with_more (reader t) bs ~off ~len more
-
 let read t bs ~off ~len =
-  read_with_more t bs ~off ~len Incomplete
+  Reader.read_with_more (reader t) bs ~off ~len Incomplete
 
 let read_eof t bs ~off ~len =
-  read_with_more t bs ~off ~len Complete
+  Reader.read_with_more (reader t) bs ~off ~len Complete
 
 let flush_response_body t =
   if is_active t then
-    Streams.flush t.streams;
-;;
+    Streams.flush t.streams
 
 let next_write_operation t =
   flush_response_body t;
