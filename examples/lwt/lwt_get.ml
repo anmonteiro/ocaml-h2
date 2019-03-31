@@ -2,27 +2,22 @@ module Client = H2_lwt_unix.Client
 open H2
 
 let response_handler notify_response_received response response_body =
-  match response.Response.status with
-  | `OK ->
-    let rec read_response () =
-      Body.schedule_read
-        response_body
-        ~on_eof:(fun () -> Lwt.wakeup_later notify_response_received ())
-        ~on_read:(fun response_fragment ~off ~len ->
-          let response_fragment_string = Bytes.create len in
-          Lwt_bytes.blit_to_bytes
-            response_fragment off
-            response_fragment_string 0
-            len;
-          print_string (Bytes.unsafe_to_string response_fragment_string);
+  Format.eprintf "OK: %a\n%!" Response.pp_hum response;
+  let rec read_response () =
+    Body.schedule_read
+      response_body
+      ~on_eof:(fun () -> Lwt.wakeup_later notify_response_received ())
+      ~on_read:(fun response_fragment ~off ~len ->
+        let response_fragment_string = Bytes.create len in
+        Lwt_bytes.blit_to_bytes
+          response_fragment off
+          response_fragment_string 0
+          len;
+        print_string (Bytes.unsafe_to_string response_fragment_string);
 
-          read_response ())
-    in
-    read_response ()
-
-  | _ ->
-    Format.fprintf Format.err_formatter "%a\n%!" Response.pp_hum response;
-    exit 1
+        read_response ())
+  in
+  read_response ()
 
 let error_handler _ =
   assert false
@@ -61,9 +56,9 @@ let () =
     let response_received, notify_response_received = Lwt.wait () in
     let response_handler = response_handler notify_response_received in
 
-    Client.create_connection ~error_handler socket >>= fun connection ->
+    Client.TLS.create_connection ~error_handler socket >>= fun connection ->
       let request_body =
-        Client.request
+        Client.TLS.request
           connection
           request_headers
           ~error_handler
