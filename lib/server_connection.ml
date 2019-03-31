@@ -270,7 +270,6 @@ let handle_headers t ~end_stream reqd headers =
         (create_push_stream t)
     in
     reqd.stream_state <- Open (FullHeaders active_stream);
-    t.receiving_headers_for_stream <- None;
     t.current_client_streams <- t.current_client_streams + 1;
     match method_and_path_or_malformed headers with
     | None ->
@@ -335,6 +334,7 @@ let handle_headers_block t ?(is_trailers=false) reqd partial_headers flags heade
     AB.feed partial_headers.Reqd.parse_state (`Bigstring headers_block)
   in
   if end_headers then begin
+    t.receiving_headers_for_stream <- None;
     let parse_state' = AB.feed parse_state' `Eof in
     match parse_state' with
     | Done (_, Ok headers) ->
