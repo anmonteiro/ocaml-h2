@@ -214,7 +214,6 @@ let handle_headers t ~end_stream respd active_state headers =
          states count toward the maximum number of streams that an endpoint is
          permitted to open. *)
     active_state.Respd.response_state <- FullHeaders;
-    t.receiving_headers_for_stream <- None;
     t.current_server_streams <- t.current_server_streams + 1;
     (* From RFC7540§8.1.2.6:
          Clients MUST NOT accept a malformed response.
@@ -286,6 +285,7 @@ let handle_headers_block t ?(is_trailers=false) respd active_state partial_heade
     AB.feed partial_headers.Stream.parse_state (`Bigstring headers_block)
   in
   if end_headers then begin
+    t.receiving_headers_for_stream <- None;
     let parse_state' = AB.feed parse_state' `Eof in
     match parse_state' with
     | Done (_, Ok headers) ->
