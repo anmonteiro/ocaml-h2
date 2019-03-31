@@ -451,12 +451,11 @@ let process_trailer_headers t reqd response_state frame_header headers_block =
   let end_stream = Flags.test_end_stream flags in
   if not end_stream then begin
     (* From RFC7540§8.1:
-         A HEADERS frame (and associated CONTINUATION frames) can only
-         appear at the start or end of a stream. An endpoint that
-         receives a HEADERS frame without the END_STREAM flag set after
-         receiving a final (non-informational) status code MUST treat
-         the corresponding request or response as malformed (Section
-         8.1.2.6). *)
+         A HEADERS frame (and associated CONTINUATION frames) can only appear
+         at the start or end of a stream. An endpoint that receives a HEADERS
+         frame without the END_STREAM flag set after receiving a final
+         (non-informational) status code MUST treat the corresponding request
+         or response as malformed (Section 8.1.2.6). *)
     set_error_and_handle t reqd `Bad_request ProtocolError
   end else begin
     let partial_headers =

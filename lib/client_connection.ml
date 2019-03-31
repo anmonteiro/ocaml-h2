@@ -249,11 +249,7 @@ let handle_headers t ~end_stream respd active_state headers =
           Body.create Bigstringaf.empty
         in
         let new_response_state =
-          Respd.ActiveRequest
-            { Respd
-            . response
-            ; response_body
-            }
+          Respd.create_active_response response response_body
         in
         active_state.response_state <- new_response_state;
         respd.response_handler response response_body;
@@ -279,7 +275,7 @@ let handle_headers t ~end_stream respd active_state headers =
       set_error_and_handle t respd (`Malformed_response message) ProtocolError;
   end
 
-let handle_headers_block t respd active_state partial_headers flags headers_block =
+let handle_headers_block t ?(is_trailers=false) respd active_state partial_headers flags headers_block =
   let open AB in
   let end_headers = Flags.test_end_header flags in
   (* From RFC7540§6.10:
@@ -293,8 +289,24 @@ let handle_headers_block t respd active_state partial_headers flags headers_bloc
     let parse_state' = AB.feed parse_state' `Eof in
     match parse_state' with
     | Done (_, Ok headers) ->
-      (* `handle_headers` will take care of transitioning the stream state *)
-      handle_headers t ~end_stream:partial_headers.end_stream respd active_state headers
+      if not is_trailers then begin
+        (* `handle_headers` will take care of transitioning the stream state *)
+        let end_stream = partial_headers.end_stream in
+        handle_headers t ~end_stream respd active_state headers
+      end else begin
+        if Headers.trailers_valid headers then begin
+          Respd.deliver_trailer_headers respd headers;
+          let response_body = Respd.response_body_exn respd in
+          Body.close_reader response_body;
+        end else begin
+          (* From RFC7540§8.1.2.1:
+               Pseudo-header fields MUST NOT appear in trailers. Endpoints MUST
+               treat a request or response that contains undefined or invalid
+               pseudo-header fields as malformed (Section 8.1.2.6). *)
+          let message = "Pseudo-header fields must not appear in trailers" in
+          set_error_and_handle t respd (`Malformed_response message) ProtocolError
+        end
+      end
     (* From RFC7540§4.3:
          A decoding error in a header block MUST be treated as a connection
          error (Section 5.4.1) of type COMPRESSION_ERROR. *)
@@ -305,6 +317,9 @@ let handle_headers_block t respd active_state partial_headers flags headers_bloc
       report_connection_error t ~additional_debug_data:message Error.CompressionError
   end else
     partial_headers.parse_state <- parse_state'
+
+let handle_trailer_headers =
+  handle_headers_block ~is_trailers:true
 
 (* TODO: reprioritize stream? *)
 let handle_first_response_bytes t respd active_state frame_header ?priority:_ headers_block =
@@ -329,8 +344,32 @@ let handle_first_response_bytes t respd active_state frame_header ?priority:_ he
     t.receiving_headers_for_stream <- Some stream_id;
   handle_headers_block t respd active_state partial_headers flags headers_block
 
-let process_trailer_headers _t _respd _rs _frame_header _headers_block =
-  ()
+let process_trailer_headers t respd active_state active_response frame_header headers_block =
+  let { Frame.stream_id; flags; _ } = frame_header in
+  let end_stream = Flags.test_end_stream flags in
+  if not end_stream then begin
+    (* From RFC7540§8.1:
+         A HEADERS frame (and associated CONTINUATION frames) can only appear
+         at the start or end of a stream. An endpoint that receives a HEADERS
+         frame without the END_STREAM flag set after receiving a final
+         (non-informational) status code MUST treat the corresponding request
+         or response as malformed (Section 8.1.2.6). *)
+    let message = "HEADERS frames containing trailers must set the END_STREAM flag" in
+    set_error_and_handle t respd (`Malformed_response message) ProtocolError
+  end else begin
+    let partial_headers =
+      { Stream
+      . parse_state = AB.parse (Hpack.Decoder.decode_headers t.hpack_decoder)
+        (* obviously true at this point. *)
+      ; end_stream
+      }
+    in
+    active_response.Respd.trailers_parser <- Some partial_headers;
+    if not Flags.(test_end_header flags) then
+      t.receiving_headers_for_stream <- Some stream_id;
+    (* trailer headers: RFC7230§4.4 *)
+    handle_trailer_headers t respd active_state partial_headers flags headers_block
+  end
 
 let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
   let { Frame.stream_id; _ } = frame_header in
@@ -358,12 +397,12 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
         report_connection_error t Error.ProtocolError
       | Active ({ response_state = Awaiting_response; _ } as active_state) ->
         handle_first_response_bytes t respd active_state frame_header ?priority headers_block
-      | Active ({ response_state = (PartialHeaders _); _ }) ->
+      | Active ({ response_state = FullHeaders | PartialHeaders _; _ }) ->
         assert false
       (* if we're getting a HEADERS frame at this point, they must be
        * trailers, and the END_STREAM flag needs to be set. *)
-      | Active { response_state = FullHeaders | ActiveRequest _; _ } ->
-        process_trailer_headers t respd () frame_header headers_block
+      | Active ({ response_state = ActiveResponse active_response; _ } as active_state) ->
+        process_trailer_headers t respd active_state active_response frame_header headers_block
       | Closed { reason = ResetByThem _; _ } ->
         (* From RFC7540§5.1:
              closed: [...] An endpoint that receives any frame other than
@@ -383,8 +422,142 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
              connection error (Section 5.4.1) of type STREAM_CLOSED [...]. *)
         report_connection_error t Error.StreamClosed
 
-let process_data_frame _t { Frame.frame_header = _; _ } _bstr =
-  ()
+let send_window_update: type a. t -> a Streams.PriorityTreeNode.node -> int -> unit =
+  fun t stream n ->
+  let send_window_update_frame stream_id n =
+    let valid_inflow = Streams.add_inflow stream n in
+    assert valid_inflow;
+    let frame_info = Writer.make_frame_info stream_id in
+    Writer.write_window_update t.writer frame_info n;
+  in
+  if n > 0 then begin
+    let max_window_size = Settings.WindowSize.max_window_size in
+    let stream_id = Streams.stream_id stream in
+    let rec loop n =
+      if n > max_window_size then begin
+        send_window_update_frame stream_id max_window_size;
+        loop (n - max_window_size)
+      end else begin
+        send_window_update_frame stream_id n;
+      end
+    in
+    loop n;
+    wakeup_writer t
+  end
+
+let process_data_frame t { Frame.frame_header; _ } bstr =
+  let open Streams in
+  let { Frame.flags; stream_id; payload_length; _ } = frame_header in
+  (* From RFC7540§6.9:
+       A receiver that receives a flow-controlled frame MUST always account
+       for its contribution against the connection flow-control window,
+       unless the receiver treats this as a connection error (Section 5.4.1).
+       This is necessary even if the frame is in error. *)
+  Streams.deduct_inflow t.streams payload_length;
+  match Streams.get_node t.streams stream_id with
+  | Some (Stream { streamd; _ } as stream) ->
+    begin match streamd.Respd.state with
+    | Active { response_state = ActiveResponse response_info; _ }  ->
+      let { Respd.response; response_body; response_body_bytes; _ } = response_info in
+      response_info.response_body_bytes <-
+        Int64.(add response_body_bytes (of_int (Bigstringaf.length bstr)));
+      if not Streams.(allowed_to_receive t.streams stream payload_length) then begin
+        (* From RFC7540§6.9:
+            A receiver MAY respond with a stream error (Section 5.4.2) or
+            connection error (Section 5.4.1) of type FLOW_CONTROL_ERROR if it
+            is unable to accept a frame. *)
+        report_stream_error t stream_id Error.FlowControlError
+      end else begin
+        Streams.deduct_inflow stream payload_length;
+        match Message.unique_content_length_values response.headers with
+        | [ content_length ]
+          when
+            (* we're getting more than the client declared? *)
+            Int64.compare
+              response_info.response_body_bytes
+              (Message.content_length_of_string content_length)
+            > 0 ->
+            (* Give back connection-level flow-controlled bytes (we use payload
+             * length to include any padding bytes that the frame might have
+             * included - which were ignored at parse time). *)
+            send_window_update t t.streams payload_length;
+            (* From RFC7540§8.1.2.6:
+                 A request or response is also malformed if the value of a
+                 content-length header field does not equal the sum of the
+                 DATA frame payload lengths that form the body. *)
+            set_error_and_handle t streamd (`Invalid_response_body_length response) ProtocolError;
+        | _ ->
+          let end_stream = Flags.test_end_stream flags in
+          (* XXX(anmonteiro): should we only give back flow control after we
+           * delivered EOF to the response body? There's a potential flow
+           * control issue right now where we're handing out connection-level
+           * flow control tokens on the receipt of every DATA frame. This
+           * might allow servers to send an unbounded number of bytes. Same
+           * issue on the server (see corresponding comment). *)
+          (* From RFC7540§6.9.1:
+               The receiver of a frame sends a WINDOW_UPDATE frame as it
+               consumes data and frees up space in flow-control windows.
+               Separate WINDOW_UPDATE frames are sent for the stream- and
+               connection-level flow-control windows. *)
+          send_window_update t t.streams payload_length;
+          send_window_update t stream payload_length;
+          let faraday = Body.unsafe_faraday response_body in
+          if not (Faraday.is_closed faraday) then begin
+            Faraday.schedule_bigstring faraday bstr;
+            if end_stream then Body.close_reader response_body;
+          end;
+          if end_stream && not (Respd.requires_output streamd) then begin
+            (* From RFC7540§6.1:
+                 When set, bit 0 indicates that this frame is the last that
+                 the endpoint will send for the identified stream. Setting
+                 this flag causes the stream to enter one of the
+                 "half-closed" states or the "closed" state (Section 5.1).
+
+               Transition to the "closed" state if this is the last DATA frame
+               that the server will send and we're done sending. *)
+            Respd.finish_stream streamd Finished
+          end;
+      end
+    | Idle ->
+      (* From RFC7540§5.1:
+           idle: [...] Receiving any frame other than HEADERS or PRIORITY on
+           a stream in this state MUST be treated as a connection error
+           (Section 5.4.1) of type PROTOCOL_ERROR. *)
+      report_connection_error t Error.ProtocolError
+    (* This is technically in the half-closed (local) state *)
+    | Closed { reason = ResetByUs NoError;_ } ->
+      (* From RFC7540§6.9:
+           A receiver that receives a flow-controlled frame MUST always
+           account for its contribution against the connection flow-control
+           window, unless the receiver treats this as a connection error
+           (Section 5.4.1). This is necessary even if the frame is in
+           error. *)
+      send_window_update t t.streams payload_length;
+
+      (* From RFC7540§6.4:
+           [...] after sending the RST_STREAM, the sending endpoint MUST be
+           prepared to receive and process additional frames sent on the
+           stream that might have been sent by the peer prior to the arrival
+           of the RST_STREAM.
+
+         Note: after some writer yields / wake ups, we will have stopped
+         keeping state information for the stream. This functions effectively
+         as a way of only accepting frames after an RST_STREAM from us up to
+         a time limit. *)
+    | _ ->
+      send_window_update t t.streams payload_length;
+      (* From RFC7540§6.1:
+           If a DATA frame is received whose stream is not in "open" or
+           "half-closed (local)" state, the recipient MUST respond with a
+           stream error (Section 5.4.2) of type STREAM_CLOSED. *)
+      report_stream_error t stream_id Error.StreamClosed
+    end
+  | None ->
+    (* From RFC7540§5.1:
+         idle: [...] Receiving any frame other than HEADERS or PRIORITY on
+         a stream in this state MUST be treated as a connection error
+         (Section 5.4.1) of type PROTOCOL_ERROR. *)
+    report_connection_error t Error.ProtocolError
 
 let process_priority_frame _t { Frame.frame_header = _ ; _ } _priority =
   ()
@@ -477,8 +650,36 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
 let process_push_promise_frame _t _frame _promised_stream_id _headers_block =
   ()
 
-let process_ping_frame _t { Frame.frame_header = _; _ } _payload =
-  ()
+(* TODO: once we add PING support, call listener(s) that might be waiting for a
+ * PING ack. *)
+let process_ping_frame t { Frame.frame_header; _ } payload =
+  let { Frame.flags; _ } = frame_header in
+  (* From RFC7540§6.7:
+       ACK (0x1): When set, bit 0 indicates that this PING frame is a PING
+       response. [...] An endpoint MUST NOT respond to PING frames containing
+       this flag. *)
+  if not (Flags.test_ack flags) then begin
+    (* From RFC7540§6.7:
+         Receivers of a PING frame that does not include an ACK flag MUST send
+         a PING frame with the ACK flag set in response, with an identical
+         payload. PING responses SHOULD be given higher priority than any other
+         frame. *)
+    let frame_info =
+      Writer.make_frame_info
+        (* From RFC7540§6.7:
+             ACK (0x1): When set, bit 0 indicates that this PING frame is a
+             PING response. An endpoint MUST set this flag in PING
+             responses. *)
+        ~flags:Flags.(set_ack default_flags)
+        Stream_identifier.connection
+    in
+    (* From RFC7540§6.7:
+         Receivers of a PING frame that does not include an ACK flag MUST send
+         a PING frame with the ACK flag set in response, with an identical
+         payload. *)
+    Writer.write_ping t.writer frame_info payload;
+    wakeup_writer t
+  end
 
 let process_goaway_frame _t _frame _payload =
   ()
@@ -486,8 +687,49 @@ let process_goaway_frame _t _frame _payload =
 let process_window_update_frame _t { Frame.frame_header = _; _ } _window_increment =
   ()
 
-let process_continuation_frame _t { Frame.frame_header = _; _ } _headers_block =
-  ()
+let process_continuation_frame t { Frame.frame_header; _ } headers_block =
+  let { Frame.stream_id; flags; _ } = frame_header in
+  if not (Stream_identifier.is_request stream_id) then
+    (* From RFC7540§5.1.1:
+         Streams initiated by a client MUST use odd-numbered stream
+         identifiers. [...] An endpoint that receives an unexpected stream
+         identifier MUST respond with a connection error (Section 5.4.1) of
+         type PROTOCOL_ERROR. *)
+    report_connection_error t Error.ProtocolError
+  else
+    match Streams.find t.streams stream_id with
+    | Some stream ->
+      begin match stream.Respd.state with
+      | Active
+          ({ response_state = PartialHeaders partial_headers; _ }
+           as active_request) ->
+        handle_headers_block t stream active_request partial_headers flags headers_block
+      | Active
+          ({ response_state =
+               ActiveResponse
+                 { trailers_parser = Some partial_headers; _ }; _ }
+           as active_request) ->
+        handle_trailer_headers t stream active_request partial_headers flags headers_block
+      | _ ->
+        (* TODO: maybe need to handle the case where the stream has been closed
+         * due to a stream error. *)
+        (* From RFC7540§6.10:
+             A RST_STREAM is the last frame that an endpoint can send on a
+             stream. The peer that sends the RST_STREAM frame MUST be prepared
+             to receive any frames that were sent or enqueued for sending by
+             the remote peer. These frames can be ignored, except where they
+             modify connection state (such as the state maintained for header
+             compression (Section 4.3) or flow control). *)
+        report_connection_error t Error.ProtocolError
+      end
+    | None ->
+      (* From RFC7540§6.10:
+           A CONTINUATION frame MUST be preceded by a HEADERS, PUSH_PROMISE or
+           CONTINUATION frame without the END_HEADERS flag set. A recipient that
+           observes violation of this rule MUST respond with a connection error
+           (Section 5.4.1) of type PROTOCOL_ERROR. *)
+      report_connection_error t Error.ProtocolError
+
 
 (* Unlike e.g. http/af where a new connection is created per request, we create
    a single connection where all requests go through. HTTP/2 allows concurrency
@@ -641,14 +883,6 @@ let request t request ~error_handler ~response_handler =
   (* TODO: closing the request body puts the stream on half-closed (local)
    * state *)
   request_body
-
-(* let flush_response_body t =
-  match !(t.state) with
-  | Awaiting_response | Closed -> ()
-  | Received_response(_, response_body) ->
-    try Body.execute_read response_body
-    with exn -> report_exn t exn
- *)
 
 let next_read_operation t =
   if Reader.is_closed (reader t) then shutdown_reader t;

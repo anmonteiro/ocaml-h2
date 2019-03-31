@@ -47,6 +47,12 @@ type response_handler = Response.t -> [`read] Body.t  -> unit
 type response_info =
   { response : Response.t
   ; response_body : [`read] Body.t
+  ; mutable response_body_bytes : int64
+    (* We're not doing anything with these yet, we could probably have a
+     * `Reqd.schedule_read_trailers` function that would be called once trailer
+     * headers are emitted. *)
+  ; mutable trailers_parser      : Stream.partial_headers option
+  ; mutable trailers             : Headers.t option
   }
 
 (* TODO: document, esp. that FullHeaders is only for error handling *)
@@ -54,7 +60,7 @@ type response_state =
   | Awaiting_response
   | PartialHeaders of Stream.partial_headers
   | FullHeaders
-  | ActiveRequest of response_info
+  | ActiveResponse of response_info
 
 type pending_response =
     (* We purposely name this tag `HalfClosedLocal` to be explicit that once
@@ -94,6 +100,15 @@ type t =
 let default_waiting = Sys.opaque_identity (fun () -> ())
 let initial_ttl = 10
 
+let create_active_response response response_body =
+  ActiveResponse
+    { response
+    ; response_body
+    ; response_body_bytes = Int64.zero
+    ; trailers_parser = None
+    ; trailers = None
+    }
+
 let create id request request_body ~max_frame_size writer error_handler response_handler on_stream_closed =
   { id
   ; request
@@ -126,7 +141,7 @@ let response t =
     | Awaiting_response
     | FullHeaders
     | PartialHeaders _ -> None
-    | ActiveRequest { response; _ } ->
+    | ActiveResponse { response; _ } ->
       Some response
     end
   | Reserved { response; _ } ->
@@ -143,11 +158,28 @@ let response_exn t =
     | FullHeaders
     | PartialHeaders _ ->
       failwith "h2.Respd.response_exn: response has not arrived"
-    | ActiveRequest { response; _ } ->
-        response
+    | ActiveResponse { response; _ } ->
+      response
     end
   | Reserved { response; _ } ->
     response
+  | Closed _ -> assert false
+
+let response_body_exn t =
+  match t.state with
+  | Idle ->
+    failwith "h2.Respd.response_exn: response has not arrived"
+  | Active { response_state; _ } ->
+    begin match response_state with
+    | Awaiting_response
+    | FullHeaders
+    | PartialHeaders _ ->
+      failwith "h2.Respd.response_exn: response has not arrived"
+    | ActiveResponse { response_body; _ } ->
+      response_body
+    end
+  | Reserved { response_body; _ } ->
+    response_body
   | Closed _ -> assert false
 
 let finish_stream t reason =
@@ -220,7 +252,7 @@ let report_error t exn error_code =
     assert false
   | Active { response_state = FullHeaders; _ } ->
     _report_error t exn error_code
-  | Active { response_state = ActiveRequest s; _ } ->
+  | Active { response_state = ActiveResponse s; _ } ->
     _report_error t ~response_body:s.response_body exn error_code
   | Closed _ -> ()
 
@@ -284,4 +316,11 @@ let flush_request_body t ~max_bytes =
       s.stream_state <- HalfClosedLocal;
     written
   | _ -> 0
+
+let deliver_trailer_headers t headers =
+  match t.state with
+  | Active { response_state = ActiveResponse s; _ } ->
+    (* TODO: call the schedule_trailers callback *)
+    s.trailers <- Some headers
+  | _ -> assert false
 

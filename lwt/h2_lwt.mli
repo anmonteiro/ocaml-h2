@@ -72,6 +72,7 @@ module Server (Io: IO) : sig
     -> unit Lwt.t
 end
 
+(* TODO: shutdown function? *)
 module Client (Io: IO) : sig
   type t
 
