@@ -560,8 +560,41 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
          (Section 5.4.1) of type PROTOCOL_ERROR. *)
     report_connection_error t Error.ProtocolError
 
-let process_priority_frame _t { Frame.frame_header = _ ; _ } _priority =
-  ()
+let on_stream_closed t = fun () ->
+  t.current_server_streams <- t.current_server_streams - 1
+
+let process_priority_frame t { Frame.frame_header; _ } priority =
+  let { Frame.stream_id; _ } = frame_header in
+  let { Priority.stream_dependency; _ } = priority in
+  if Stream_identifier.(stream_id === stream_dependency) then
+    (* From RFC7540§5.3.1:
+         A stream cannot depend on itself. An endpoint MUST treat this as a stream
+         error (Section 5.4.2) of type PROTOCOL_ERROR. *)
+    report_stream_error t stream_id Error.ProtocolError
+  else
+    match Streams.get_node t.streams stream_id with
+    | Some stream ->
+      Streams.reprioritize_stream t.streams ~priority stream
+    | None ->
+      (* From RFC7540§5.3:
+           A client can assign a priority for a new stream by including
+           prioritization information in the HEADERS frame (Section 6.2) that
+           opens the stream. At any other time, the PRIORITY frame (Section
+           6.3) can be used to change the priority of a stream.
+
+         Note: The spec mostly only mentions that clients are the endpoints
+               that make use of PRIORITY frames. As such, we don't make too
+               much of an effort to process PRIORITY frames coming from a
+               server. If we know about a stream, we reprioritize it (meaning
+               prioritization is an input to the process of allocating
+               resources when flushing request bodies). Otherwise, we ignore
+               it. We don't, however, report any errors if the frame is
+               well-formed, as section 5. clearly mentions that PRIORITY frames
+               must be accepted in all stream states.
+
+         From RFC7540§5.1:
+           Note that PRIORITY can be sent and received in any stream state. *)
+      ()
 
 let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
   let { Frame.stream_id; _ } = frame_header in
@@ -692,6 +725,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
   end
 
 let process_push_promise_frame _t _frame _promised_stream_id _headers_block =
+  (* TODO: We'll need a push handler too *)
   ()
 
 (* TODO: once we add PING support, call listener(s) that might be waiting for a
@@ -951,9 +985,6 @@ stream"
   end;
   t
 
-let on_stream_closed t = fun () ->
-  t.current_server_streams <- t.current_server_streams - 1
-
 let request t request ~error_handler ~response_handler =
   let max_frame_size = t.settings.max_frame_size in
   let request_body = Body.create (Bigstringaf.create max_frame_size) in
@@ -962,8 +993,6 @@ let request t request ~error_handler ~response_handler =
   let respd =
     Respd.create
       stream_id
-      request
-      request_body
       ~max_frame_size
       t.writer
       error_handler
@@ -987,6 +1016,8 @@ let request t request ~error_handler ~response_handler =
       Active
         { response_state = Awaiting_response
         ; stream_state = Open
+        ; request
+        ; request_body
         });
   wakeup_writer t;
   (* TODO: closing the request body puts the stream on half-closed (local)

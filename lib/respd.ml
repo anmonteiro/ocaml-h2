@@ -75,7 +75,9 @@ type pending_response =
 
 type active_request =
   { mutable response_state : response_state
-  ; mutable stream_state : pending_response
+  ; mutable stream_state   : pending_response
+  ; request                : Request.t
+  ; request_body           : [`read] Body.t
   }
 
 type state =
@@ -84,13 +86,10 @@ type state =
     (* TODO: make the `request{,_exn}` / `response{,_exn}` functions work
      * in this state. *)
   | Closed of Stream.closed
-    (* TODO: this is probably not right?! *)
-  | Reserved of response_info
+  | Reserved of active_request
 
 type t =
   { id                     : Stream_identifier.t
-  ; request                : Request.t
-  ; request_body           : [`read] Body.t
   ; writer                 : Writer.t
   ; error_handler          : error_handler
   ; response_handler       : response_handler
@@ -113,10 +112,8 @@ let create_active_response response response_body =
     ; trailers = None
     }
 
-let create id request request_body ~max_frame_size writer error_handler response_handler on_stream_closed =
+let create id ~max_frame_size writer error_handler response_handler on_stream_closed =
   { id
-  ; request
-  ; request_body
   ; writer
   ; error_handler
   ; response_handler
@@ -132,14 +129,27 @@ let done_waiting when_done_waiting =
   f ()
 
 let request t =
-  t.request
+  match t.state with
+  | Idle ->
+    failwith "h2.Respd.request: request is not active"
+  | Reserved { request; _ } -> request
+  | Active { request; _ } -> request
+  | Closed _ ->
+    failwith "h2.Respd.request: request has ended"
 
 let request_body t =
-  t.request_body
+  match t.state with
+  | Idle ->
+    failwith "h2.Respd.request: request is not active"
+  | Reserved { request_body; _ } -> request_body
+  | Active { request_body; _ } -> request_body
+  | Closed _ ->
+    failwith "h2.Respd.request: request has ended"
 
 let response t =
   match t.state with
   | Idle -> None
+  | Reserved { response_state; _ }
   | Active { response_state; _ } ->
     begin match response_state with
     | Awaiting_response
@@ -148,14 +158,13 @@ let response t =
     | ActiveResponse { response; _ } ->
       Some response
     end
-  | Reserved { response; _ } ->
-    Some response
   | Closed _ -> None
 
 let response_exn t =
   match t.state with
   | Idle ->
     failwith "h2.Respd.response_exn: response has not arrived"
+  | Reserved { response_state; _ }
   | Active { response_state; _ } ->
     begin match response_state with
     | Awaiting_response
@@ -165,14 +174,13 @@ let response_exn t =
     | ActiveResponse { response; _ } ->
       response
     end
-  | Reserved { response; _ } ->
-    response
   | Closed _ -> assert false
 
 let response_body_exn t =
   match t.state with
   | Idle ->
     failwith "h2.Respd.response_exn: response has not arrived"
+  | Reserved { response_state; _ }
   | Active { response_state; _ } ->
     begin match response_state with
     | Awaiting_response
@@ -182,8 +190,6 @@ let response_body_exn t =
     | ActiveResponse { response_body; _ } ->
       response_body
     end
-  | Reserved { response_body; _ } ->
-    response_body
   | Closed _ -> assert false
 
 let finish_stream t reason =
@@ -227,7 +233,7 @@ let close_stream t =
     ()
   | _ -> ()
 
-let _report_error t ?response_body exn error_code =
+let _report_error t s ?response_body exn error_code =
   match fst t.error_code with
   | `Ok ->
     begin match response_body with
@@ -238,7 +244,7 @@ let _report_error t ?response_body exn error_code =
     | None -> ()
     end;
     (* TODO: flush the request body  *)
-    Body.close_writer t.request_body;
+    Body.close_writer s.request_body;
     t.error_code <- (exn :> [`Ok | error]), Some error_code;
     t.error_handler exn;
     reset_stream t error_code
@@ -251,13 +257,14 @@ let _report_error t ?response_body exn error_code =
 let report_error t exn error_code =
   match t.state with
   | Idle
-  | Reserved _
+  | Reserved { response_state = Awaiting_response | PartialHeaders _ | ActiveResponse _; _ }
   | Active { response_state = Awaiting_response | PartialHeaders _; _ } ->
     assert false
-  | Active { response_state = FullHeaders; _ } ->
-    _report_error t exn error_code
-  | Active { response_state = ActiveResponse s; _ } ->
-    _report_error t ~response_body:s.response_body exn error_code
+  | Reserved ({ response_state = FullHeaders; _ } as s)
+  | Active ({ response_state = FullHeaders; _ } as s) ->
+    _report_error t s exn error_code
+  | Active ({ response_state = ActiveResponse { response_body; _ }; _ } as s) ->
+    _report_error t s ~response_body exn error_code
   | Closed _ -> ()
 
 let close_request_body { request_body; _ } =
@@ -269,8 +276,13 @@ let error_code t =
   | `Ok             -> None
 
 let on_more_output_available t f =
-  if not (Body.is_closed t.request_body) then
-    Body.when_ready_to_write t.request_body f
+  match t.state with
+  | Idle
+  | Reserved _ -> assert false
+  | Active { request_body; _ } ->
+    if not (Body.is_closed request_body) then
+      Body.when_ready_to_write request_body f
+  | Closed _ -> assert false
 
 let request_body_requires_output response_body =
   not (Body.is_closed response_body)
@@ -283,8 +295,8 @@ let requires_output t =
   | Active { stream_state = HalfClosedLocal; _ } -> false
     (* TODO: Does a reserved stream require output? *)
   | Reserved _ -> false
-  | Active { stream_state = Open; _ } ->
-    request_body_requires_output t.request_body
+  | Active { stream_state = Open; request_body; _ } ->
+    request_body_requires_output request_body
   | Closed _ -> false
 
 let write_buffer_data writer ~off ~len frame_info buffer =
@@ -301,14 +313,14 @@ let write_buffer_data writer ~off ~len frame_info buffer =
 
 let flush_request_body t ~max_bytes =
   match t.state with
-  | Active ({ stream_state = Open; _ } as s) ->
+  | Active ({ stream_state = Open; request_body; _ } as s) ->
     let written =
-      Body.transfer_to_writer t.request_body
+      Body.transfer_to_writer request_body
         t.writer
         ~max_frame_size:t.max_frame_size
         ~max_bytes t.id
     in
-    if not (request_body_requires_output t.request_body) then
+    if not (request_body_requires_output request_body) then
       s.stream_state <- HalfClosedLocal;
     written
   | _ -> 0
