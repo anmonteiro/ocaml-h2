@@ -499,14 +499,13 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
                HEADERS frames can be sent on a stream in the "idle", "reserved
                (local)", "open", or "half-closed (remote)" state. *)
           open_stream t frame_header ?priority headers_block
-        | Open (PartialHeaders _) ->
+        | Open (PartialHeaders _)
+        | Open (FullHeaders _) ->
           (* This case is unreachable because we check that partial HEADERS
            * states must be followed by CONTINUATION frames elsewhere. *)
           assert false
         (* if we're getting a HEADERS frame at this point, they must be
          * trailers, and the END_STREAM flag needs to be set. *)
-        | Open (FullHeaders rs) ->
-          process_trailer_headers t reqd rs frame_header headers_block
         | Open (ActiveRequest rs) ->
           process_trailer_headers t reqd rs frame_header headers_block
         | HalfClosed _
@@ -543,14 +542,17 @@ let send_window_update: type a. t -> a Streams.PriorityTreeNode.node -> int -> u
     Writer.write_window_update t.writer frame_info n;
   in
   if n > 0 then begin
-    let n = ref n in
     let max_window_size = Settings.WindowSize.max_window_size in
     let stream_id = Streams.stream_id stream in
-    while !n >= max_window_size do
-      send_window_update_frame stream_id max_window_size;
-      n := !n - max_window_size
-    done;
-    send_window_update_frame stream_id !n;
+    let rec loop n =
+      if n > max_window_size then begin
+        send_window_update_frame stream_id max_window_size;
+        loop (n - max_window_size)
+      end else begin
+        send_window_update_frame stream_id n;
+      end
+    in
+    loop n;
     wakeup_writer t
   end
 

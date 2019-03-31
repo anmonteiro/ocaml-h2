@@ -30,10 +30,12 @@
   POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
+type nothing = [ `Tls_not_available ]
+
 module Io : H2_lwt.IO with
-    type socket = Lwt_unix.file_descr * [ `Tls_not_available ]
+    type socket = Lwt_unix.file_descr * nothing
     and type addr = Unix.sockaddr = struct
-  type socket = Lwt_unix.file_descr * [ `Tls_not_available ]
+  type socket = Lwt_unix.file_descr * nothing
   type addr = Unix.sockaddr
 
   let read _ _bigstring ~off:_ ~len:_ =
@@ -55,11 +57,11 @@ module Io : H2_lwt.IO with
     Lwt.fail_with "Tls not available"
 end
 
-type client = [ `Tls_not_available ]
-type server = [ `Tls_not_available ]
+type client = nothing
+type server = nothing
 
 let make_client ?client:_ _socket =
-  Lwt.fail_with "Tls not available"
+  Lwt.return `Tls_not_available
 
 let make_server ?server:_ ?certfile:_ ?keyfile:_ _socket =
-  Lwt.fail_with "Tls not available"
+  Lwt.return `Tls_not_available
