@@ -1,7 +1,7 @@
 (executables
  (libraries bigstringaf h2 alcotest test_common)
- (modules test_h2 test_priority)
- (names   test_h2 test_priority))
+ (modules test_h2 test_h2_server test_priority)
+ (names   test_h2 test_h2_server test_priority))
 
 (alias
  (name runtest)
@@ -13,9 +13,14 @@
  (deps test_h2.exe)
  (action (run %{deps})))
 
+(alias
+ (name runtest)
+ (deps test_h2_server.exe)
+ (action (run %{deps})))
+
 (library
   (name test_common)
-  (libraries bigstringaf hex h2)
+  (libraries bigstringaf hex h2 alcotest)
   (modules test_common))
 
 (executable

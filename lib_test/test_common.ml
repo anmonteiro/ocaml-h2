@@ -69,3 +69,25 @@ let opt_exn = function
   | Some x -> x
   | None -> failwith "opt_exn: None"
 
+let encode_headers hpack_encoder headers =
+  let f = Faraday.create 0x1000 in
+  Serialize.Writer.encode_headers hpack_encoder f headers;
+  Faraday.serialize_to_bigstring f
+
+let parse_frames_bigstring wire =
+  let open Parse in
+  let frames = ref [] in
+  let handler = function
+    | Ok frame ->
+        frames := frame :: !frames
+    | _ -> Alcotest.fail "Expected frame to parse successfully."
+  in
+  let reader = Reader.frame handler in
+  let _read =
+    Reader.read_with_more reader wire ~off:0 ~len:(Bigstringaf.length wire) Incomplete
+  in
+  List.rev !frames
+
+let parse_frames wire =
+  parse_frames_bigstring (bs_of_string wire)
+
