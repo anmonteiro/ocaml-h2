@@ -27,31 +27,16 @@
   "resolutions": {
     "@opam/conf-libev": "esy-packages/libev:package.json#86d244e",
     "@opam/conf-autoconf": "esy-packages/esy-autoconf:package.json#71a8836",
-    "@opam/conf-gmp": {
-      "source": "esy-packages/esy-gmp:package.json#03309d6",
-      "override": {
-        "exportedEnv": {
-          "CFLAGS": {
-            "scope": "global",
-            "val": "-I#{self.install / 'include'} $CFLAGS"
-          },
-          "LDFLAGS":{
-            "scope": "global",
-            "val": "-L#{self.lib} $LDFLAGS"
-          }
-        }
-      }
-    },
+    "@opam/conf-gmp": "esy-packages/esy-gmp:package.json#1ecf502",
     "@opam/conf-openssl": {
       "source": "no-source:",
       "override": {
         "dependencies": {
           "@opam/conf-pkg-config": "*",
-          "@esy-packages/esy-openssl": "*"
+          "@esy-packages/esy-openssl": "esy-packages/esy-openssl#65efbc9"
         }
       }
     },
-    "@esy-packages/esy-openssl": "esy-packages/esy-openssl#9813f1b",
     "@opam/ssl": "anmonteiro/ocaml-ssl:ssl.opam#917b768",
     "@opam/httpaf": "inhabitedtype/httpaf:httpaf.opam#53042e5"
   }
