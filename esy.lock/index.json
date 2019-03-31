@@ -1,5 +1,5 @@
 {
-  "checksum": "1c03e9d9bb8eb8466acf868c7caa4cba",
+  "checksum": "6ccb4fced136f409e4c97cc32c003b82",
   "root": "h2@link-dev:./esy.json",
   "node": {
     "yarn-pkg-config@github:esy-ocaml/yarn-pkg-config#d488cd9321cd5036bd36ec96744ce78c5d45fc49@d41d8cd9": {
@@ -80,12 +80,12 @@
       "dependencies": [
         "ocaml@4.7.1004@d41d8cd9", "@opam/ocamlfind@opam:1.8.0@f744a0c5",
         "@opam/conf-perl@opam:1@3174af0e",
-        "@opam/conf-gmp@archive:https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz#sha1:9dc6981197a7d92f339192eea974f5eca48fcffe@d3e86405",
+        "@opam/conf-gmp@archive:https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz#sha1:9dc6981197a7d92f339192eea974f5eca48fcffe@bf09c392",
         "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [
         "ocaml@4.7.1004@d41d8cd9", "@opam/ocamlfind@opam:1.8.0@f744a0c5",
-        "@opam/conf-gmp@archive:https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz#sha1:9dc6981197a7d92f339192eea974f5eca48fcffe@d3e86405"
+        "@opam/conf-gmp@archive:https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz#sha1:9dc6981197a7d92f339192eea974f5eca48fcffe@bf09c392"
       ]
     },
     "@opam/yojson@opam:1.7.0@2d92307e": {
@@ -477,12 +477,12 @@
       "overrides": [],
       "dependencies": [
         "ocaml@4.7.1004@d41d8cd9", "@opam/dune@opam:1.8.2@511996a8",
-        "@opam/conf-openssl@no-source:@e8ca502a",
+        "@opam/conf-openssl@no-source:@f9c7aef0",
         "@opam/base-unix@opam:base@87d0b2eb",
         "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [
-        "ocaml@4.7.1004@d41d8cd9", "@opam/conf-openssl@no-source:@e8ca502a",
+        "ocaml@4.7.1004@d41d8cd9", "@opam/conf-openssl@no-source:@f9c7aef0",
         "@opam/base-unix@opam:base@87d0b2eb"
       ]
     },
@@ -2385,8 +2385,8 @@
       "dependencies": [ "@esy-ocaml/substs@0.0.1@d41d8cd9" ],
       "devDependencies": []
     },
-    "@opam/conf-openssl@no-source:@e8ca502a": {
-      "id": "@opam/conf-openssl@no-source:@e8ca502a",
+    "@opam/conf-openssl@no-source:@f9c7aef0": {
+      "id": "@opam/conf-openssl@no-source:@f9c7aef0",
       "name": "@opam/conf-openssl",
       "version": "no-source:",
       "source": { "type": "install", "source": [ "no-source:" ] },
@@ -2394,13 +2394,13 @@
         {
           "dependencies": {
             "@opam/conf-pkg-config": "*",
-            "@esy-packages/esy-openssl": "*"
+            "@esy-packages/esy-openssl": "esy-packages/esy-openssl#65efbc9"
           }
         }
       ],
       "dependencies": [
         "@opam/conf-pkg-config@opam:1.1@657bff53",
-        "@esy-packages/esy-openssl@archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1a.tar.gz#sha1:0a7d7382e3e608fc037d4955a0ddad224acc1fc8@ec4bfcf8"
+        "@esy-packages/esy-openssl@archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz#sha1:1b09930a6099c6c8fa15dd6c6842e134e65e0a31@00057677"
       ],
       "devDependencies": []
     },
@@ -2439,9 +2439,9 @@
       "dependencies": [],
       "devDependencies": []
     },
-    "@opam/conf-gmp@archive:https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz#sha1:9dc6981197a7d92f339192eea974f5eca48fcffe@d3e86405": {
+    "@opam/conf-gmp@archive:https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz#sha1:9dc6981197a7d92f339192eea974f5eca48fcffe@bf09c392": {
       "id":
-        "@opam/conf-gmp@archive:https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz#sha1:9dc6981197a7d92f339192eea974f5eca48fcffe@d3e86405",
+        "@opam/conf-gmp@archive:https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz#sha1:9dc6981197a7d92f339192eea974f5eca48fcffe@bf09c392",
       "name": "@opam/conf-gmp",
       "version":
         "archive:https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz#sha1:9dc6981197a7d92f339192eea974f5eca48fcffe",
@@ -2452,16 +2452,7 @@
         ]
       },
       "overrides": [
-        "esy.lock/overrides/66d4d77ebf2ee1a267d57a488e4e3ed4/package.json",
-        {
-          "exportedEnv": {
-            "CFLAGS": {
-              "scope": "global",
-              "val": "-I#{self.install / 'include'} $CFLAGS"
-            },
-            "LDFLAGS": { "scope": "global", "val": "-L#{self.lib} $LDFLAGS" }
-          }
-        }
+        "esy.lock/overrides/bf09c3929c80d06f7a088323624137a1/package.json"
       ],
       "dependencies": [],
       "devDependencies": []
@@ -2889,19 +2880,19 @@
         "@opam/astring@opam:0.8.3@4e5e17d5"
       ]
     },
-    "@esy-packages/esy-openssl@archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1a.tar.gz#sha1:0a7d7382e3e608fc037d4955a0ddad224acc1fc8@ec4bfcf8": {
+    "@esy-packages/esy-openssl@archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz#sha1:1b09930a6099c6c8fa15dd6c6842e134e65e0a31@00057677": {
       "id":
-        "@esy-packages/esy-openssl@archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1a.tar.gz#sha1:0a7d7382e3e608fc037d4955a0ddad224acc1fc8@ec4bfcf8",
+        "@esy-packages/esy-openssl@archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz#sha1:1b09930a6099c6c8fa15dd6c6842e134e65e0a31@00057677",
       "name": "@esy-packages/esy-openssl",
       "version":
-        "archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1a.tar.gz#sha1:0a7d7382e3e608fc037d4955a0ddad224acc1fc8",
+        "archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz#sha1:1b09930a6099c6c8fa15dd6c6842e134e65e0a31",
       "source": {
         "type": "install",
         "source": [
-          "archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1a.tar.gz#sha1:0a7d7382e3e608fc037d4955a0ddad224acc1fc8"
+          "archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz#sha1:1b09930a6099c6c8fa15dd6c6842e134e65e0a31"
         ]
       },
-      "overrides": [ "esy.lock/overrides/ec4bfcf8f23e2e2a943195e35fef922e" ],
+      "overrides": [ "esy.lock/overrides/000576771cef51fdd250f66f22238a27" ],
       "dependencies": [],
       "devDependencies": []
     },
