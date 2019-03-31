@@ -499,13 +499,14 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
                HEADERS frames can be sent on a stream in the "idle", "reserved
                (local)", "open", or "half-closed (remote)" state. *)
           open_stream t frame_header ?priority headers_block
-        | Open (PartialHeaders _)
-        | Open (FullHeaders _) ->
+        | Open (PartialHeaders _) ->
           (* This case is unreachable because we check that partial HEADERS
            * states must be followed by CONTINUATION frames elsewhere. *)
           assert false
         (* if we're getting a HEADERS frame at this point, they must be
          * trailers, and the END_STREAM flag needs to be set. *)
+        | Open (FullHeaders rs) ->
+          process_trailer_headers t reqd rs frame_header headers_block
         | Open (ActiveRequest rs) ->
           process_trailer_headers t reqd rs frame_header headers_block
         | HalfClosed _
