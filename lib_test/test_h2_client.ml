@@ -171,6 +171,9 @@ module Client_connection_tests = struct
     | `Close _ ->
       Alcotest.fail "Expected client connection to issue a `Write operation"
 
+  (* TODO: test continuation frames *)
+  (* TODO: test continuation frames on a different streams (error case) *)
+  (* TODO: test data larger than content length *)
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
