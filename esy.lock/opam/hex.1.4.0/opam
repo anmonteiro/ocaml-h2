@@ -6,9 +6,10 @@ homepage: "https://github.com/mirage/ocaml-hex"
 doc: "https://mirage.github.io/ocaml-hex/"
 bug-reports: "https://github.com/mirage/ocaml-hex/issues"
 depends: [
-  "ocaml"
+  "ocaml" {>="4.03.0"}
   "dune" {build & >= "1.0"}
   "cstruct" {>= "1.7.0"}
+  "bigarray-compat" {>= "1.0.0"}
 ]
 build: [
   ["dune" "subst"] {pinned}
@@ -31,6 +32,6 @@ description: """
 """
 url {
   src:
-    "https://github.com/mirage/ocaml-hex/releases/download/v1.3.0/hex-v1.3.0.tbz"
-  checksum: "md5=c0baa72c9d7495cd3c6646f9a50b03c7"
+    "https://github.com/mirage/ocaml-hex/releases/download/v1.4.0/hex-v1.4.0.tbz"
+  checksum: "md5=57103ff33e70f14171c46d88f5452d11"
 }
