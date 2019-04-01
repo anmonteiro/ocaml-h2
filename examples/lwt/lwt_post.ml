@@ -52,11 +52,12 @@ let () =
     >>= fun () ->
 
     let request_headers =
-      Request.create `POST "/" ~scheme:"http" ~headers:(Headers.of_list [
-        "Host", !host;
-        "Connection", "close";
-        "Content-Length", string_of_int (String.length text_to_send);
-      ])
+      Request.create `POST "/"
+        ~scheme:"http"
+        ~headers:Headers.(of_list
+          [ ":authority", !host
+          ; "content-length", string_of_int (String.length text_to_send);
+          ])
     in
 
     let response_received, notify_response_received = Lwt.wait () in
