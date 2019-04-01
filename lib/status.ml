@@ -46,33 +46,49 @@
 (* From RFC7540§8.1.1:
      HTTP/2 removes support for the 101 (Switching Protocols) informational
      status code ([RFC7231], Section 6.2.2). *)
-type informational = [ | `Continue ]
+type informational = [ `Continue ]
 
 type successful = Httpaf.Status.successful
 type redirection = Httpaf.Status.redirection
-type client_error = Httpaf.Status.client_error
+
+type client_error =
+  [ Httpaf.Status.client_error
+    (* From RFC7540§9.1.2:
+         The 421 (Misdirected Request) status code indicates that the request
+         was directed at a server that is not able to produce a response. This
+         can be sent by a server that is not configured to produce responses
+         for the combination of scheme and authority that are included in the
+         request URI. *)
+  | `Misdirected_request ]
+
 type server_error = Httpaf.Status.server_error
 
-type standard = [
-  | informational
-  | Httpaf.Status.successful
-  | Httpaf.Status.redirection
-  | Httpaf.Status.client_error
-  | Httpaf.Status.server_error
+type standard =
+  [ informational
+  | successful
+  | redirection
+  | client_error
+  | server_error
   ]
 
-type t = [
-  | standard
-  | `Code of int ]
+type t =
+  [ standard
+  | `Code of int
+  ]
 
-let default_reason_phrase t =
-  (* Note: The value for reason phrases is never actually serialized to the
-     input or output channels.
+(* Note: The value for reason phrases is never actually serialized to the
+   input or output channels.
 
-     From RFC7540§8.1.2.4:
-       HTTP/2 does not define a way to carry the version or reason phrase that
-       is included in an HTTP/1.1 status line. *)
-  Httpaf.Status.default_reason_phrase (t :> Httpaf.Status.standard)
+   From RFC7540§8.1.2.4:
+     HTTP/2 does not define a way to carry the version or reason phrase that is
+     included in an HTTP/1.1 status line. *)
+let default_reason_phrase = function
+  | `Misdirected_request -> "Misdirected Request"
+  | #Httpaf.Status.standard as t -> Httpaf.Status.default_reason_phrase t
+
+let to_code = function
+  | `Misdirected_request -> 421
+  | #Httpaf.Status.t as t -> Httpaf.Status.to_code t
 
 let really_unsafe_of_code = function
  (* Informational *)
@@ -114,6 +130,7 @@ let really_unsafe_of_code = function
   | 417 -> `Expectation_failed
   | 418 -> `I_m_a_teapot
   | 420 -> `Enhance_your_calm
+  | 421 -> `Misdirected_request
   | 426 -> `Upgrade_required
  (* Server error *)
   | 500 -> `Internal_server_error
@@ -123,8 +140,6 @@ let really_unsafe_of_code = function
   | 504 -> `Gateway_timeout
   | 505 -> `Http_version_not_supported
   | c   -> `Code c
-let to_code t =
-  Httpaf.Status.to_code (t :> Httpaf.Status.t)
 
 let unsafe_of_code c =
   match really_unsafe_of_code c with
@@ -142,33 +157,36 @@ let of_code c =
     else `Code c
   | s -> s
 
-let is_informational t =
-  match t with
-  | #informational -> true
-  | `Code n        -> n >= 100 && n <= 199
-  | _              -> false
+let is_informational = function
+  | `Misdirected_request -> false
+  | #Httpaf.Status.t as t -> Httpaf.Status.is_informational t
 
-let is_successful t =
-  Httpaf.Status.is_successful (t :> Httpaf.Status.t)
+let is_successful = function
+  | `Misdirected_request -> false
+  | #Httpaf.Status.t as t -> Httpaf.Status.is_successful t
 
-let is_redirection t =
-  Httpaf.Status.is_redirection (t :> Httpaf.Status.t)
+let is_redirection = function
+  | `Misdirected_request -> false
+  | #Httpaf.Status.t as t -> Httpaf.Status.is_redirection t
 
-let is_client_error t =
-  Httpaf.Status.is_client_error (t :> Httpaf.Status.t)
+let is_client_error = function
+  | `Misdirected_request -> true
+  | #Httpaf.Status.t as t -> Httpaf.Status.is_client_error t
 
-let is_server_error t =
-  Httpaf.Status.is_server_error (t :> Httpaf.Status.t)
+let is_server_error = function
+  | `Misdirected_request -> false
+  | #Httpaf.Status.t as t -> Httpaf.Status.is_server_error t
 
-let is_error t =
-  Httpaf.Status.is_error (t :> Httpaf.Status.t)
+let is_error = function
+  | `Misdirected_request -> true
+  | #Httpaf.Status.t as t -> Httpaf.Status.is_error t
 
-
-let to_string t =
-  Httpaf.Status.to_string (t :> Httpaf.Status.t)
+let to_string = function
+  | `Misdirected_request -> "421"
+  | #Httpaf.Status.t as t -> Httpaf.Status.to_string t
 
 let of_string x =
   of_code (int_of_string x)
 
 let pp_hum fmt t =
-  Httpaf.Status.pp_hum fmt (t :> Httpaf.Status.t)
+  Format.fprintf fmt "%u" (to_code t)

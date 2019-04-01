@@ -49,4 +49,4 @@ let pp_hum fmt { status; headers } =
     | `Code _                    -> "Non-standard status code"
   in
   Format.fprintf fmt "((status %a) (reason %S) (headers %a))"
-    Status.pp_hum (status :> Httpaf.Status.t) reason Headers.pp_hum headers
+    Status.pp_hum status reason Headers.pp_hum headers

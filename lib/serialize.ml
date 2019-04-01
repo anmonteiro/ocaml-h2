@@ -487,7 +487,7 @@ module Writer = struct
     Hpack.Encoder.encode_header hpack_encoder faraday
       { Headers
       . name = ":status"
-      ; value = Status.to_string (status :> Httpaf.Status.t)
+      ; value = Status.to_string status
       ; sensitive = false
       };
     encode_headers hpack_encoder faraday headers;

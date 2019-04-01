@@ -81,7 +81,7 @@ module Method : module type of Httpaf.Method
     See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1}
     for more details. *)
 module Status : sig
-  type informational = [ | `Continue ]
+  type informational = [ `Continue ]
   (** The 1xx (Informational) class of status code indicates an interim
       response for communicating connection status or request progress
       prior to completing the requested action and sending a final
@@ -105,12 +105,19 @@ module Status : sig
       See {{:https://tools.ietf.org/html/rfc7231#section-6.4} RFC7231§6.4} for
       more details. *)
 
-  type client_error = Httpaf.Status.client_error
+  type client_error =
+    [ Httpaf.Status.client_error
+    | `Misdirected_request
+    ]
   (** The 4xx (Client Error) class of status code indicates that the client
       seems to have erred.
 
       See {{:https://tools.ietf.org/html/rfc7231#section-6.5} RFC7231§6.5} for
-      more details. *)
+      more details.
+
+      In addition to http/af, this type also includes the 421 (Misdirected
+      Request) tag. See {{:https://tools.ietf.org/html/rfc7540#section-9.1.2}
+      RFC7540§9.1.2} for more details. *)
 
   type server_error = Httpaf.Status.server_error
   (** The 5xx (Server Error) class of status code indicates that the server is
@@ -120,15 +127,20 @@ module Status : sig
       See {{:https://tools.ietf.org/html/rfc7231#section-6.6} RFC7231§6.6} for
       more details. *)
 
-  type standard = [
-    | informational
-    | Httpaf.Status.successful
-    | Httpaf.Status.redirection
-    | Httpaf.Status.client_error
-    | Httpaf.Status.server_error
+  type standard =
+    [ informational
+    | successful
+    | redirection
+    | client_error
+    | server_error
     ]
   (** The status codes defined in the HTTP/1.1 RFCs, excluding the [Switching
-      Protocols] status as per the HTTP/2 RFC. *)
+      Protocols] status and including the [Misdirected Request] as per the
+      HTTP/2 RFC.
+
+      See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1}
+      and {{:https://tools.ietf.org/html/rfc7540#section-9.1.2} RFC7540§9.1.2}
+      for more details. *)
 
   type t = [
     | standard
@@ -491,7 +503,7 @@ module Reqd : sig
       fully process the response to the original request.
 
       [push reqd request] creates a new (pushed) request descriptor that allows
-      responding to the "promised" request. This function raises an exception
+      responding to the "promised" [request]. This function raises an exception
       if server push is not enabled for the connection.
 
       See {{:https://tools.ietf.org/html/rfc7540#section-8.2} RFC7540§8.2} for
