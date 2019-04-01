@@ -234,7 +234,17 @@ let write_push_promise_frame t info ~promised_id ?len iovecs =
   in
   write_frame_with_padding t info PushPromise payload_length writer
 
-let write_ping_frame t info payload =
+let default_ping_payload =
+  (* From RFC7540§6.7:
+       In addition to the frame header, PING frames MUST contain 8 octets of
+       opaque data in the payload. *)
+  let bstr = Bigstringaf.create 8 in
+  for i = 0 to 7 do
+    Bigstringaf.set bstr i '\000'
+  done;
+  bstr
+
+let write_ping_frame t info ?(off=0) payload =
   (* From RFC7540§6.7:
        In addition to the frame header, PING frames MUST contain 8 octets of
        opaque data in the payload. *)
@@ -248,7 +258,7 @@ let write_ping_frame t info payload =
     }
   in
   write_frame_header t header;
-  schedule_bigstring ~off:0 ~len:payload_length t payload
+  schedule_bigstring ~off ~len:payload_length t payload
 
 let write_go_away_frame t info stream_id error_code debug_data =
   let debug_data_len = Bigstringaf.length debug_data in
@@ -562,8 +572,8 @@ module Writer = struct
   let write_settings t frame_info settings =
     write_settings_frame t.encoder frame_info settings
 
-  let write_ping t frame_info payload =
-    write_ping_frame t.encoder frame_info payload
+  let write_ping t frame_info ?off payload =
+    write_ping_frame t.encoder frame_info ?off payload
 
   let write_go_away t frame_info ~debug_data ~last_stream_id error =
     write_go_away_frame t.encoder frame_info last_stream_id error debug_data

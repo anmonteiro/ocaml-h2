@@ -275,6 +275,7 @@ module Client (Io: IO) = struct
         Io.close socket);
     Lwt.return connection
 
-  let request connection request ~error_handler ~response_handler =
-    Client_connection.request connection request ~error_handler ~response_handler
+  let request = Client_connection.request
+
+  let ping = Client_connection.ping
 end

@@ -37,6 +37,15 @@ module Reader = Parse.Reader
 module Writer = Serialize.Writer
 module Streams = Streams.Client_streams
 
+module Queue = struct
+  include Queue
+
+  let take_opt t =
+    match is_empty t with
+    | true -> None
+    | false -> Some (take t)
+end
+
 type error =
   [ `Malformed_response of string
   | `Invalid_response_body_length of Response.t
@@ -51,14 +60,6 @@ type reader_state =
   | New of Reader.server_connection_preface
   | Active of Reader.frame
 
-(*
-  ; request          : Request.t
-  ; request_body     : [ `write ] Body.t
-  ; response_handler : (Response.t -> [`read] Body.t -> unit)
-  ; state  : state ref
- *)
-
-(* TODO: ping handler *)
 type t =
   { settings         : Settings.t
   ; mutable reader   : reader_state
@@ -69,6 +70,7 @@ type t =
   ; mutable current_server_streams : int
   ; mutable receiving_headers_for_stream : Stream_identifier.t option
   ; mutable did_send_go_away : bool
+  ; pending_pings    : (unit -> unit) Queue.t
   ; error_handler    : (error -> unit)
   ; wakeup_writer    : (unit -> unit) ref
     (* From RFC7540§4.3:
@@ -728,15 +730,21 @@ let process_push_promise_frame _t _frame _promised_stream_id _headers_block =
   (* TODO: We'll need a push handler too *)
   ()
 
-(* TODO: once we add PING support, call listener(s) that might be waiting for a
- * PING ack. *)
 let process_ping_frame t { Frame.frame_header; _ } payload =
   let { Frame.flags; _ } = frame_header in
   (* From RFC7540§6.7:
        ACK (0x1): When set, bit 0 indicates that this PING frame is a PING
        response. [...] An endpoint MUST NOT respond to PING frames containing
        this flag. *)
-  if not (Flags.test_ack flags) then begin
+  if Flags.test_ack flags then begin
+    match Queue.take_opt t.pending_pings with
+    | Some callback ->
+      callback ()
+    | None ->
+      (* server is ACKing a PING that we didn't send? *)
+      let additional_debug_data = "Unexpected PING acknowledgement" in
+      report_connection_error t ~additional_debug_data Error.ProtocolError
+  end else begin
     (* From RFC7540§6.7:
          Receivers of a PING frame that does not include an ACK flag MUST send
          a PING frame with the ACK flag set in response, with an identical
@@ -948,6 +956,7 @@ stream"
     ; current_server_streams = 0
     ; receiving_headers_for_stream = None
     ; did_send_go_away = false
+    ; pending_pings = Queue.create ()
     ; error_handler
     ; reader = New (Reader.server_connection_preface preface_handler)
     (* TODO: `response_buffer_size`?! *)
@@ -1023,6 +1032,29 @@ let request t request ~error_handler ~response_handler =
   (* TODO: closing the request body puts the stream on half-closed (local)
    * state *)
   request_body
+
+(* XXX: we store PING callbacks in FIFO order. Would it ever be the case that
+ * the receipt of a PING frame acknowledges a later callback? If so, we'd need
+ * to disallow sending custom PING payloads and generate a random payload that
+ * we store in a Hashtbl. *)
+let ping t ?payload ?(off=0) callback =
+  let payload = match payload with
+  | None -> Serialize.default_ping_payload
+  | Some payload ->
+    if (Bigstringaf.length payload) - off < 8 then
+      failwith "PING payload must have at least 8 octets in length";
+    payload
+  in
+  (* From RFC7540§6.7:
+       ACK (0x1): When set, bit 0 indicates that this PING frame is a PING
+       response.
+
+       Note: this is not a PING response, quite the opposite, so we don't set
+       the ACK flag. *)
+  let frame_info = Writer.make_frame_info Stream_identifier.connection in
+  Queue.add callback t.pending_pings;
+  Writer.write_ping t.writer frame_info ~off payload;
+  wakeup_writer t
 
 let next_read_operation t =
   if Reader.is_closed (reader t) then shutdown_reader t;
