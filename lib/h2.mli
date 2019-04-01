@@ -640,12 +640,18 @@ module Client_connection : sig
 
   type error_handler = error -> unit
 
-  (* TODO: explain that HTTP/2 handles errors per stream and per connection,
-   * therefore we need an error handler for the whole connection. *)
   val create
     :  ?config:Config.t
     -> error_handler:error_handler
     -> t
+  (** [create ?config ~error_handler] creates a connection that can be used
+      to interact with servers over the HTTP/2 protocol. [error_handler] will
+      be called for {e connection level} errors.
+
+      HTTP/2 is multiplexed over a single TCP connection and distinguishes
+      connection-level errors from stream-level errors. See See
+      {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for more
+      details. *)
 
   val request
     :  t
