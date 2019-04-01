@@ -67,4 +67,11 @@ module Client : sig
     -> error_handler    : Client_connection.error_handler
     -> response_handler : Client_connection.response_handler
     -> [`write] Body.t
+
+  val ping
+    :  t
+    -> ?payload : Bigstringaf.t
+    -> ?off : int
+    -> (unit -> unit)
+    -> unit
 end
