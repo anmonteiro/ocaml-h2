@@ -33,6 +33,7 @@ opam-steps: &opam-steps
           sudo apt-get install -y pkg-config libgmp-dev autotools-dev autoconf lsof
           opam update
           opam install -y dune
+          opam install -y ocamlformat
           opam install -t --deps-only .
     - run:
         name: 'Clean'
