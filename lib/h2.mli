@@ -105,8 +105,9 @@ module Status : sig
       more details.
 
       In addition to http/af, this type also includes the 421 (Misdirected
-      Request) tag. See {{:https://tools.ietf.org/html/rfc7540#section-9.1.2}
-      RFC7540§9.1.2} for more details. *)
+      Request) tag. See
+      {{:https://tools.ietf.org/html/rfc7540#section-9.1.2} RFC7540§9.1.2} for
+      more details. *)
   type client_error =
     [ Httpaf.Status.client_error
     | `Misdirected_request
@@ -120,9 +121,9 @@ module Status : sig
       more details. *)
   type server_error = Httpaf.Status.server_error
 
-  (** The status codes defined in the HTTP/1.1 RFCs, excluding the [Switching
-      Protocols] status and including the [Misdirected Request] as per the
-      HTTP/2 RFC.
+  (** The status codes defined in the HTTP/1.1 RFCs, excluding the
+      [Switching Protocols] status and including the [Misdirected Request] as
+      per the HTTP/2 RFC.
 
       See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1}
       and {{:https://tools.ietf.org/html/rfc7540#section-9.1.2} RFC7540§9.1.2}
@@ -191,17 +192,17 @@ end
 
 (** Header Fields
 
-    Each header field consists of a lowercase {b field name} and a {b field
-    value}. Per the HTTP/2 specification, header field names {b must} be
-    converted to lowercase prior to their encoding in HTTP/2 (see
+    Each header field consists of a lowercase {b field name} and a
+    {b field value}. Per the HTTP/2 specification, header field names {b must}
+    be converted to lowercase prior to their encoding in HTTP/2 (see
     {{:https://tools.ietf.org/html/rfc7540#section-8.1.2} RFC7540§8.1.2} for
     more details). h2 does {b not} convert field names to lowercase; it is
     therefore the responsibility of the caller of the functions contained in
     this module to use lowercase names for header fields.
 
     The order in which header fields {i with differing field names} are
-    received is not significant, except for pseudo-header fields, which {b
-    must} appear in header blocks before regular fields (see
+    received is not significant, except for pseudo-header fields, which
+    {b must} appear in header blocks before regular fields (see
     {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.1} RFC7540§8.1.2.1}
     for more details).
 
@@ -213,10 +214,12 @@ end
     A recipient MAY combine multiple header fields with the same field name
     into one "field-name: field-value" pair, without changing the semantics of
     the message, by appending each subsequent field value to the combined field
-    value in order, separated by a comma. {i The order in which header fields
-    with the same field name are received is therefore significant to the
-    interpretation of the combined field value}; a proxy MUST NOT change the
-    order of these field values when forwarding a message.
+    value in order, separated by a comma.
+    {i
+    The order in which header fields with the same field name are received is
+    therefore significant to the interpretation of the combined field value}; a
+    proxy MUST NOT change the order of these field values when forwarding a
+    message.
 
     {i Note.} Unless otherwise specified, all operations preserve header field
     order and all reference to equality on names is assumed to be
@@ -245,8 +248,8 @@ module Headers : sig
       [assoc] is the intended transmission order. The following equations
       should hold:
 
-      {ul {- [to_list (of_list lst) = lst] } {- [get (of_list [("k", "v1");
-      ("k", "v2")]) "k" = Some "v2"]. }} *)
+      - [to_list (of_list lst) = lst]
+      - [get (of_list \[("k", "v1"); ("k", "v2")\]) "k" = Some "v2"]. *)
 
   val of_rev_list : (name * value) list -> t
   (** [of_list assoc] is a collection of header fields defined by the
@@ -254,8 +257,8 @@ module Headers : sig
       [assoc] is the {i reverse} of the intended trasmission order. The
       following equations should hold:
 
-      {ul {- [to_list (of_rev_list lst) = List.rev lst] } {- [get (of_rev_list
-      [("k", "v1"); ("k", "v2")]) "k" = Some "v1"]. }} *)
+      - [to_list (of_rev_list lst) = List.rev lst]
+      - [get (of_rev_list \[("k", "v1"); ("k", "v2")\]) "k" = Some "v1"]. *)
 
   val to_list : t -> (name * value) list
   (** [to_list t] is the association list of header fields contained in [t] in
@@ -276,7 +279,7 @@ module Headers : sig
 
       The following equations should hold:
 
-      {ul {- [get (add t name value) name = Some value] }} *)
+      - [get (add t name value) name = Some value] *)
 
   val add_unless_exists : t -> ?sensitive:bool -> name -> value -> t
   (** [add_unless_exists t ?sensitive name value] is a collection of header
@@ -291,13 +294,17 @@ module Headers : sig
   val add_multi : t -> (name * value list) list -> t
   (** [add_multi t assoc] is the same as
 
-      {[ add_list t (List.concat_map assoc ~f:(fun (name, values) -> List.map
-      values ~f:(fun value -> (name, value)))) ]}
+      {[
+add_list t (List.concat_map assoc ~f:(fun (name, values) -> List.map
+      values ~f:(fun value -> (name, value))))
+      ]}
 
       but is implemented more efficiently. For example,
 
-      {[ add_multi t ["name1", ["x", "y"]; "name2", ["p", "q"]] = add_list
-      ["name1", "x"; "name1", "y"; "name2", "p"; "name2", "q"] ]} *)
+      {[
+add_multi t ["name1", ["x", "y"]; "name2", ["p", "q"]] = add_list
+      ["name1", "x"; "name1", "y"; "name2", "p"; "name2", "q"]
+      ]} *)
 
   val remove : t -> name -> t
   (** [remove t name] is a collection of header fields that contains all the
@@ -459,8 +466,9 @@ module Response : sig
       parameters. Unlike the [Response] type in http/af, h2 does not define a
       way for responses to carry reason phrases or protocol version.
 
-      See {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.4}
-      RFC7540§8.1.2.4} for more details. *)
+      See
+      {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.4} RFC7540§8.1.2.4}
+      for more details. *)
 
   val pp_hum : Format.formatter -> t -> unit
 end
@@ -486,8 +494,8 @@ module Reqd : sig
       request in [t]. When the response is fully transmitted to the wire, the
       stream completes.
 
-      From {{:https://tools.ietf.org/html/rfc7540#section-8.1} RFC7540§8.1}: An
-      HTTP request/response exchange fully consumes a single stream. *)
+      From {{:https://tools.ietf.org/html/rfc7540#section-8.1} RFC7540§8.1}:
+      An HTTP request/response exchange fully consumes a single stream. *)
 
   val respond_with_string : t -> Response.t -> string -> unit
 
@@ -601,10 +609,11 @@ module Server_connection : sig
       attempt to the connection. {!report_write_result} should be called after
       a call to {!next_write_operation} that returns a [`Write buffer] value.
 
-      {ul {- [`Ok n] indicates that the caller successfully wrote [n] bytes of
-      output from the buffer that the caller was provided by
-      {!next_write_operation}. } {- [`Closed] indicates that the output
-      destination will no longer accept bytes from the write processor. }} *)
+      - [`Ok n] indicates that the caller successfully wrote [n] bytes of
+        output from the buffer that the caller was provided by
+        {!next_write_operation}.
+      - [`Closed] indicates that the output destination will no longer accept
+        bytes from the write processor. *)
 
   val yield_writer : t -> (unit -> unit) -> unit
   (** [yield_writer t continue] registers with the connection to call
@@ -656,8 +665,8 @@ module Client_connection : sig
 
       HTTP/2 is multiplexed over a single TCP connection and distinguishes
       connection-level errors from stream-level errors. See See
-      {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for more
-      details. *)
+      {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for
+      more details. *)
 
   val request
     :  t
@@ -673,8 +682,8 @@ module Client_connection : sig
 
       HTTP/2 is multiplexed over a single TCP connection and distinguishes
       connection-level errors from stream-level errors. See
-      {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for more
-      details. *)
+      {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for
+      more details. *)
 
   val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
   (** [ping connection ?payload ?off f] sends an HTTP/2 PING frame and
@@ -687,8 +696,8 @@ module Client_connection : sig
       In HTTP/2, the PING frame is a mechanism for measuring a minimal
       round-trip time from the sender, as well as determining whether an idle
       connection is still functional. See
-      {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for more
-      details. *)
+      {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for
+      more details. *)
 
   val next_read_operation : t -> [ `Read | `Close ]
   (** [next_read_operation t] returns a value describing the next operation
@@ -720,10 +729,11 @@ module Client_connection : sig
       attempt to the connection. {!report_write_result} should be called after
       a call to {!next_write_operation} that returns a [`Write buffer] value.
 
-      {ul {- [`Ok n] indicates that the caller successfully wrote [n] bytes of
-      output from the buffer that the caller was provided by
-      {next_write_operation}. } {- [`Closed] indicates that the output
-      destination will no longer accept bytes from the write processor. }} *)
+      - [`Ok n] indicates that the caller successfully wrote [n] bytes of
+        output from the buffer that the caller was provided by
+        {next_write_operation}.
+      - [`Closed] indicates that the output destination will no longer accept
+        bytes from the write processor. *)
 
   val yield_writer : t -> (unit -> unit) -> unit
   (** [yield_writer t continue] registers with the connection to call

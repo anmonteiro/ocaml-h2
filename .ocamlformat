@@ -12,6 +12,6 @@ sequence-style = terminator
 indicate-multiline-delimiters = false
 ocp-indent-compat = true
 wrap-comments = true
-parse-docstrings = false
+parse-docstrings = true
 let-binding-spacing = compact
 type-decl = sparse
