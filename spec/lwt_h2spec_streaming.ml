@@ -44,9 +44,9 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
             set_interval 1 (fun () ->
                 ignore
                 @@ Reqd.try_with request_descriptor (fun () ->
-                       Body.write_string response_body " data" );
+                       Body.write_string response_body " data");
                 Body.flush response_body (fun () ->
-                    Body.close_writer response_body ) ) )
+                    Body.close_writer response_body)))
           ~on_read:(fun _request_data ~off:_ ~len:_ -> respond ())
       in
       respond ()
@@ -83,12 +83,12 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
       -> unit =
    fun _client_address ?request:_ error start_response ->
     let response_body = start_response Headers.empty in
-    ( match error with
+    (match error with
     | `Exn exn ->
       Body.write_string response_body (Printexc.to_string exn);
       Body.write_string response_body "\n"
     | #Status.standard as error ->
-      Body.write_string response_body (Status.default_reason_phrase error) );
+      Body.write_string response_body (Status.default_reason_phrase error));
     Body.close_writer response_body
   in
   H2_lwt_unix.Server.create_connection_handler
@@ -115,6 +115,6 @@ let () =
       print_string "To send a POST request, try\n\n";
       print_string "  echo foo | dune exec examples/lwt/lwt_post.exe\n\n";
       flush stdout;
-      Lwt.return_unit );
+      Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   Lwt_main.run forever
