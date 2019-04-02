@@ -12,7 +12,6 @@ let set_interval s f destroy =
   in
   set_interval_loop s f 2
 
-
 let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
   let open H2 in
   let request_handler : Unix.sockaddr -> Reqd.t -> unit =
@@ -70,12 +69,10 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
         (Response.create `Method_not_allowed)
         ""
   in
-  let error_handler :
-         Unix.sockaddr
-      -> ?request:H2.Request.t
-      -> _
-      -> (Headers.t -> [ `write ] Body.t)
-      -> unit =
+  let error_handler
+      :  Unix.sockaddr -> ?request:H2.Request.t -> _
+      -> (Headers.t -> [ `write ] Body.t) -> unit
+    =
    fun _client_address ?request:_ error start_response ->
     let response_body = start_response Headers.empty in
     (match error with
@@ -94,7 +91,6 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
       }
     ~request_handler
     ~error_handler
-
 
 let () =
   let open Lwt.Infix in
