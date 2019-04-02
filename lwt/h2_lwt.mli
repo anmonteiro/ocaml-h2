@@ -36,6 +36,7 @@ open H2
 
 module type IO = sig
   type socket
+
   type addr
 
   val read
@@ -46,7 +47,7 @@ module type IO = sig
     -> [ `Eof | `Ok of int ] Lwt.t
 
   val writev
-     : socket
+    :  socket
     -> Faraday.bigstring Faraday.iovec list
     -> [ `Closed | `Ok of int ] Lwt.t
 
@@ -59,40 +60,34 @@ module type IO = sig
   val report_exn : Server_connection.t -> socket -> exn -> unit Lwt.t
 end
 
-
 (* The function that results from [create_connection_handler] should be passed
    to [Lwt_io.establish_server_with_client_socket]. *)
-module Server (Io: IO) : sig
+module Server (Io : IO) : sig
   val create_connection_handler
-    :  ?config         : Config.t
-    -> request_handler : (Io.addr -> Server_connection.request_handler)
-    -> error_handler   : (Io.addr -> Server_connection.error_handler)
+    :  ?config:Config.t
+    -> request_handler:(Io.addr -> Server_connection.request_handler)
+    -> error_handler:(Io.addr -> Server_connection.error_handler)
     -> Io.addr
     -> Io.socket
     -> unit Lwt.t
 end
 
 (* TODO: shutdown function? *)
-module Client (Io: IO) : sig
+module Client (Io : IO) : sig
   type t
 
   val create_connection
-    :  ?config          : Config.t
-    -> error_handler    : Client_connection.error_handler
+    :  ?config:Config.t
+    -> error_handler:Client_connection.error_handler
     -> Io.socket
     -> t Lwt.t
 
   val request
     :  t
     -> Request.t
-    -> error_handler    : Client_connection.error_handler
-    -> response_handler : Client_connection.response_handler
-    -> [`write] Body.t
+    -> error_handler:Client_connection.error_handler
+    -> response_handler:Client_connection.response_handler
+    -> [ `write ] Body.t
 
-  val ping
-    :  t
-    -> ?payload : Bigstringaf.t
-    -> ?off : int
-    -> (unit -> unit)
-    -> unit
+  val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
 end
