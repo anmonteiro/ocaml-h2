@@ -32,26 +32,25 @@
 
 open H2
 
-
 (* The function that results from [create_connection_handler] should be passed
    to [Lwt_io.establish_server_with_client_socket]. *)
 module Server : sig
   val create_connection_handler
-    :  ?config         : Config.t
-    -> request_handler : (Unix.sockaddr -> Server_connection.request_handler)
-    -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
+    :  ?config:Config.t
+    -> request_handler:(Unix.sockaddr -> Server_connection.request_handler)
+    -> error_handler:(Unix.sockaddr -> Server_connection.error_handler)
     -> Unix.sockaddr
     -> Lwt_unix.file_descr
     -> unit Lwt.t
 
   module TLS : sig
     val create_connection_handler
-      :  ?server         : Tls_io.server
-      -> ?certfile       : string
-      -> ?keyfile        : string
-      -> ?config         : Config.t
-      -> request_handler : (Unix.sockaddr -> Server_connection.request_handler)
-      -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
+      :  ?server:Tls_io.server
+      -> ?certfile:string
+      -> ?keyfile:string
+      -> ?config:Config.t
+      -> request_handler:(Unix.sockaddr -> Server_connection.request_handler)
+      -> error_handler:(Unix.sockaddr -> Server_connection.error_handler)
       -> Unix.sockaddr
       -> Lwt_unix.file_descr
       -> unit Lwt.t
@@ -59,12 +58,12 @@ module Server : sig
 
   module SSL : sig
     val create_connection_handler
-      :  ?server         : Ssl_io.server
-      -> ?certfile       : string
-      -> ?keyfile        : string
-      -> ?config         : Config.t
-      -> request_handler : (Unix.sockaddr -> Server_connection.request_handler)
-      -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
+      :  ?server:Ssl_io.server
+      -> ?certfile:string
+      -> ?keyfile:string
+      -> ?config:Config.t
+      -> request_handler:(Unix.sockaddr -> Server_connection.request_handler)
+      -> error_handler:(Unix.sockaddr -> Server_connection.error_handler)
       -> Unix.sockaddr
       -> Lwt_unix.file_descr
       -> unit Lwt.t
@@ -75,46 +74,41 @@ module Client : sig
   type t
 
   val create_connection
-    :  ?config          : Config.t
-    -> error_handler    : Client_connection.error_handler
+    :  ?config:Config.t
+    -> error_handler:Client_connection.error_handler
     -> Lwt_unix.file_descr
     -> t Lwt.t
 
   val request
     :  t
     -> Request.t
-    -> error_handler    : Client_connection.error_handler
-    -> response_handler : Client_connection.response_handler
-    -> [`write] Body.t
+    -> error_handler:Client_connection.error_handler
+    -> response_handler:Client_connection.response_handler
+    -> [ `write ] Body.t
 
-  val ping
-    :  t
-    -> ?payload : Bigstringaf.t
-    -> ?off : int
-    -> (unit -> unit)
-    -> unit
+  val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
 
   module TLS : sig
     type t
 
     val create_connection
-      :  ?client          : Tls_io.client
-      -> ?config          : Config.t
-      -> error_handler    : Client_connection.error_handler
+      :  ?client:Tls_io.client
+      -> ?config:Config.t
+      -> error_handler:Client_connection.error_handler
       -> Lwt_unix.file_descr
       -> t Lwt.t
 
     val request
       :  t
       -> Request.t
-      -> error_handler    : Client_connection.error_handler
-      -> response_handler : Client_connection.response_handler
-      -> [`write] Body.t
+      -> error_handler:Client_connection.error_handler
+      -> response_handler:Client_connection.response_handler
+      -> [ `write ] Body.t
 
     val ping
       :  t
-      -> ?payload : Bigstringaf.t
-      -> ?off : int
+      -> ?payload:Bigstringaf.t
+      -> ?off:int
       -> (unit -> unit)
       -> unit
   end
@@ -123,23 +117,23 @@ module Client : sig
     type t
 
     val create_connection
-      :  ?client          : Ssl_io.client
-      -> ?config          : Config.t
-      -> error_handler    : Client_connection.error_handler
+      :  ?client:Ssl_io.client
+      -> ?config:Config.t
+      -> error_handler:Client_connection.error_handler
       -> Lwt_unix.file_descr
       -> t Lwt.t
 
     val request
       :  t
       -> Request.t
-      -> error_handler    : Client_connection.error_handler
-      -> response_handler : Client_connection.response_handler
-      -> [`write] Body.t
+      -> error_handler:Client_connection.error_handler
+      -> response_handler:Client_connection.response_handler
+      -> [ `write ] Body.t
 
     val ping
       :  t
-      -> ?payload : Bigstringaf.t
-      -> ?off : int
+      -> ?payload:Bigstringaf.t
+      -> ?off:int
       -> (unit -> unit)
       -> unit
   end

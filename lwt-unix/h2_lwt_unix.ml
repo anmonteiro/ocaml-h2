@@ -33,15 +33,17 @@
 open H2
 open Lwt.Infix
 
-module Io : H2_lwt.IO with
-    type socket = Lwt_unix.file_descr
-    and type addr = Unix.sockaddr = struct
+module Io :
+  H2_lwt.IO
+  with type socket = Lwt_unix.file_descr
+   and type addr = Unix.sockaddr = struct
   type socket = Lwt_unix.file_descr
+
   type addr = Unix.sockaddr
 
   let shutdown socket command =
-    try Lwt_unix.shutdown socket command
-    with Unix.Unix_error (Unix.ENOTCONN, _, _) -> ()
+    try Lwt_unix.shutdown socket command with
+    | Unix.Unix_error (Unix.ENOTCONN, _, _) -> ()
 
   let shutdown_send socket =
     if not (Lwt_unix.state socket = Lwt_unix.Closed) then
@@ -53,9 +55,7 @@ module Io : H2_lwt.IO with
 
   let close socket =
     if Lwt_unix.state socket <> Lwt_unix.Closed then
-      Lwt.catch
-        (fun () -> Lwt_unix.close socket)
-        (fun _exn -> Lwt.return_unit)
+      Lwt.catch (fun () -> Lwt_unix.close socket) (fun _exn -> Lwt.return_unit)
     else
       Lwt.return_unit
 
@@ -63,13 +63,10 @@ module Io : H2_lwt.IO with
     Lwt.catch
       (fun () -> Lwt_bytes.read fd bigstring off len)
       (function
-      | Unix.Unix_error (Unix.EBADF, _, _) as exn ->
-        Lwt.fail exn
-      | exn ->
-        Lwt.async (fun () ->
-          Lwt_unix.close fd);
-        Lwt.fail exn)
-
+        | Unix.Unix_error (Unix.EBADF, _, _) as exn -> Lwt.fail exn
+        | exn ->
+          Lwt.async (fun () -> Lwt_unix.close fd);
+          Lwt.fail exn)
     >>= fun bytes_read ->
     if bytes_read = 0 then
       Lwt.return `Eof
@@ -78,7 +75,7 @@ module Io : H2_lwt.IO with
 
   let writev = Faraday_lwt_unix.writev_of_fd
 
-  let report_exn connection socket = fun exn ->
+  let report_exn connection socket exn =
     (* This needs to handle two cases. The case where the socket is
      * still open and we can gracefully respond with an error, and the
      * case where the client has already left. The second case is more
@@ -94,13 +91,9 @@ module Io : H2_lwt.IO with
      *   not required for the initiator of the close to wait for the
      *   responding close_notify alert before closing the read side of
      *   the connection. *)
-    begin match Lwt_unix.state socket with
-    | Aborted _
-    | Closed ->
-      Server_connection.shutdown connection
-    | Opened ->
-      Server_connection.report_exn connection exn
-    end;
+    (match Lwt_unix.state socket with
+    | Aborted _ | Closed -> Server_connection.shutdown connection
+    | Opened -> Server_connection.report_exn connection exn);
     Lwt.return_unit
 end
 
@@ -113,43 +106,48 @@ module Server = struct
     include H2_lwt.Server (Tls_io.Io)
 
     let create_connection_handler
-      ?server
-      ?certfile
-      ?keyfile
-      ?(config=Config.default)
-      ~request_handler
-      ~error_handler =
-      fun client_addr socket ->
-        Tls_io.make_server ?server ?certfile ?keyfile socket >>= fun tls_server ->
-        create_connection_handler
-          ~config
-          ~request_handler
-          ~error_handler
-          client_addr
-          (socket, tls_server)
+        ?server
+        ?certfile
+        ?keyfile
+        ?(config = Config.default)
+        ~request_handler
+        ~error_handler
+        client_addr
+        socket
+      =
+      Tls_io.make_server ?server ?certfile ?keyfile socket
+      >>= fun tls_server ->
+      create_connection_handler
+        ~config
+        ~request_handler
+        ~error_handler
+        client_addr
+        (socket, tls_server)
   end
 
   module SSL = struct
     include H2_lwt.Server (Ssl_io.Io)
+
     let create_connection_handler
-      ?server
-      ?certfile
-      ?keyfile
-      ?(config=Config.default)
-      ~request_handler
-      ~error_handler =
-      fun client_addr socket ->
-        Ssl_io.make_server ?server ?certfile ?keyfile socket >>= fun ssl_server ->
-        create_connection_handler
-          ~config
-          ~request_handler
-          ~error_handler
-          client_addr
-          ssl_server
+        ?server
+        ?certfile
+        ?keyfile
+        ?(config = Config.default)
+        ~request_handler
+        ~error_handler
+        client_addr
+        socket
+      =
+      Ssl_io.make_server ?server ?certfile ?keyfile socket
+      >>= fun ssl_server ->
+      create_connection_handler
+        ~config
+        ~request_handler
+        ~error_handler
+        client_addr
+        ssl_server
   end
 end
-
-
 
 module Client = struct
   include H2_lwt.Client (Io)
@@ -157,23 +155,20 @@ module Client = struct
   module TLS = struct
     include H2_lwt.Client (Tls_io.Io)
 
-    let create_connection ?client ?(config=Config.default) ~error_handler socket =
+    let create_connection
+        ?client ?(config = Config.default) ~error_handler socket
+      =
       Tls_io.make_client ?client socket >>= fun tls_client ->
-      create_connection
-        ~config
-        ~error_handler
-        (socket, tls_client)
+      create_connection ~config ~error_handler (socket, tls_client)
   end
 
   module SSL = struct
     include H2_lwt.Client (Ssl_io.Io)
 
-    let create_connection ?client ?(config=Config.default) ~error_handler socket =
+    let create_connection
+        ?client ?(config = Config.default) ~error_handler socket
+      =
       Ssl_io.make_client ?client socket >>= fun ssl_client ->
-      create_connection
-        ~config
-        ~error_handler
-        ssl_client
+      create_connection ~config ~error_handler ssl_client
   end
 end
-
