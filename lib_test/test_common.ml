@@ -2,9 +2,8 @@ open H2__
 
 let read_all path =
   let file = open_in path in
-  try
-      really_input_string file (in_channel_length file)
-  with exn ->
+  try really_input_string file (in_channel_length file) with
+  | exn ->
     close_in file;
     raise exn
 
@@ -13,8 +12,7 @@ let bs_to_string bs =
   let len = Bigstringaf.length bs in
   Bigstringaf.substring ~off ~len bs
 
-let bs_of_string s =
-  Bigstringaf.of_string ~off:0 ~len:(String.length s) s
+let bs_of_string s = Bigstringaf.of_string ~off:0 ~len:(String.length s) s
 
 let string_of_hex s = Hex.to_string (`Hex s)
 
@@ -23,7 +21,7 @@ let hex_of_string s =
   String.uppercase_ascii hex
 
 let make_iovecs bs =
-  [{ Httpaf.IOVec.buffer = bs; off = 0; len = Bigstringaf.length bs }]
+  [ { Httpaf.IOVec.buffer = bs; off = 0; len = Bigstringaf.length bs } ]
 
 let write_frame ?padding t { Frame.frame_header; frame_payload } =
   let open Serialize in
@@ -42,7 +40,11 @@ let write_frame ?padding t { Frame.frame_header; frame_payload } =
   | Settings settings ->
     Writer.write_settings t info settings
   | PushPromise (promised_id, header_block) ->
-    write_push_promise_frame t.encoder info ~promised_id (make_iovecs header_block)
+    write_push_promise_frame
+      t.encoder
+      info
+      ~promised_id
+      (make_iovecs header_block)
   | Ping payload ->
     Writer.write_ping t info payload
   | GoAway (last_stream_id, error, debug_data) ->
@@ -65,9 +67,7 @@ let serialize_frame_string ?padding frame =
   let bs = serialize_frame ?padding frame in
   bs_to_string bs
 
-let opt_exn = function
-  | Some x -> x
-  | None -> failwith "opt_exn: None"
+let opt_exn = function Some x -> x | None -> failwith "opt_exn: None"
 
 let encode_headers hpack_encoder headers =
   let f = Faraday.create 0x1000 in
@@ -79,15 +79,19 @@ let parse_frames_bigstring wire =
   let frames = ref [] in
   let handler = function
     | Ok frame ->
-        frames := frame :: !frames
-    | _ -> Alcotest.fail "Expected frame to parse successfully."
+      frames := frame :: !frames
+    | _ ->
+      Alcotest.fail "Expected frame to parse successfully."
   in
   let reader = Reader.frame handler in
   let _read =
-    Reader.read_with_more reader wire ~off:0 ~len:(Bigstringaf.length wire) Incomplete
+    Reader.read_with_more
+      reader
+      wire
+      ~off:0
+      ~len:(Bigstringaf.length wire)
+      Incomplete
   in
   List.rev !frames
 
-let parse_frames wire =
-  parse_frames_bigstring (bs_of_string wire)
-
+let parse_frames wire = parse_frames_bigstring (bs_of_string wire)

@@ -6,28 +6,31 @@ let pp_priority fmt { Priority.weight; stream_dependency; exclusive } =
   Format.fprintf
     fmt
     "Weight: %d; Parent: %ld; Exclusive: %B"
-    weight stream_dependency exclusive
+    weight
+    stream_dependency
+    exclusive
 
 let priority = Alcotest.of_pp pp_priority
 
-let node = (module struct
-  open Streams.PriorityTreeNode
-  type t = parent
+let node =
+  (module struct
+    open Streams.PriorityTreeNode
 
-  let pp formatter (Parent t) =
-    Format.pp_print_text formatter (Streams.stream_id t |> Int32.to_string)
+    type t = parent
 
-  let equal (Parent h1) (Parent h2) =
-    Stream_identifier.(Streams.(stream_id h1) === Streams.(stream_id h2))
-end : Alcotest.TESTABLE with type t = Streams.PriorityTreeNode.parent)
+    let pp formatter (Parent t) =
+      Format.pp_print_text formatter (Streams.stream_id t |> Int32.to_string)
+
+    let equal (Parent h1) (Parent h2) =
+      Stream_identifier.(Streams.(stream_id h1) === Streams.(stream_id h2))
+  end
+  : Alcotest.TESTABLE
+    with type t = Streams.PriorityTreeNode.parent)
 
 let default_error_handler ?request:_ _err _handle = ()
 
 let new_p w =
-  { Priority.exclusive = false
-  ; stream_dependency = 0l
-  ; weight = w
-  }
+  { Priority.exclusive = false; stream_dependency = 0l; weight = w }
 
 let test_reqd stream_id =
   Reqd.create
@@ -39,10 +42,12 @@ let test_reqd stream_id =
 
 let repeat (Streams.PriorityTreeNode.Connection root) queue num =
   let rec loop q n acc =
-    if n = 0 then acc
+    if n = 0 then
+      acc
     else
       match Streams.PriorityQueue.pop q with
-      | None -> failwith "invalid queue"
+      | None ->
+        failwith "invalid queue"
       | Some ((k, (Streams.PriorityTreeNode.Stream p as p_node)), q') ->
         (* simulate writing 100 bytes *)
         root.t_last <- p.t;
@@ -52,7 +57,8 @@ let repeat (Streams.PriorityTreeNode.Connection root) queue num =
   loop queue num []
 
 let add_stream root ?priority reqd =
-  Streams.add root
+  Streams.add
+    root
     ?priority
     ~initial_window_size:Settings.WindowSize.default_initial_window_size
     reqd
@@ -63,7 +69,10 @@ let test_priority_queue () =
   add_stream root ~priority:(new_p 101) (test_reqd 3l);
   add_stream root ~priority:(new_p 1) (test_reqd 5l);
   let q = Streams.children root in
-  Alcotest.(check bool) "Check if empty" false (Streams.PriorityQueue.is_empty q);
+  Alcotest.(check bool)
+    "Check if empty"
+    false
+    (Streams.PriorityQueue.is_empty q);
   let t = repeat root q 1000 in
   let count_1 = List.filter (fun x -> x = 1l) t |> List.length in
   let count_3 = List.filter (fun x -> x = 3l) t |> List.length in
@@ -82,33 +91,51 @@ let test_reprioritize () =
   add_stream root (test_reqd 5l);
   (* change the weight of stream 1 *)
   let new_priority = { Priority.default_priority with weight = 100 } in
-  let Stream stream1 as stream1_node = Streams.get_node root 1l |> opt_exn in
+  let (Stream stream1 as stream1_node) = Streams.get_node root 1l |> opt_exn in
   Streams.reprioritize_stream root ~priority:new_priority stream1_node;
-  Alcotest.check priority "Stream 1 changed weight"
-    new_priority stream1.priority;
-  let Stream stream3 = Streams.get_node root 3l |> opt_exn in
-  Alcotest.check priority "Stream 3 still has default weight"
-    Priority.default_priority stream3.priority;
+  Alcotest.check
+    priority
+    "Stream 1 changed weight"
+    new_priority
+    stream1.priority;
+  let (Stream stream3) = Streams.get_node root 3l |> opt_exn in
+  Alcotest.check
+    priority
+    "Stream 3 still has default weight"
+    Priority.default_priority
+    stream3.priority;
   (* Add stream 7 that depends on 1 *)
   let stream7 = test_reqd 7l in
   let stream7_priority =
     { Priority.default_priority with stream_dependency = 1l }
   in
   add_stream root ~priority:stream7_priority stream7;
-  let Stream stream7 = Streams.get_node root 7l |> opt_exn in
-  Alcotest.check priority "Stream 7 depends on stream 1"
-    stream7_priority stream7.priority;
-  Alcotest.check node "Stream 7 depends on stream 1"
-    (Parent stream1_node) stream7.parent;
-  let (_, Stream stream1_first_child) =
+  let (Stream stream7) = Streams.get_node root 7l |> opt_exn in
+  Alcotest.check
+    priority
+    "Stream 7 depends on stream 1"
+    stream7_priority
+    stream7.priority;
+  Alcotest.check
+    node
+    "Stream 7 depends on stream 1"
+    (Parent stream1_node)
+    stream7.parent;
+  let _, Stream stream1_first_child =
     stream1.children |> PriorityQueue.to_list |> List.hd
   in
-  Alcotest.(check bool) "Stream 1 has stream 7 in its children"
-    false (PriorityQueue.is_empty stream1.children);
-  Alcotest.(check int32) "Stream 1 has stream 7 in its children"
-    7l stream1_first_child.streamd.id;
-  Alcotest.(check int) "Root still has 3 children"
-    3 (PriorityQueue.size (Streams.children root))
+  Alcotest.(check bool)
+    "Stream 1 has stream 7 in its children"
+    false
+    (PriorityQueue.is_empty stream1.children);
+  Alcotest.(check int32)
+    "Stream 1 has stream 7 in its children"
+    7l
+    stream1_first_child.streamd.id;
+  Alcotest.(check int)
+    "Root still has 3 children"
+    3
+    (PriorityQueue.size (Streams.children root))
 
 let test_reprioritize_exclusive () =
   let open Streams in
@@ -119,29 +146,40 @@ let test_reprioritize_exclusive () =
   (* Add stream 7 that exclusively depends on 0 *)
   let stream7 = test_reqd 7l in
   let stream7_priority =
-    { Priority
-    . default_priority
-    with stream_dependency = 0l
-    ; exclusive = true
-    }
+    { Priority.default_priority with stream_dependency = 0l; exclusive = true }
   in
   add_stream root ~priority:stream7_priority stream7;
-  let Stream stream7 as stream7_node = Streams.get_node root 7l |> opt_exn in
-  Alcotest.check priority "Stream 7 depends on stream 0"
-    stream7_priority stream7.priority;
-  Alcotest.check node "Stream 7 depends on stream 0"
-    (Parent root) stream7.parent;
+  let (Stream stream7 as stream7_node) = Streams.get_node root 7l |> opt_exn in
+  Alcotest.check
+    priority
+    "Stream 7 depends on stream 0"
+    stream7_priority
+    stream7.priority;
+  Alcotest.check
+    node
+    "Stream 7 depends on stream 0"
+    (Parent root)
+    stream7.parent;
   let root_children = Streams.children root |> PriorityQueue.to_list in
-  let (_, Stream root_first_child) = List.hd root_children in
-  Alcotest.(check int32) "Stream 0 has a single child, stream 7"
-    7l root_first_child.streamd.id;
-  Alcotest.(check int) "Stream 0 has a single child, stream 7"
-    1 (List.length root_children);
-  let Stream stream1 = Streams.get_node root 1l |> opt_exn in
-  Alcotest.check node "Stream 1's parent is now stream 7"
-    (Parent stream7_node) stream1.parent;
-  Alcotest.(check int) "Stream 7 has 3 children"
-    3 (PriorityQueue.size stream7.children)
+  let _, Stream root_first_child = List.hd root_children in
+  Alcotest.(check int32)
+    "Stream 0 has a single child, stream 7"
+    7l
+    root_first_child.streamd.id;
+  Alcotest.(check int)
+    "Stream 0 has a single child, stream 7"
+    1
+    (List.length root_children);
+  let (Stream stream1) = Streams.get_node root 1l |> opt_exn in
+  Alcotest.check
+    node
+    "Stream 1's parent is now stream 7"
+    (Parent stream7_node)
+    stream1.parent;
+  Alcotest.(check int)
+    "Stream 7 has 3 children"
+    3
+    (PriorityQueue.size stream7.children)
 
 let depend_on stream_id =
   { Priority.default_priority with stream_dependency = stream_id }
@@ -174,27 +212,44 @@ let test_reprioritize_to_dependency () =
   let open Streams in
   let root = Streams.make_root ~capacity:6 () in
   set_up_dep_tree root;
-  let Stream stream1 as stream1_node = Streams.get_node root 1l |> opt_exn in
+  let (Stream stream1 as stream1_node) = Streams.get_node root 1l |> opt_exn in
   let stream5_node = Streams.get_node root 5l |> opt_exn in
-  let Stream stream7 as stream7_node = Streams.get_node root 7l |> opt_exn in
-  Alcotest.check node "Stream 7 depends on stream 5"
-    (Parent stream5_node) stream7.parent;
+  let (Stream stream7 as stream7_node) = Streams.get_node root 7l |> opt_exn in
+  Alcotest.check
+    node
+    "Stream 7 depends on stream 5"
+    (Parent stream5_node)
+    stream7.parent;
   let root_children = Streams.children root |> PriorityQueue.to_list in
-  let (_, Stream root_first_child) = List.hd root_children in
-  Alcotest.(check int32) "Stream 0 has a single child, stream 1"
-    1l root_first_child.streamd.id;
-  Alcotest.(check int) "Stream 0 has a single child, stream 7"
-    1 (List.length root_children);
+  let _, Stream root_first_child = List.hd root_children in
+  Alcotest.(check int32)
+    "Stream 0 has a single child, stream 1"
+    1l
+    root_first_child.streamd.id;
+  Alcotest.(check int)
+    "Stream 0 has a single child, stream 7"
+    1
+    (List.length root_children);
   (* reprioritize stream 1 to have 7 as the new parent *)
   reprioritize_stream root ~priority:(depend_on 7l) stream1_node;
-  Alcotest.check node "Stream 1's parent is now stream 7"
-    (Parent stream7_node) stream1.parent;
-  Alcotest.check node "Stream 7's parent is now stream 0"
-    (Parent root) stream7.parent;
-  Alcotest.(check int) "Stream 7 has 2 children"
-    2 (PriorityQueue.size stream7.children);
-  Alcotest.(check (list int32)) "Stream 7 has 2 children, 11 and 1"
-    [1l; 11l] (stream7.children |> PriorityQueue.to_list |> List.map fst)
+  Alcotest.check
+    node
+    "Stream 1's parent is now stream 7"
+    (Parent stream7_node)
+    stream1.parent;
+  Alcotest.check
+    node
+    "Stream 7's parent is now stream 0"
+    (Parent root)
+    stream7.parent;
+  Alcotest.(check int)
+    "Stream 7 has 2 children"
+    2
+    (PriorityQueue.size stream7.children);
+  Alcotest.(check (list int32))
+    "Stream 7 has 2 children, 11 and 1"
+    [ 1l; 11l ]
+    (stream7.children |> PriorityQueue.to_list |> List.map fst)
 
 (*
  * This is the tree from: https://tools.ietf.org/html/rfc7540#section-5.3.3
@@ -217,47 +272,70 @@ let test_reprioritize_to_dependency_exclusive () =
   let root = Streams.make_root ~capacity:6 () in
   set_up_dep_tree root;
   let stream5_node = Streams.get_node root 5l |> opt_exn in
-  let Stream stream7 as stream7_node = Streams.get_node root 7l |> opt_exn in
-  Alcotest.check node "Stream 7 depends on stream 5"
-    (Parent stream5_node) stream7.parent;
+  let (Stream stream7 as stream7_node) = Streams.get_node root 7l |> opt_exn in
+  Alcotest.check
+    node
+    "Stream 7 depends on stream 5"
+    (Parent stream5_node)
+    stream7.parent;
   let root_children = Streams.children root |> PriorityQueue.to_list in
-  let (_, Stream root_first_child) = List.hd root_children in
-  Alcotest.(check int32) "Stream 0 has a single child, stream 1"
-    1l root_first_child.streamd.id;
-  Alcotest.(check int) "Stream 0 has a single child, stream 7"
-    1 (List.length root_children);
+  let _, Stream root_first_child = List.hd root_children in
+  Alcotest.(check int32)
+    "Stream 0 has a single child, stream 1"
+    1l
+    root_first_child.streamd.id;
+  Alcotest.(check int)
+    "Stream 0 has a single child, stream 7"
+    1
+    (List.length root_children);
   (* reprioritize stream 1 to have 7 as the new parent with exclusive priority *)
-  let Stream stream1 as stream1_node = Streams.get_node root 1l |> opt_exn in
-  reprioritize_stream root
-    ~priority:{ Priority
-              . default_priority
-              with stream_dependency = 7l
-              ; exclusive = true
-              }
+  let (Stream stream1 as stream1_node) = Streams.get_node root 1l |> opt_exn in
+  reprioritize_stream
+    root
+    ~priority:
+      { Priority.default_priority with
+        stream_dependency = 7l
+      ; exclusive = true
+      }
     stream1_node;
-  Alcotest.check node "Stream 1's parent is now stream 7"
-    (Parent stream7_node) stream1.parent;
-  Alcotest.check node "Stream 7's parent is now stream 0"
-    (Parent root) stream7.parent;
-  Alcotest.(check int) "Stream 7 has a single child"
-    1 (PriorityQueue.size stream7.children);
-  Alcotest.(check (list int32)) "Stream 7 has a single child 1"
-    [1l] (stream7.children |> PriorityQueue.to_list |> List.map fst);
-  Alcotest.(check (list int32)) "Stream 11 is now a child of stream 1"
-    [3l; 5l; 11l] (stream1.children |> PriorityQueue.to_list |> List.map fst)
+  Alcotest.check
+    node
+    "Stream 1's parent is now stream 7"
+    (Parent stream7_node)
+    stream1.parent;
+  Alcotest.check
+    node
+    "Stream 7's parent is now stream 0"
+    (Parent root)
+    stream7.parent;
+  Alcotest.(check int)
+    "Stream 7 has a single child"
+    1
+    (PriorityQueue.size stream7.children);
+  Alcotest.(check (list int32))
+    "Stream 7 has a single child 1"
+    [ 1l ]
+    (stream7.children |> PriorityQueue.to_list |> List.map fst);
+  Alcotest.(check (list int32))
+    "Stream 11 is now a child of stream 1"
+    [ 3l; 5l; 11l ]
+    (stream1.children |> PriorityQueue.to_list |> List.map fst)
 
 let priority_queue_tests =
-  ["Priority queue tests", `Quick, test_priority_queue]
+  [ "Priority queue tests", `Quick, test_priority_queue ]
 
 let reprioritization_tests =
   [ "Reprioritize simple", `Quick, test_reprioritize
   ; "Reprioritize simple exclusive", `Quick, test_reprioritize_exclusive
   ; "Reprioritize to dependency", `Quick, test_reprioritize_to_dependency
-  ; "Reprioritize to dependency exclusive", `Quick, test_reprioritize_to_dependency_exclusive
+  ; ( "Reprioritize to dependency exclusive"
+    , `Quick
+    , test_reprioritize_to_dependency_exclusive )
   ]
 
 let () =
-  Alcotest.run "httpaf unit tests"
+  Alcotest.run
+    "httpaf unit tests"
     [ "Reprioritization tests", reprioritization_tests
     ; "Priority_Queue_Tests", priority_queue_tests
     ]
