@@ -234,7 +234,17 @@ let write_push_promise_frame t info ~promised_id ?len iovecs =
   in
   write_frame_with_padding t info PushPromise payload_length writer
 
-let write_ping_frame t info payload =
+let default_ping_payload =
+  (* From RFC7540§6.7:
+       In addition to the frame header, PING frames MUST contain 8 octets of
+       opaque data in the payload. *)
+  let bstr = Bigstringaf.create 8 in
+  for i = 0 to 7 do
+    Bigstringaf.set bstr i '\000'
+  done;
+  bstr
+
+let write_ping_frame t info ?(off=0) payload =
   (* From RFC7540§6.7:
        In addition to the frame header, PING frames MUST contain 8 octets of
        opaque data in the payload. *)
@@ -248,7 +258,7 @@ let write_ping_frame t info payload =
     }
   in
   write_frame_header t header;
-  schedule_bigstring ~off:0 ~len:payload_length t payload
+  schedule_bigstring ~off ~len:payload_length t payload
 
 let write_go_away_frame t info stream_id error_code debug_data =
   let debug_data_len = Bigstringaf.length debug_data in
@@ -399,7 +409,7 @@ module Writer = struct
    * frames. *)
   let chunk_header_block_fragments t frame_info
     ?(has_priority=false)
-    ~(write_frame_fn : Faraday.t ->
+    ~(write_frame : Faraday.t ->
       frame_info ->
       ?len:int ->
       Bigstringaf.t iovec list -> unit)
@@ -421,7 +431,7 @@ module Writer = struct
         max_frame_payload
       in
       ignore (Faraday.serialize faraday (fun iovecs ->
-        write_frame_fn t.encoder
+        write_frame t.encoder
           frame_info
           ~len:headers_block_len
           iovecs;
@@ -467,7 +477,7 @@ module Writer = struct
       in
       ignore (Faraday.serialize faraday (fun iovecs ->
         let len = Httpaf.IOVec.lengthv iovecs in
-        write_frame_fn t.encoder frame_info ~len iovecs;
+        write_frame t.encoder frame_info ~len iovecs;
         `Ok len))
     end
 
@@ -475,6 +485,43 @@ module Writer = struct
     List.iter (fun header ->
       Hpack.Encoder.encode_header hpack_encoder faraday header)
       (Headers.to_hpack_list headers)
+
+  let write_request_like_frame t hpack_encoder ~write_frame frame_info request =
+    let { Request.meth; target; scheme; headers } = request in
+    let faraday = Faraday.of_bigstring t.headers_block_buffer in
+    Hpack.Encoder.encode_header hpack_encoder faraday
+      { Headers
+      . name = ":method"
+      ; value = Httpaf.Method.to_string meth
+      ; sensitive = false
+      };
+    Hpack.Encoder.encode_header hpack_encoder faraday
+      { Headers
+      . name = ":path"
+      ; value = target
+      ; sensitive = false
+      };
+    (* TODO: scheme not required if method is CONNECT *)
+    Hpack.Encoder.encode_header hpack_encoder faraday
+      { Headers
+      . name = ":scheme"
+      ; value = scheme
+      ; sensitive = false
+      };
+    encode_headers hpack_encoder faraday headers;
+    chunk_header_block_fragments
+      t
+      frame_info
+      ~write_frame
+      faraday
+
+  let write_request_headers t hpack_encoder ?priority frame_info request =
+    let write_frame = write_headers_frame ?priority in
+    write_request_like_frame t hpack_encoder ~write_frame frame_info request
+
+  let write_push_promise t hpack_encoder frame_info ~promised_id request =
+    let write_frame = write_push_promise_frame ~promised_id in
+    write_request_like_frame t hpack_encoder ~write_frame frame_info request
 
   let write_response_headers t hpack_encoder ?priority frame_info response =
     let { Response.status; headers; _ } = response in
@@ -498,30 +545,8 @@ module Writer = struct
     chunk_header_block_fragments
       t
       frame_info
-      ~write_frame_fn:(write_headers_frame ?priority)
+      ~write_frame:(write_headers_frame ?priority)
       ~has_priority
-      faraday
-
-  let write_push_promise t hpack_encoder frame_info ~promised_id request =
-    let { Request.meth; target; headers } = request in
-    let faraday = Faraday.of_bigstring t.headers_block_buffer in
-    Hpack.Encoder.encode_header hpack_encoder faraday
-      { Headers
-      . name = ":method"
-      ; value = Httpaf.Method.to_string meth
-      ; sensitive = false
-      };
-    Hpack.Encoder.encode_header hpack_encoder faraday
-      { Headers
-      . name = ":path"
-      ; value = target
-      ; sensitive = false
-      };
-    encode_headers hpack_encoder faraday headers;
-    chunk_header_block_fragments
-      t
-      frame_info
-      ~write_frame_fn:(write_push_promise_frame ~promised_id)
       faraday
 
   let write_rst_stream t frame_info e =
@@ -547,8 +572,8 @@ module Writer = struct
   let write_settings t frame_info settings =
     write_settings_frame t.encoder frame_info settings
 
-  let write_ping t frame_info payload =
-    write_ping_frame t.encoder frame_info payload
+  let write_ping t frame_info ?off payload =
+    write_ping_frame t.encoder frame_info ?off payload
 
   let write_go_away t frame_info ~debug_data ~last_stream_id error =
     write_go_away_frame t.encoder frame_info last_stream_id error debug_data

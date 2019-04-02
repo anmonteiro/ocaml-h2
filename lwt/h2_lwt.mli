@@ -61,8 +61,7 @@ end
 
 
 (* The function that results from [create_connection_handler] should be passed
-   to [Lwt_io.establish_server_with_client_socket]. For an example, see
-   [examples/lwt_echo_server.ml]. *)
+   to [Lwt_io.establish_server_with_client_socket]. *)
 module Server (Io: IO) : sig
   val create_connection_handler
     :  ?config         : Config.t
@@ -73,35 +72,27 @@ module Server (Io: IO) : sig
     -> unit Lwt.t
 end
 
-(* For an example, see [examples/lwt_get.ml]. *)
-(* module Client : sig
-  val request
+(* TODO: shutdown function? *)
+module Client (Io: IO) : sig
+  type t
+
+  val create_connection
     :  ?config          : Config.t
-    -> Lwt_unix.file_descr
+    -> error_handler    : Client_connection.error_handler
+    -> Io.socket
+    -> t Lwt.t
+
+  val request
+    :  t
     -> Request.t
     -> error_handler    : Client_connection.error_handler
     -> response_handler : Client_connection.response_handler
     -> [`write] Body.t
 
-  module TLS : sig
-    val request
-      :  ?client          : Tls_io.client
-      -> ?config          : Config.t
-      -> Lwt_unix.file_descr
-      -> Request.t
-      -> error_handler    : Client_connection.error_handler
-      -> response_handler : Client_connection.response_handler
-      -> [`write] Body.t
-  end
-
-  module SSL : sig
-    val request
-      :  ?client          : Ssl_io.client
-      -> ?config          : Config.t
-      -> Lwt_unix.file_descr
-      -> Request.t
-      -> error_handler    : Client_connection.error_handler
-      -> response_handler : Client_connection.response_handler
-      -> [`write] Body.t
-  end
-end *)
+  val ping
+    :  t
+    -> ?payload : Bigstringaf.t
+    -> ?off : int
+    -> (unit -> unit)
+    -> unit
+end

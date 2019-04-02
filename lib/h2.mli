@@ -432,10 +432,12 @@ module Request : sig
   type t =
     { meth    : Method.t
     ; target  : string
+    ; scheme  : string
     ; headers : Headers.t }
 
   val create
     :  ?headers:Headers.t (** default is {!Headers.empty} *)
+    -> scheme: string
     -> Method.t
     -> string
     -> t
@@ -626,23 +628,66 @@ end
 
 (** {2 Client Connection} *)
 
-(* module Client_connection : sig
-
+module Client_connection : sig
   type t
 
   type error =
-    [ `Malformed_response of string | `Invalid_response_body_length of Response.t | `Exn of exn ]
+    [ `Malformed_response of string
+    | `Invalid_response_body_length of Response.t
+    | `Exn of exn ]
 
   type response_handler = Response.t -> [`read] Body.t  -> unit
 
   type error_handler = error -> unit
 
-  val request
+  val create
     :  ?config:Config.t
+    -> error_handler:error_handler
+    -> t
+  (** [create ?config ~error_handler] creates a connection that can be used
+      to interact with servers over the HTTP/2 protocol. [error_handler] will
+      be called for {e connection level} errors.
+
+      HTTP/2 is multiplexed over a single TCP connection and distinguishes
+      connection-level errors from stream-level errors. See See
+      {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for more
+      details. *)
+
+  val request
+    :  t
     -> Request.t
     -> error_handler:error_handler
     -> response_handler:response_handler
-    -> [`write] Body.t * t
+    -> [`write] Body.t
+  (** [request connection req ~error_handler ~response_handler] opens a new
+      HTTP/2 stream with [req] and returns a request body that can be written
+      to. Once a response arrives, [response_handler] will be called with its
+      headers and body. [error_handler] will be called for {e stream-level}
+      errors.
+
+      HTTP/2 is multiplexed over a single TCP connection and distinguishes
+      connection-level errors from stream-level errors. See
+      {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for more
+      details. *)
+
+  val ping
+    :  t
+    -> ?payload : Bigstringaf.t
+    -> ?off : int
+    -> (unit -> unit)
+    -> unit
+  (** [ping connection ?payload ?off f] sends an HTTP/2 PING frame and
+      registers [f] to be called when the server has sent an acknowledgement
+      for it. A custom [payload] (and offset into that payload) for the PING
+      frame may also be provided. If not, a payload with all bytes set to zero
+      will be used. Note that a PING frame's payload {b must} be 8 octets in
+      length.
+
+      In HTTP/2, the PING frame is a mechanism for measuring a minimal
+      round-trip time from the sender, as well as determining whether an
+      idle connection is still functional. See
+      {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for
+      more details. *)
 
   val next_read_operation : t -> [ `Read | `Close ]
   (** [next_read_operation t] returns a value describing the next operation
@@ -689,16 +734,15 @@ end
 
   val report_exn : t -> exn -> unit
   (** [report_exn t exn] reports that an error [exn] has been caught and
-      that it has been attributed to [t]. Calling this function will swithc [t]
+      that it has been attributed to [t]. Calling this function will switch [t]
       into an error state. Depending on the state [t] is transitioning from, it
-      may call its error handler before terminating the connection. *)
+      may call its (connection-level) error handler before terminating the
+      connection. *)
 
   val is_closed : t -> bool
 
   (**/**)
   val shutdown : t -> unit
   (**/**)
-end *)
-
-(**/**)
+end
 

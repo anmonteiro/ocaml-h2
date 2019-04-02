@@ -9,6 +9,8 @@ Unreleased
 - h2: Add support for the 421 (Misdirected Request) status code as per
   [RFC7540§9.1.2](https://tools.ietf.org/html/rfc7540#section-9.1.2)
   ([#15](https://github.com/anmonteiro/ocaml-h2/pull/15))
+- h2, h2-lwt, h2-lwt-unix, h2-mirage: Add an HTTP/2 client implementation
+  ([#16](https://github.com/anmonteiro/ocaml-h2/pull/16))
 
 0.1.0 2019-03-27
 --------------

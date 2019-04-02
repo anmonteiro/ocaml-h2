@@ -1,5 +1,6 @@
 open H2__
 open Test_common
+module Streams = Streams.Server_streams
 
 let pp_priority fmt { Priority.weight; stream_dependency; exclusive } =
   Format.fprintf
@@ -105,7 +106,7 @@ let test_reprioritize () =
   Alcotest.(check bool) "Stream 1 has stream 7 in its children"
     false (PriorityQueue.is_empty stream1.children);
   Alcotest.(check int32) "Stream 1 has stream 7 in its children"
-    7l stream1_first_child.reqd.id;
+    7l stream1_first_child.streamd.id;
   Alcotest.(check int) "Root still has 3 children"
     3 (PriorityQueue.size (Streams.children root))
 
@@ -133,7 +134,7 @@ let test_reprioritize_exclusive () =
   let root_children = Streams.children root |> PriorityQueue.to_list in
   let (_, Stream root_first_child) = List.hd root_children in
   Alcotest.(check int32) "Stream 0 has a single child, stream 7"
-    7l root_first_child.reqd.id;
+    7l root_first_child.streamd.id;
   Alcotest.(check int) "Stream 0 has a single child, stream 7"
     1 (List.length root_children);
   let Stream stream1 = Streams.get_node root 1l |> opt_exn in
@@ -181,7 +182,7 @@ let test_reprioritize_to_dependency () =
   let root_children = Streams.children root |> PriorityQueue.to_list in
   let (_, Stream root_first_child) = List.hd root_children in
   Alcotest.(check int32) "Stream 0 has a single child, stream 1"
-    1l root_first_child.reqd.id;
+    1l root_first_child.streamd.id;
   Alcotest.(check int) "Stream 0 has a single child, stream 7"
     1 (List.length root_children);
   (* reprioritize stream 1 to have 7 as the new parent *)
@@ -222,7 +223,7 @@ let test_reprioritize_to_dependency_exclusive () =
   let root_children = Streams.children root |> PriorityQueue.to_list in
   let (_, Stream root_first_child) = List.hd root_children in
   Alcotest.(check int32) "Stream 0 has a single child, stream 1"
-    1l root_first_child.reqd.id;
+    1l root_first_child.streamd.id;
   Alcotest.(check int) "Stream 0 has a single child, stream 7"
     1 (List.length root_children);
   (* reprioritize stream 1 to have 7 as the new parent with exclusive priority *)

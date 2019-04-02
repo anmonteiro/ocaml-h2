@@ -403,7 +403,7 @@ module Server_connection_tests = struct
     let root_children = root.children |> PriorityQueue.to_list in
     Alcotest.(check (list int32)) "Stream has been added to the priority tree"
       [1l] (List.map fst root_children);
-    let Stream { reqd = old_reqd; _ } = root_children |> List.hd |> snd in
+    let Stream { streamd = old_reqd; _ } = root_children |> List.hd |> snd in
     let headers, _ = header_and_continuation_frames in
     let headers =
       { headers
@@ -416,10 +416,10 @@ module Server_connection_tests = struct
     write_frames t [headers];
     let open Streams in
     let new_root_children = root.children |> PriorityQueue.to_list in
-    let Stream { reqd; _ } = new_root_children |> List.hd |> snd in
+    let Stream { streamd; _ } = new_root_children |> List.hd |> snd in
     Alcotest.(check (list int32)) "Priority tree still only contains one stream"
       [1l] (new_root_children |> List.map fst);
-    Alcotest.(check bool) "Reqd is the same" true (old_reqd == reqd)
+    Alcotest.(check bool) "Reqd is the same" true (old_reqd == streamd)
 
   let data_request_handler reqd =
     Reqd.respond_with_string reqd (Response.create `OK) "Some data"
@@ -503,7 +503,7 @@ module Server_connection_tests = struct
         "Expected state machine to issue a write operation after seeing headers."
 
   let server_push_request_handler reqd =
-    let request = Request.create `GET "/main.css" in
+    let request = Request.create `GET ~scheme:"http" "/main.css" in
     let pushed_reqd = Reqd.push reqd request in
     let response = Response.create `OK in
     (* Send the response for / *)

@@ -115,7 +115,7 @@ let make_client ?client socket =
   | Some client -> Lwt.return client
   | None ->
     X509_lwt.authenticator `No_authentication_I'M_STUPID >>= fun authenticator ->
-    let config = Tls.Config.client ~authenticator () in
+    let config = Tls.Config.client ~authenticator ~alpn_protocols:["h2"] () in
     Tls_lwt.Unix.client_of_fd config socket
 
 let make_server ?server ?certfile ?keyfile socket =

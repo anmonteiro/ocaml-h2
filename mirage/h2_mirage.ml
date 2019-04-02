@@ -146,4 +146,5 @@ module Server_with_conduit = struct
     Lwt.return listen
 end
 
-(* module Client = Httpaf_lwt.Client (Io) *)
+module Client = H2_lwt.Client (Io)
+
