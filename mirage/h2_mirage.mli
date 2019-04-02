@@ -34,10 +34,11 @@ open H2
 
 module type Server_intf = sig
   val create_connection_handler
-    :  ?config : Config.t
-    -> request_handler : Server_connection.request_handler
-    -> error_handler : Server_connection.error_handler
-    -> (Conduit_mirage.Flow.flow -> unit Lwt.t)
+    :  ?config:Config.t
+    -> request_handler:Server_connection.request_handler
+    -> error_handler:Server_connection.error_handler
+    -> Conduit_mirage.Flow.flow
+    -> unit Lwt.t
 end
 
 module Server : Server_intf
@@ -47,31 +48,26 @@ module Server_with_conduit : sig
 
   type t = Conduit_mirage.Flow.flow -> unit Lwt.t
 
-  val connect:
-    Conduit_mirage.t ->
-    (Conduit_mirage.server -> t -> unit Lwt.t) Lwt.t
+  val connect
+    :  Conduit_mirage.t
+    -> (Conduit_mirage.server -> t -> unit Lwt.t) Lwt.t
 end
 
 module Client : sig
   type t
 
   val create_connection
-    :  ?config          : Config.t
-    -> error_handler    : Client_connection.error_handler
+    :  ?config:Config.t
+    -> error_handler:Client_connection.error_handler
     -> Conduit_mirage.Flow.flow
     -> t Lwt.t
 
   val request
     :  t
     -> Request.t
-    -> error_handler    : Client_connection.error_handler
-    -> response_handler : Client_connection.response_handler
-    -> [`write] Body.t
+    -> error_handler:Client_connection.error_handler
+    -> response_handler:Client_connection.response_handler
+    -> [ `write ] Body.t
 
-  val ping
-    :  t
-    -> ?payload : Bigstringaf.t
-    -> ?off : int
-    -> (unit -> unit)
-    -> unit
+  val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
 end
