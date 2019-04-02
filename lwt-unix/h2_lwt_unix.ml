@@ -43,7 +43,8 @@ module Io :
 
   let shutdown socket command =
     try Lwt_unix.shutdown socket command with
-    | Unix.Unix_error (Unix.ENOTCONN, _, _) -> ()
+    | Unix.Unix_error (Unix.ENOTCONN, _, _) ->
+      ()
 
   let shutdown_send socket =
     if not (Lwt_unix.state socket = Lwt_unix.Closed) then
@@ -63,7 +64,8 @@ module Io :
     Lwt.catch
       (fun () -> Lwt_bytes.read fd bigstring off len)
       (function
-        | Unix.Unix_error (Unix.EBADF, _, _) as exn -> Lwt.fail exn
+        | Unix.Unix_error (Unix.EBADF, _, _) as exn ->
+          Lwt.fail exn
         | exn ->
           Lwt.async (fun () -> Lwt_unix.close fd);
           Lwt.fail exn)
@@ -92,8 +94,10 @@ module Io :
      *   responding close_notify alert before closing the read side of
      *   the connection. *)
     (match Lwt_unix.state socket with
-    | Aborted _ | Closed -> Server_connection.shutdown connection
-    | Opened -> Server_connection.report_exn connection exn);
+    | Aborted _ | Closed ->
+      Server_connection.shutdown connection
+    | Opened ->
+      Server_connection.report_exn connection exn);
     Lwt.return_unit
 end
 

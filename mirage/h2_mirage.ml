@@ -60,7 +60,8 @@ struct
             ~dst_off:off
             ~len:buf.len;
           `Ok buf.len
-        | Ok `Eof -> `Eof
+        | Ok `Eof ->
+          `Eof
         | Error error ->
           raise (Failure (Format.asprintf "%a" Flow.pp_error error)))
       (fun exn -> shutdown flow >>= fun () -> Lwt.fail exn)
@@ -77,8 +78,10 @@ struct
       (fun () ->
         Flow.writev flow cstruct_iovecs >|= fun x ->
         match x with
-        | Ok () -> `Ok (Cstruct.lenv cstruct_iovecs)
-        | Error `Closed -> `Closed
+        | Ok () ->
+          `Ok (Cstruct.lenv cstruct_iovecs)
+        | Error `Closed ->
+          `Closed
         | Error other_error ->
           raise
             (Failure (Format.asprintf "%a" Flow.pp_write_error other_error)))

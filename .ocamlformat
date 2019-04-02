@@ -1,5 +1,5 @@
 profile = sparse
-break-cases = toplevel
+break-cases = nested
 break-fun-decl = smart
 cases-exp-indent = 2
 if-then-else = fit-or-vertical

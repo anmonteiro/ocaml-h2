@@ -47,7 +47,8 @@ struct
         (* Lwt_unix.blocking (Lwt_ssl.get_fd socket) >>= fun _ -> *)
         Lwt_ssl.read_bytes ssl bigstring off len)
       (function
-        | Unix.Unix_error (Unix.EBADF, _, _) as exn -> Lwt.fail exn
+        | Unix.Unix_error (Unix.EBADF, _, _) as exn ->
+          Lwt.fail exn
         | exn ->
           Lwt.async (fun () ->
               Lwt_ssl.ssl_shutdown ssl >>= fun () -> Lwt_ssl.close ssl);
@@ -71,7 +72,8 @@ struct
       (function
         | Unix.Unix_error (Unix.EBADF, "check_descriptor", _) ->
           Lwt.return `Closed
-        | exn -> Lwt.fail exn)
+        | exn ->
+          Lwt.fail exn)
 
   let shutdown_send ssl =
     ignore
@@ -102,8 +104,10 @@ struct
      *   responding close_notify alert before closing the read side of
      *   the connection. *)
     (match Lwt_unix.state (Lwt_ssl.get_fd ssl) with
-    | Aborted _ | Closed -> H2.Server_connection.shutdown connection
-    | Opened -> H2.Server_connection.report_exn connection exn);
+    | Aborted _ | Closed ->
+      H2.Server_connection.shutdown connection
+    | Opened ->
+      H2.Server_connection.report_exn connection exn);
     Lwt.return_unit
 end
 
@@ -113,7 +117,8 @@ type server = Lwt_ssl.socket
 
 let make_client ?client socket =
   match client with
-  | Some client -> Lwt.return client
+  | Some client ->
+    Lwt.return client
   | None ->
     let client_ctx = Ssl.create_context Ssl.SSLv23 Ssl.Client_context in
     Ssl.disable_protocols client_ctx [ Ssl.SSLv23 ];
@@ -124,7 +129,8 @@ let make_client ?client socket =
 (* TODO: this needs error handling or it'll crash the server *)
 let make_server ?server ?certfile ?keyfile socket =
   match server, certfile, keyfile with
-  | Some server, _, _ -> Lwt.return server
+  | Some server, _, _ ->
+    Lwt.return server
   | None, Some cert, Some priv_key ->
     let server_ctx = Ssl.create_context Ssl.TLSv1_3 Ssl.Server_context in
     Ssl.disable_protocols server_ctx [ Ssl.SSLv23 ];

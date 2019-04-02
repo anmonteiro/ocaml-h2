@@ -46,7 +46,8 @@ module Io :
     Lwt.catch
       (fun () -> Tls_lwt.Unix.read_bytes tls bigstring off len)
       (function
-        | Unix.Unix_error (Unix.EBADF, _, _) as exn -> Lwt.fail exn
+        | Unix.Unix_error (Unix.EBADF, _, _) as exn ->
+          Lwt.fail exn
         | exn ->
           Lwt.async (fun () -> Tls_lwt.Unix.close tls);
           Lwt.fail exn)
@@ -70,7 +71,8 @@ module Io :
       (function
         | Unix.Unix_error (Unix.EBADF, "check_descriptor", _) ->
           Lwt.return `Closed
-        | exn -> Lwt.fail exn)
+        | exn ->
+          Lwt.fail exn)
 
   let shutdown_send (_, tls) = ignore (Tls_lwt.Unix.close_tls tls)
 
@@ -95,8 +97,10 @@ module Io :
      *   responding close_notify alert before closing the read side of
      *   the connection. *)
     (match Lwt_unix.state socket with
-    | Aborted _ | Closed -> H2.Server_connection.shutdown connection
-    | Opened -> H2.Server_connection.report_exn connection exn);
+    | Aborted _ | Closed ->
+      H2.Server_connection.shutdown connection
+    | Opened ->
+      H2.Server_connection.report_exn connection exn);
     Lwt.return_unit
 end
 
@@ -106,7 +110,8 @@ type server = Tls.Config.server
 
 let make_client ?client socket =
   match client with
-  | Some client -> Lwt.return client
+  | Some client ->
+    Lwt.return client
   | None ->
     X509_lwt.authenticator `No_authentication_I'M_STUPID
     >>= fun authenticator ->
@@ -118,7 +123,8 @@ let make_client ?client socket =
 let make_server ?server ?certfile ?keyfile socket =
   let config =
     match server, certfile, keyfile with
-    | Some server, _, _ -> Lwt.return server
+    | Some server, _, _ ->
+      Lwt.return server
     | None, Some cert, Some priv_key ->
       X509_lwt.private_of_pems ~cert ~priv_key >|= fun certificate ->
       Tls.Config.server
