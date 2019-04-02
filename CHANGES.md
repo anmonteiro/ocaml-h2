@@ -11,6 +11,8 @@ Unreleased
   ([#15](https://github.com/anmonteiro/ocaml-h2/pull/15))
 - h2, h2-lwt, h2-lwt-unix, h2-mirage: Add an HTTP/2 client implementation
   ([#16](https://github.com/anmonteiro/ocaml-h2/pull/16))
+- h2: Remove dependency on the `result` package
+  ([#18](https://github.com/anmonteiro/ocaml-h2/pull/18))
 
 0.1.0 2019-03-27
 --------------
