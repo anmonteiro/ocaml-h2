@@ -3,29 +3,29 @@ open H2
 
 module type HTTP2 = H2_mirage.Server_intf
 
-module Dispatch (C: Mirage_types_lwt.CONSOLE) (Http2: HTTP2) = struct
-
+module Dispatch (C : Mirage_types_lwt.CONSOLE) (Http2 : HTTP2) = struct
   let log c fmt = Printf.ksprintf (C.log c) fmt
 
   let get_content c path =
-    log c "Replying: %s" path >|= fun () ->
-    "Hello from the httpaf unikernel"
+    log c "Replying: %s" path >|= fun () -> "Hello from the httpaf unikernel"
 
   let dispatcher c reqd =
-    let {Request.target; _} = Reqd.request reqd in
+    let { Request.target; _ } = Reqd.request reqd in
     Lwt.catch
       (fun () ->
-         get_content c target >|= fun body ->
-         let response = Response.create
-          ~headers:(Headers.of_list ["content-length", body
-            |> String.length
-            |> string_of_int])
-          `OK
-         in
-         Reqd.respond_with_string reqd response body)
+        get_content c target >|= fun body ->
+        let response =
+          Response.create
+            ~headers:
+              (Headers.of_list
+                 [ "content-length", body |> String.length |> string_of_int ])
+            `OK
+        in
+        Reqd.respond_with_string reqd response body)
       (fun exn ->
-         let response = Response.create `Internal_server_error in
-         Lwt.return (Reqd.respond_with_string reqd response (Printexc.to_string exn)))
+        let response = Response.create `Internal_server_error in
+        Lwt.return
+          (Reqd.respond_with_string reqd response (Printexc.to_string exn)))
     |> ignore
 
   let serve c dispatch =
@@ -41,11 +41,15 @@ module Dispatch (C: Mirage_types_lwt.CONSOLE) (Http2: HTTP2) = struct
 end
 
 (** Server boilerplate *)
-module Make (C : Mirage_types_lwt.CONSOLE) (Clock : Mirage_types_lwt.PCLOCK) (Http2: HTTP2) = struct
-
-  module D  = Dispatch (C) (Http2)
+module Make
+    (C : Mirage_types_lwt.CONSOLE)
+    (Clock : Mirage_types_lwt.PCLOCK)
+    (Http2 : HTTP2) =
+struct
+  module D = Dispatch (C) (Http2)
 
   let log c fmt = Printf.ksprintf (C.log c) fmt
+
   let start c _clock http2 =
     log c "started unikernel listen on port 8001" >>= fun () ->
     http2 (`TCP 8001) @@ D.serve c D.dispatcher
