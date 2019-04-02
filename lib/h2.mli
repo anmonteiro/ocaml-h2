@@ -42,8 +42,6 @@
     principles of memory management and vectorized IO in order to use this
     library. *)
 
-open Result
-
 (** {2 Basic HTTP Types} *)
 
 
