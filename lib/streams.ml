@@ -111,7 +111,7 @@ include PriorityTreeNode
 type t = root node
 
 (* TODO(anmonteiro): change according to SETTINGS_MAX_CONCURRENT_STREAMS? *)
-let make_root ?(capacity=128) () =
+let make_root ?(capacity=65536) () =
   Connection
     { t_last = 0
     ; children = PriorityQueue.empty
