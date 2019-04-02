@@ -1,3 +1,11 @@
-profile = janestreet
-break-cases = all
+profile = sparse
+#break-cases = all
+break-fun-decl = smart
 cases-exp-indent = 2
+if-then-else = fit-or-vertical
+parens-tuple = multi-line-only
+parens-tuple-patterns = multi-line-only
+parens-ite = false
+infix-precedence = parens
+break-infix-before-func = false
+sequence-style = terminator

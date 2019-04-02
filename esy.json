@@ -22,7 +22,8 @@
   "devDependencies": {
     "@opam/alcotest": "*",
     "@opam/hex": "*",
-    "@opam/merlin": "*"
+    "@opam/merlin": "*",
+    "@opam/ocamlformat": "*"
   },
   "resolutions": {
     "@opam/conf-libev": "esy-packages/libev:package.json#86d244e",
