@@ -1,10 +1,13 @@
 (executable
-  (name test)
-  (libraries hpack yojson hex alcotest))
+ (name test)
+ (libraries hpack yojson hex alcotest))
 
 (include_subdirs unqualified)
 
 (alias
-  (name slowtests)
-  (deps (:test_exe test.exe) (source_tree "hpack-test-case/"))
-  (action (run %{test_exe})))
+ (name slowtests)
+ (deps
+  (:test_exe test.exe)
+  (source_tree "hpack-test-case/"))
+ (action
+  (run %{test_exe})))

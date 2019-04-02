@@ -36,6 +36,4 @@ type header =
   ; sensitive : bool
   }
 
-type error =
-  | Decoding_error
-
+type error = Decoding_error

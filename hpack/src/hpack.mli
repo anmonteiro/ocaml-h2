@@ -33,14 +33,13 @@
 type header =
   { name : string
   ; value : string
-    (* From RFC7541§7.1.3:
-     *   Implementations can also choose to protect sensitive header fields by
-     *   not compressing them and instead encoding their value as literals. *)
+        (* From RFC7541§7.1.3:
+         *   Implementations can also choose to protect sensitive header fields by
+         *   not compressing them and instead encoding their value as literals. *)
   ; sensitive : bool
   }
 
-type error =
-  | Decoding_error
+type error = Decoding_error
 
 module Encoder : sig
   type t
@@ -65,7 +64,6 @@ module Encoder : sig
       See {{:https://tools.ietf.org/html/rfc7540#section-6.5.2} RFC7540§6.5.2}
       and {{:https://tools.ietf.org/html/rfc7541#section-4.1} RFC7541§4.1} for
       more details. *)
-
 end
 
 module Decoder : sig
