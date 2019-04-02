@@ -40,15 +40,15 @@ type partial_headers =
 type closed_reason =
   | Finished
   (* TODO: we could abide by the following by either 1) having I/O runtime
-     support for timers or 2) by simply counting the number of frames received
-     after we've sent an RST_STREAM?
-
-     From RFC7540§5.4.2:
-       Normally, an endpoint SHOULD NOT send more than one RST_STREAM frame for
-       any stream. However, an endpoint MAY send additional RST_STREAM frames
-       if it receives frames on a closed stream after more than a round-trip
-       time. This behavior is permitted to deal with misbehaving
-       implementations. *)
+   * support for timers or 2) by simply counting the number of frames received
+   * after we've sent an RST_STREAM?
+   *
+   * From RFC7540§5.4.2:
+   *   Normally, an endpoint SHOULD NOT send more than one RST_STREAM frame for
+   *   any stream. However, an endpoint MAY send additional RST_STREAM frames
+   *   if it receives frames on a closed stream after more than a round-trip
+   *   time. This behavior is permitted to deal with misbehaving
+   *   implementations. *)
   | ResetByUs of Error.error_code
     (* Received an RST_STREAM frame from the peer. *)
   | ResetByThem of Error.error_code

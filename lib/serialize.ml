@@ -113,11 +113,11 @@ let write_priority t {Priority.exclusive; stream_dependency; weight} =
   in
   BE.write_uint32 t stream_dependency_id;
   (* From RFC7540§6.3:
-       An unsigned 8-bit integer representing a priority weight for the stream
-       (see Section 5.3). Add one to the value to obtain a weight between 1 and
-       256.
-
-    Note: we store priority with values from 1 to 256, so decrement here. *)
+   *   An unsigned 8-bit integer representing a priority weight for the stream
+   *   (see Section 5.3). Add one to the value to obtain a weight between 1 and
+   *   256.
+   *
+   * Note: we store priority with values from 1 to 256, so decrement here. *)
   write_uint8 t (weight - 1)
 
 let bounded_schedule_iovecs t ~len iovecs =
@@ -143,15 +143,15 @@ let write_headers_frame t info ?priority ?len iovecs =
   match priority with
   | None ->
     (* See RFC7540§6.3:
-         Just the Header Block Fragment length if no priority. *)
+     *   Just the Header Block Fragment length if no priority. *)
     let writer t =
       bounded_schedule_iovecs t ~len iovecs
     in
     write_frame_with_padding t info Headers len writer
   | Some priority ->
     (* See RFC7540§6.2:
-         Exclusive Bit & Stream Dependency (4 octets) + Weight (1 octet) +
-         Header Block Fragment length. *)
+     *   Exclusive Bit & Stream Dependency (4 octets) + Weight (1 octet) +
+     *   Header Block Fragment length. *)
     let payload_length = len + 5 in
     let info' = { info with flags = Flags.set_priority info.flags } in
     let writer t =
@@ -166,7 +166,7 @@ let write_priority_frame t info priority =
     . flags = info.flags
     ; stream_id = info.stream_id
       (* See RFC7540§6.3:
-           Stream Dependency (4 octets) + Weight (1 octet). *)
+       *   Stream Dependency (4 octets) + Weight (1 octet). *)
     ; payload_length = 5
     ; frame_type =  Priority
     }
@@ -180,8 +180,8 @@ let write_rst_stream_frame t info e =
     . flags = info.flags
     ; stream_id = info.stream_id
       (* From RFC7540§6.4:
-           The RST_STREAM frame contains a single unsigned, 32-bit integer
-           identifying the error code (Section 7). *)
+       *   The RST_STREAM frame contains a single unsigned, 32-bit integer
+       *   identifying the error code (Section 7). *)
     ; payload_length = 4
     ; frame_type = RSTStream
     }
@@ -194,9 +194,9 @@ let write_settings_frame t info settings =
     | [] -> ()
     | (key, value) :: xs ->
       (* From RFC7540§6.5.1:
-           The payload of a SETTINGS frame consists of zero or more parameters,
-           each consisting of an unsigned 16-bit setting identifier and an
-           unsigned 32-bit value. *)
+       *   The payload of a SETTINGS frame consists of zero or more parameters,
+       *   each consisting of an unsigned 16-bit setting identifier and an
+       *   unsigned 32-bit value. *)
       BE.write_uint16 t (Settings.serialize_key key);
       BE.write_uint32 t (Int32.of_int value);
       write_settings_payload xs
@@ -206,9 +206,9 @@ let write_settings_frame t info settings =
     . flags = info.flags
     ; stream_id = info.stream_id
       (* From RFC7540§6.5.1:
-           The payload of a SETTINGS frame consists of zero or more parameters,
-           each consisting of an unsigned 16-bit setting identifier and an
-           unsigned 32-bit value. *)
+       *   The payload of a SETTINGS frame consists of zero or more parameters,
+       *   each consisting of an unsigned 16-bit setting identifier and an
+       *   unsigned 32-bit value. *)
     ; payload_length = List.length settings * 6
     ; frame_type =  Settings
     }
@@ -223,9 +223,9 @@ let write_push_promise_frame t info ~promised_id ?len iovecs =
   in
   let payload_length =
     (* From RFC7540§6.6:
-         The PUSH_PROMISE frame includes the unsigned 31-bit identifier of the
-         stream the endpoint plans to create along with a set of headers that
-         provide additional context for the stream. *)
+     *   The PUSH_PROMISE frame includes the unsigned 31-bit identifier of the
+     *   stream the endpoint plans to create along with a set of headers that
+     *   provide additional context for the stream. *)
     4 + len
   in
   let writer t =
@@ -236,8 +236,8 @@ let write_push_promise_frame t info ~promised_id ?len iovecs =
 
 let default_ping_payload =
   (* From RFC7540§6.7:
-       In addition to the frame header, PING frames MUST contain 8 octets of
-       opaque data in the payload. *)
+   *   In addition to the frame header, PING frames MUST contain 8 octets of
+   *   opaque data in the payload. *)
   let bstr = Bigstringaf.create 8 in
   for i = 0 to 7 do
     Bigstringaf.set bstr i '\000'
@@ -246,8 +246,8 @@ let default_ping_payload =
 
 let write_ping_frame t info ?(off=0) payload =
   (* From RFC7540§6.7:
-       In addition to the frame header, PING frames MUST contain 8 octets of
-       opaque data in the payload. *)
+   *   In addition to the frame header, PING frames MUST contain 8 octets of
+   *   opaque data in the payload. *)
   let payload_length = 8 in
   let header =
     { Frame
@@ -267,8 +267,8 @@ let write_go_away_frame t info stream_id error_code debug_data =
     . flags = info.flags
     ; stream_id = info.stream_id
       (* See RFC7540§6.8:
-           Last-Stream-ID (4 octets) + Error Code (4 octets) + Additional Debug
-           Data (opaque) *)
+       *   Last-Stream-ID (4 octets) + Error Code (4 octets) + Additional Debug
+       *   Data (opaque) *)
     ; payload_length = 8 + debug_data_len
     ; frame_type = GoAway
     }
@@ -284,10 +284,10 @@ let write_window_update_frame t info window_size =
     . flags = info.flags
     ; stream_id = info.stream_id
       (* From RFC7540§6.9:
-           The payload of a WINDOW_UPDATE frame is one reserved bit plus an
-           unsigned 31-bit integer indicating the number of octets that the
-           sender can transmit in addition to the existing flow-control
-           window. *)
+       *   The payload of a WINDOW_UPDATE frame is one reserved bit plus an
+       *   unsigned 31-bit integer indicating the number of octets that the
+       *   sender can transmit in addition to the existing flow-control
+       *   window. *)
     ; payload_length = 4
     ; frame_type = WindowUpdate
     }
@@ -313,11 +313,11 @@ let write_continuation_frame t info ?len iovecs =
 
 let write_connection_preface t =
   (* From RFC7540§3.5:
-       In HTTP/2, each endpoint is required to send a connection preface as a
-       final confirmation of the protocol in use and to establish the initial
-       settings for the HTTP/2 connection. [...] The client connection preface
-       starts with a sequence of 24 octets, [...] the string
-       PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n. *)
+   *   In HTTP/2, each endpoint is required to send a connection preface as a
+   *   final confirmation of the protocol in use and to establish the initial
+   *   settings for the HTTP/2 connection. [...] The client connection preface
+   *   starts with a sequence of 24 octets, [...] the string
+   *   PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n. *)
   write_string t "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
 
 module Writer = struct
@@ -360,8 +360,8 @@ module Writer = struct
     write_connection_preface t.encoder;
     let frame_info = make_frame_info Stream_identifier.connection in
     (* From RFC7540§3.5:
-         This sequence MUST be followed by a SETTINGS frame (Section 6.5),
-         which MAY be empty. *)
+     *   This sequence MUST be followed by a SETTINGS frame (Section 6.5),
+     *   which MAY be empty. *)
     write_settings_frame t.encoder frame_info settings_list
 
   let chunk_data_frames ?(off=0) ~f frame_info total_length =
@@ -439,13 +439,13 @@ module Writer = struct
       let rec loop remaining =
         if max_frame_payload < remaining then begin
           (* Note: Don't reuse flags from frame info as CONTINUATION frames
-             only define END_HEADERS.
-
-             From RFC7540§6.10:
-               The CONTINUATION frame defines the following flag:
-
-                 END_HEADERS (0x4): When set, bit 2 indicates that this frame
-                 ends a header block (Section 4.3). *)
+           * only define END_HEADERS.
+           *
+           * From RFC7540§6.10:
+           *   The CONTINUATION frame defines the following flag:
+           *
+           *     END_HEADERS (0x4): When set, bit 2 indicates that this frame
+           *     ends a header block (Section 4.3). *)
           let frame_info = { frame_info with flags = Flags.default_flags } in
           ignore (Faraday.serialize faraday (fun iovecs ->
             write_continuation_frame t.encoder
@@ -527,10 +527,10 @@ module Writer = struct
     let { Response.status; headers; _ } = response in
     let faraday = Faraday.of_bigstring t.headers_block_buffer in
     (* From RFC7540§8.1.2.4:
-         For HTTP/2 responses, a single :status pseudo-header field is defined
-         that carries the HTTP status code field (see [RFC7231], Section 6).
-         This pseudo-header field MUST be included in all responses; otherwise,
-         the response is malformed (Section 8.1.2.6). *)
+     *   For HTTP/2 responses, a single :status pseudo-header field is defined
+     *   that carries the HTTP status code field (see [RFC7231], Section 6).
+     *   This pseudo-header field MUST be included in all responses; otherwise,
+     *   the response is malformed (Section 8.1.2.6). *)
     Hpack.Encoder.encode_header hpack_encoder faraday
       { Headers
       . name = ":status"

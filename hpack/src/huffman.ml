@@ -41,8 +41,8 @@ let encoded_length s =
       loop (bits + len_in_bits) (i + 1)
     end else
       (* From RFC7541§5.2:
-           As the Huffman-encoded data doesn't always end at an octet boundary,
-           some padding is inserted after it, up to the next octet boundary. *)
+       *   As the Huffman-encoded data doesn't always end at an octet boundary,
+       *   some padding is inserted after it, up to the next octet boundary. *)
       (bits + 7) / 8
   in
   loop 0 0

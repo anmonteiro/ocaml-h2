@@ -162,11 +162,11 @@ let transfer_to_writer t writer ~max_frame_size ~max_bytes stream_id =
     if t.write_final_data_frame then begin
       t.write_final_data_frame <- false;
       (* Note: we don't need to check if we're flow-controlled here.
-
-         From RFC7540§6.9.1:
-           Frames with zero length with the END_STREAM flag set (that is, an
-           empty DATA frame) MAY be sent if there is no available space in
-           either flow-control window. *)
+       *
+       * From RFC7540§6.9.1:
+       *   Frames with zero length with the END_STREAM flag set (that is, an
+       *   empty DATA frame) MAY be sent if there is no available space in
+       *   either flow-control window. *)
       let frame_info =
         Serialize.Writer.make_frame_info
           ~max_frame_size

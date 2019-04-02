@@ -160,7 +160,7 @@ let decode cases =
     decoded_headers' decoded_headers;
 
     (* Now check that the `encoded_again` payload is smaller than the `encoded`
-       payload. Indexing has happened! *)
+     * payload. Indexing has happened! *)
     let enc', dec' = Array.fold_left (fun (_, decoded_headers) _ ->
       let encoded_again = encode_headers encoder decoded_headers in
       let decoded_again = decode_headers decoder2 size encoded_again in
@@ -229,13 +229,13 @@ let test_evicting_table_size_0 () =
   let encoded_headers = encode_headers encoder hs in
   Alcotest.(check bool) "Encodes to non-zero hex" true (String.length encoded_headers > 0);
   (* From RFC7541§6.3: Dynamic Table Size Update
-       A dynamic table size update signals a change to the size of the dynamic
-       table.
-       A dynamic table size update starts with the '001' 3-bit pattern
-
-     Note: we add 0x20 at the beginning of the following wire to signal a
-     dynamic table size update of 0 before the remaining headers are
-     decoded. *)
+   *   A dynamic table size update signals a change to the size of the dynamic
+   *   table.
+   *   A dynamic table size update starts with the '001' 3-bit pattern
+   *
+   * Note: we add 0x20 at the beginning of the following wire to signal a
+   * dynamic table size update of 0 before the remaining headers are
+   * decoded. *)
   let wire = h ("20" ^ (hex_of_string encoded_headers)) in
   let decoder = Decoder.create 4096 in
   let decoded_headers = decode_headers decoder 4096 wire in

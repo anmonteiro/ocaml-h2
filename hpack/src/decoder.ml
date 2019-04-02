@@ -46,9 +46,9 @@ let create max_capacity =
 let set_capacity { table; max_capacity } capacity =
   if capacity > max_capacity then
     (* From RFC7541§6.3:
-         The new maximum size MUST be lower than or equal to the limit
-         determined by the protocol using HPACK. A value that exceeds this
-         limit MUST be treated as a decoding error. *)
+     *   The new maximum size MUST be lower than or equal to the limit
+     *   determined by the protocol using HPACK. A value that exceeds this
+     *   limit MUST be treated as a decoding error. *)
     Error Decoding_error
   else begin
     Dynamic_table.set_capacity table capacity;
@@ -59,7 +59,7 @@ let[@inline] ok x = return (Ok x)
 let[@inline] error x = return (Error x)
 
 (* From RFC7541§5.1:
-     decode I from the next N bits. *)
+ *   decode I from the next N bits. *)
 let decode_int prefix n =
   let max_prefix = 1 lsl n - 1 in
   let i = prefix land max_prefix in
@@ -78,13 +78,13 @@ let decode_int prefix n =
 let decode_string =
   any_uint8 >>= fun h ->
     (* From RFC7541§5.2:
-         The number of octets used to encode the string literal, encoded as an
-         integer with a 7-bit prefix (see Section 5.1). *)
+     *   The number of octets used to encode the string literal, encoded as an
+     *   integer with a 7-bit prefix (see Section 5.1). *)
     decode_int h 7 >>= fun string_length ->
       lift (fun string_data ->
         (* From RFC7541§5.2:
-          A one-bit flag, H, indicating whether or not the octets of the
-           string are Huffman encoded. *)
+         *   A one-bit flag, H, indicating whether or not the octets of the
+         *   string are Huffman encoded. *)
         if h land 0b1000_0000 == 0 then
           Ok string_data
         else
@@ -95,25 +95,25 @@ let get_indexed_field table index =
   let static_table_size = Static_table.table_size in
   let dynamic_table_size = Dynamic_table.table_size table in
      (* From RFC7541§6.1:
-          The index value of 0 is not used. It MUST be treated as a decoding
-          error if found in an indexed header field representation. *)
+      *   The index value of 0 is not used. It MUST be treated as a decoding
+      *   error if found in an indexed header field representation. *)
   if index == 0 ||
      (* From RFC7541§2.3.3:
-          Indices strictly greater than the sum of the lengths of both tables
-          MUST be treated as a decoding error. *)
+      *   Indices strictly greater than the sum of the lengths of both tables
+      *   MUST be treated as a decoding error. *)
      index > (static_table_size + dynamic_table_size) then
     Error Decoding_error
   else if index <= static_table_size then
     (* From RFC7541§2.3.3:
-         Indices between 1 and the length of the static table (inclusive) refer
-         to elements in the static table (see Section 2.3.1). *)
+     *   Indices between 1 and the length of the static table (inclusive) refer
+     *   to elements in the static table (see Section 2.3.1). *)
     Ok (Static_table.table.(index - 1))
   else
     (* From RFC7541§2.3.3:
-         Indices strictly greater than the length of the static table refer to
-         elements in the dynamic table (see Section 2.3.2). The length of the
-         static table is subtracted to find the index into the dynamic
-         table. *)
+     *   Indices strictly greater than the length of the static table refer to
+     *   elements in the dynamic table (see Section 2.3.2). The length of the
+     *   static table is subtracted to find the index into the dynamic
+     *   table. *)
     Ok (Dynamic_table.get table (index - static_table_size - 1))
 
 let decode_header_field table prefix prefix_length =
@@ -124,14 +124,14 @@ let decode_header_field table prefix prefix_length =
       | Error e, _
       | _, Error e -> Error e)
     (* From RFC7541§6.2.1:
-         If the header field name matches the header field name of an entry
-         stored in the static table or the dynamic table, the header field
-         name can be represented using the index of that entry. In this case,
-         [...] This value is always non-zero.
-
-         Otherwise, the header field name is represented as a string literal
-         (see Section 5.2). A value 0 is used in place [...], followed by the
-         header field name. *)
+     *   If the header field name matches the header field name of an entry
+     *   stored in the static table or the dynamic table, the header field
+     *   name can be represented using the index of that entry. In this case,
+     *   [...] This value is always non-zero.
+     *
+     *   Otherwise, the header field name is represented as a string literal
+     *   (see Section 5.2). A value 0 is used in place [...], followed by the
+     *   header field name. *)
     (if index == 0 then
       decode_string
     else
@@ -149,9 +149,9 @@ let decode_headers ({ table; _ } as t) =
     any_uint8 >>= fun b ->
     if b land 0b1000_0000 != 0 then begin
       (* From RFC7541§6.1: Indexed Header Field Representation
-           An indexed header field starts with the '1' 1-bit pattern, followed
-           by the index of the matching header field, represented as an integer
-           with a 7-bit prefix (see Section 5.1). *)
+       *   An indexed header field starts with the '1' 1-bit pattern, followed
+       *   by the index of the matching header field, represented as an integer
+       *   with a 7-bit prefix (see Section 5.1). *)
       decode_int b 7 >>= fun index ->
       match get_indexed_field table index with
       | Ok (name, value) ->
@@ -159,49 +159,49 @@ let decode_headers ({ table; _ } as t) =
       | Error e -> error e
     end else if b land 0b1100_0000 == 0b0100_0000 then begin
       (* From RFC7541§6.2.1: Literal Header Field with Incremental Indexing
-           A literal header field with incremental indexing representation
-           starts with the '01' 2-bit pattern. In this case, the index of the
-           entry is represented as an integer with a 6-bit prefix (see Section
-           5.1). *)
+       *   A literal header field with incremental indexing representation
+       *   starts with the '01' 2-bit pattern. In this case, the index of the
+       *   entry is represented as an integer with a 6-bit prefix (see Section
+       *   5.1). *)
       decode_header_field table b 6 >>= function
       | Ok (name, value) ->
         (* From RFC7541§6.2.1: Literal Header Field with Incremental Indexing
-             A literal header field with incremental indexing representation
-             results in appending a header field to the decoded header list and
-             inserting it as a new entry into the dynamic table. *)
+         *   A literal header field with incremental indexing representation
+         *   results in appending a header field to the decoded header list and
+         *   inserting it as a new entry into the dynamic table. *)
         Dynamic_table.add table (name, value);
         loop ({ name; value; sensitive = false } :: acc) true
       | Error e -> error e
     end else if b land 0b1111_0000 == 0 then begin
       (* From RFC7541§6.2.2: Literal Header Field without Indexing
-           A literal header field without indexing representation starts with
-           the '0000' 4-bit pattern. In this case, the index of the entry is
-           represented as an integer with a 4-bit prefix (see Section 5.1). *)
+       *   A literal header field without indexing representation starts with
+       *   the '0000' 4-bit pattern. In this case, the index of the entry is
+       *   represented as an integer with a 4-bit prefix (see Section 5.1). *)
       decode_header_field table b 4 >>= function
       | Ok (name, value) ->
         loop ({ name; value; sensitive = false } :: acc) true
       | Error e -> error e
     end else if b land 0b1111_0000 == 0b0001_0000 then begin
       (* From RFC7541§6.2.3: Literal Header Field Never Indexed
-           A literal header field without indexing representation starts with
-           the '0001' 4-bit pattern.
-          The encoding of the representation is identical to the literal header
-          field without indexing (see Section 6.2.2). *)
+       *   A literal header field without indexing representation starts with
+       *   the '0001' 4-bit pattern.
+       *  The encoding of the representation is identical to the literal header
+       *  field without indexing (see Section 6.2.2). *)
       decode_header_field table b 4 >>= function
       | Ok (name, value) ->
         loop ({ name; value; sensitive = true } :: acc) true
       | Error e -> error e
     end else if b land 0b1110_0000 == 0b0010_0000 then begin
       (* From RFC7541§6.3: Dynamic Table Size Update
-           A dynamic table size update signals a change to the size of the
-           dynamic table.
-           A dynamic table size update starts with the '001' 3-bit pattern *)
+       *   A dynamic table size update signals a change to the size of the
+       *   dynamic table.
+       *   A dynamic table size update starts with the '001' 3-bit pattern *)
       if saw_first_header then
         (* From RFC7541§4.2: Maximum Table Size
-             A change in the maximum size of the dynamic table is signaled via
-             a dynamic table size update (see Section 6.3). This dynamic table
-             size update MUST occur at the beginning of the first header block
-             following the change to the dynamic table size. *)
+         *   A change in the maximum size of the dynamic table is signaled via
+         *   a dynamic table size update (see Section 6.3). This dynamic table
+         *   size update MUST occur at the beginning of the first header block
+         *   following the change to the dynamic table size. *)
         error Decoding_error
       else begin
         decode_int b 5 >>= fun capacity ->

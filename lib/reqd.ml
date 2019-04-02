@@ -160,7 +160,7 @@ let request_body t =
     request_body
   | Reserved _ ->
     (* From RFC7540§8.1:
-         Promised requests MUST NOT include a request body. *)
+     *   Promised requests MUST NOT include a request body. *)
     failwith "h2.Reqd.request_body: Promised requests must not include a request body"
   | Closed _ -> assert false
 
@@ -223,9 +223,9 @@ let send_fixed_response t s response data =
     in
     Writer.write_response_headers t.writer s.encoder frame_info response;
     (* From RFC7540§8.1:
-         An HTTP request/response exchange fully consumes a single stream.
-         [...] A response starts with a HEADERS frame and ends with a frame
-         bearing END_STREAM, which places the stream in the "closed" state. *)
+     *   An HTTP request/response exchange fully consumes a single stream.
+     *   [...] A response starts with a HEADERS frame and ends with a frame
+     *   bearing END_STREAM, which places the stream in the "closed" state. *)
     if should_send_data then
       s.response_state <- Fixed
         { response
@@ -252,9 +252,9 @@ let unsafe_respond_with_data t response data =
   | Reserved stream ->
     send_fixed_response t stream response data;
     (* From RFC7540§8.1:
-         reserved (local): [...] In this state, only the following transitions
-         are possible: The endpoint can send a HEADERS frame. This causes the
-         stream to open in a "half-closed (remote)" state. *)
+     *   reserved (local): [...] In this state, only the following transitions
+     *   are possible: The endpoint can send a HEADERS frame. This causes the
+     *   stream to open in a "half-closed (remote)" state. *)
     Writer.flush t.writer (fun () ->
       t.state <- HalfClosedRemote stream)
   | Closed _ -> assert false
@@ -304,9 +304,9 @@ let unsafe_respond_with_streaming t ~flush_headers_immediately response =
       send_streaming_response ~flush_headers_immediately t s response
     in
     (* From RFC7540§8.1:
-         reserved (local): [...] In this state, only the following transitions
-         are possible: The endpoint can send a HEADERS frame. This causes the
-         stream to open in a "half-closed (remote)" state. *)
+     *   reserved (local): [...] In this state, only the following transitions
+     *   are possible: The endpoint can send a HEADERS frame. This causes the
+     *   stream to open in a "half-closed (remote)" state. *)
     Writer.flush t.writer (fun () ->
       t.state <- HalfClosedRemote s);
     response_body
@@ -336,17 +336,17 @@ let start_push_stream t s request =
         create_push_stream
     in
     (* From RFC7540§8.2:
-         Promised requests [...] MUST NOT include a request body. *)
+     *   Promised requests [...] MUST NOT include a request body. *)
     let active_request = create_active_request active_stream request Body.empty
     in
     (* From RFC7540§8.2.1:
-         Sending a PUSH_PROMISE frame creates a new stream and puts the stream
-         into the "reserved (local)" state for the server and the "reserved
-         (remote)" state for the client.
-
-       Note: we do this before flushing the writer because request handlers might
-       immediately call one of the `respond_with` functions and expect the stream
-       to be in the `Reserved` state. *)
+     *   Sending a PUSH_PROMISE frame creates a new stream and puts the stream
+     *   into the "reserved (local)" state for the server and the "reserved
+     *   (remote)" state for the client.
+     *
+     * Note: we do this before flushing the writer because request handlers might
+     * immediately call one of the `respond_with` functions and expect the stream
+     * to be in the `Reserved` state. *)
     promised_reqd.state <- Reserved active_request;
     wakeup_writer ();
     promised_reqd
@@ -359,9 +359,9 @@ let start_push_stream t s request =
 let unsafe_push t request =
   (* TODO: should we validate? *)
   (* From RFC7540§8.2:
-       Promised requests MUST be cacheable (see [RFC7231], Section 4.2.3), MUST
-       be safe (see [RFC7231], Section 4.2.1), and MUST NOT include a request
-       body. *)
+   *   Promised requests MUST be cacheable (see [RFC7231], Section 4.2.3), MUST
+   *   be safe (see [RFC7231], Section 4.2.1), and MUST NOT include a request
+   *   body. *)
   match t.state with
   | Idle
   | Open (PartialHeaders _) -> assert false
@@ -384,8 +384,8 @@ let push t request =
     failwith "h2.Reqd.push: invalid state, currently handling error";
   if Stream_identifier.is_pushed t.id then
     (* From RFC7540§6.6:
-         PUSH_PROMISE frames MUST only be sent on a peer-initiated stream that
-         is in either the "open" or "half-closed (remote)" state. *)
+     *   PUSH_PROMISE frames MUST only be sent on a peer-initiated stream that
+     *   is in either the "open" or "half-closed (remote)" state. *)
     failwith "h2.Reqd.push: PUSH_PROMISE frames MUST only be sent on a peer-initiated stream";
   unsafe_push t request
 
@@ -408,13 +408,13 @@ let close_stream t =
     | Open (FullHeaders _)
     | Open (ActiveRequest _) ->
       (* From RFC7540§8.1:
-           A server can send a complete response prior to the client sending an
-           entire request if the response does not depend on any portion of the
-           request that has not been sent and received. When this is true, a
-           server MAY request that the client abort transmission of a request
-           without error by sending a RST_STREAM with an error code of NO_ERROR
-           after sending a complete response (i.e., a frame with the END_STREAM
-           flag). *)
+       *   A server can send a complete response prior to the client sending an
+       *   entire request if the response does not depend on any portion of the
+       *   request that has not been sent and received. When this is true, a
+       *   server MAY request that the client abort transmission of a request
+       *   without error by sending a RST_STREAM with an error code of NO_ERROR
+       *   after sending a complete response (i.e., a frame with the END_STREAM
+       *   flag). *)
       reset_stream t Error.NoError
     | HalfClosedRemote _ ->
       Writer.flush t.writer (fun () -> finish_stream t Finished)
@@ -515,9 +515,9 @@ let requires_output t =
   | Idle -> false
   | Reserved _ -> true
   (* From RFC7540§8.1:
-       A server can send a complete response prior to the client sending an
-       entire request if the response does not depend on any portion of the
-       request that has not been sent and received. *)
+   *   A server can send a complete response prior to the client sending an
+   *   entire request if the response does not depend on any portion of the
+   *   request that has not been sent and received. *)
   | Open (PartialHeaders _) -> false
   | Open (FullHeaders { response_state; _ })
   | Open (ActiveRequest { response_state; _ })

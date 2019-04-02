@@ -220,18 +220,18 @@ let valid_headers ?(is_request=true) t =
   match get t "connection", get t "TE" with
   | Some _, _ ->
     (* From RFC7540§8.1.2.2:
-         HTTP/2 does not use the Connection header field to indicate
-         connection-specific header fields; in this protocol,
-         connection-specific metadata is conveyed by other means. An endpoint
-         MUST NOT generate an HTTP/2 message containing connection-specific
-         header fields; any message containing connection-specific header
-         fields MUST be treated as malformed (Section 8.1.2.6). *)
+     *   HTTP/2 does not use the Connection header field to indicate
+     *   connection-specific header fields; in this protocol,
+     *   connection-specific metadata is conveyed by other means. An endpoint
+     *   MUST NOT generate an HTTP/2 message containing connection-specific
+     *   header fields; any message containing connection-specific header
+     *   fields MUST be treated as malformed (Section 8.1.2.6). *)
     false
   | _, Some value when value <> "trailers" ->
     (* From RFC7540§8.1.2.2:
-         The only exception to this is the TE header field, which MAY be
-         present in an HTTP/2 request; when it is, it MUST NOT contain any
-         value other than "trailers". *)
+     *   The only exception to this is the TE header field, which MAY be
+     *   present in an HTTP/2 request; when it is, it MUST NOT contain any
+     *   value other than "trailers". *)
     false
   | _ ->
     let pseudo_ended = ref false in
@@ -241,24 +241,24 @@ let valid_headers ?(is_request=true) t =
       if not is_pseudo && not pseudo_did_end then
         pseudo_ended := true;
       (* From RFC7540§8.1.2:
-           [...] header field names MUST be converted to lowercase
-           prior to their encoding in HTTP/2. A request or response
-           containing uppercase header field names MUST be treated as
-           malformed (Section 8.1.2.6). *)
+       *   [...] header field names MUST be converted to lowercase
+       *   prior to their encoding in HTTP/2. A request or response
+       *   containing uppercase header field names MUST be treated as
+       *   malformed (Section 8.1.2.6). *)
       not CI.(is_lowercase name) ||
       (* From RFC7540§8.1.2.1:
-           Pseudo-header fields are only valid in the context in
-           which they are defined. [...] pseudo-header fields defined
-           for responses MUST NOT appear in requests. [...] Endpoints
-           MUST treat a request or response that contains undefined
-           or invalid pseudo-header fields as malformed (Section
-           8.1.2.6). *)
+       *   Pseudo-header fields are only valid in the context in
+       *   which they are defined. [...] pseudo-header fields defined
+       *   for responses MUST NOT appear in requests. [...] Endpoints
+       *   MUST treat a request or response that contains undefined
+       *   or invalid pseudo-header fields as malformed (Section
+       *   8.1.2.6). *)
       (is_pseudo && not (List.mem name (if is_request then Pseudo.reserved_request else Pseudo.reserved_response))) ||
       (* From RFC7540§8.1.2.1:
-           All pseudo-header fields MUST appear in the header block before
-           regular header fields. Any request or response that contains a
-           pseudo-header field that appears in a header block after a regular
-           header field MUST be treated as malformed (Section 8.1.2.6). *)
+       *   All pseudo-header fields MUST appear in the header block before
+       *   regular header fields. Any request or response that contains a
+       *   pseudo-header field that appears in a header block after a regular
+       *   header field MUST be treated as malformed (Section 8.1.2.6). *)
       (is_pseudo && pseudo_did_end))
       (to_hpack_list t)
     in
@@ -273,15 +273,15 @@ let valid_response_headers t =
 let trailers_valid t =
   let invalid = exists ~f:(fun name _ ->
     (* From RFC7540§8.1.2:
-         [...] header field names MUST be converted to lowercase prior to
-         their encoding in HTTP/2. A request or response containing
-         uppercase header field names MUST be treated as malformed
-         (Section 8.1.2.6). *)
+     *   [...] header field names MUST be converted to lowercase prior to
+     *   their encoding in HTTP/2. A request or response containing
+     *   uppercase header field names MUST be treated as malformed
+     *   (Section 8.1.2.6). *)
     not (CI.is_lowercase name) ||
     (* From RFC7540§8.1.2.1:
-         Pseudo-header fields MUST NOT appear in trailers.  Endpoints MUST
-         treat a request or response that contains undefined or invalid
-         pseudo-header fields as malformed (Section 8.1.2.6). *)
+     *   Pseudo-header fields MUST NOT appear in trailers.  Endpoints MUST
+     *   treat a request or response that contains undefined or invalid
+     *   pseudo-header fields as malformed (Section 8.1.2.6). *)
     Pseudo.is_pseudo name)
     t
   in

@@ -39,9 +39,9 @@ type t =
   }
 
 (* From RFC7540§5.3.5:
-     All streams are initially assigned a non-exclusive dependency on stream
-     0x0. Pushed streams (Section 8.2) initially depend on their associated
-     stream. In both cases, streams are assigned a default weight of 16. *)
+ *   All streams are initially assigned a non-exclusive dependency on stream
+ *   0x0. Pushed streams (Section 8.2) initially depend on their associated
+ *   stream. In both cases, streams are assigned a default weight of 16. *)
 let default_priority =
   { exclusive = false
   ; stream_dependency = 0l
@@ -50,8 +50,8 @@ let default_priority =
 
 
 (* From RFC7540§5.4.1:
-     All dependent streams are allocated an integer weight between 1 and 256
-     (inclusive). *)
+ *   All dependent streams are allocated an integer weight between 1 and 256
+ *   (inclusive). *)
 let highest_priority =
   { exclusive = false
   ; stream_dependency = 0l
@@ -59,14 +59,14 @@ let highest_priority =
   }
 
 (* --- Exclusive flag ---
-
-  From RFC7540§5.4.1:
-    +-+-------------------------------------------------------------+
-    |E|                  Stream Dependency (31)                     |
-    +-+-------------+-----------------------------------------------+
-    |   Weight (8)  |
-    +-+-------------+
-*)
+ *
+ * From RFC7540§5.4.1:
+ *   +-+-------------------------------------------------------------+
+ *   |E|                  Stream Dependency (31)                     |
+ *   +-+-------------+-----------------------------------------------+
+ *   |   Weight (8)  |
+ *   +-+-------------+
+ *)
 
 let test_exclusive n = test_bit_int32 n 31
 

@@ -69,7 +69,7 @@ let test_priority_queue () =
   let count_3 = List.filter (fun x -> x = 3l) t |> List.length in
   let count_5 = List.filter (fun x -> x = 5l) t |> List.length in
   (* After multiple repetitions, the frequency of 1, 3 and 5 is proportional to
-     their weight, e.g. 101 * 1000 / 303 *)
+   * their weight, e.g. 101 * 1000 / 303 *)
   Alcotest.(check int) "Number of items with weight 201" 663 count_1;
   Alcotest.(check int) "Number of items with weight 101" 333 count_3;
   Alcotest.(check int) "Number of items with weight 1" 4 count_5
@@ -155,21 +155,21 @@ let set_up_dep_tree root =
   add_stream root ~priority:(depend_on 7l) (test_reqd 11l)
 
 (*
- This is the tree from: https://httpwg.org/specs/rfc7540.html#rfc.section.5.3.3
-
-          1 --> 7
-    0                0
-    |                |
-    1                7
-   / \              / \
-  3   5     ==>    11  1
-     / \              / \
-    7   9            3   5
-    |                    |
-    11                   9
-
-                (non-exclusive)
-*)
+ * This is the tree from: https://tools.ietf.org/html/rfc7540#section-5.3.3
+ *
+ *          1 --> 7
+ *    0                0
+ *    |                |
+ *    1                7
+ *   / \              / \
+ *  3   5     ==>    11  1
+ *     / \              / \
+ *    7   9            3   5
+ *    |                    |
+ *    11                   9
+ *
+ *                (non-exclusive)
+ *)
 let test_reprioritize_to_dependency () =
   let open Streams in
   let root = Streams.make_root ~capacity:6 () in
@@ -197,21 +197,21 @@ let test_reprioritize_to_dependency () =
     [1l; 11l] (stream7.children |> PriorityQueue.to_list |> List.map fst)
 
 (*
- This is the tree from: https://httpwg.org/specs/rfc7540.html#rfc.section.5.3.3
-
-          1 --> 7
-    0                0
-    |                |
-    1                7
-   / \               |
-  3   5     ==>      1
-     / \            /|\
-    7   9          3 5 11
-    |                |
-    11               9
-
-                (exclusive)
-*)
+ * This is the tree from: https://tools.ietf.org/html/rfc7540#section-5.3.3
+ *
+ *          1 --> 7
+ *    0                0
+ *    |                |
+ *    1                7
+ *   / \               |
+ *  3   5     ==>      1
+ *     / \            /|\
+ *    7   9          3 5 11
+ *    |                |
+ *    11               9
+ *
+ *                (exclusive)
+ *)
 let test_reprioritize_to_dependency_exclusive () =
   let open Streams in
   let root = Streams.make_root ~capacity:6 () in

@@ -34,13 +34,13 @@ module WindowSize = struct
   type t = int
 
   (* From RFC7540§6.9.2:
-       When an HTTP/2 connection is first established, new streams are created
-       with an initial flow-control window size of 65,535 octets. *)
+   *   When an HTTP/2 connection is first established, new streams are created
+   *   with an initial flow-control window size of 65,535 octets. *)
   let default_initial_window_size = 65535
 
   (* From RFC7540§6.9:
-       The legal range for the increment to the flow-control window is 1 to
-       2^31-1 (2,147,483,647) octets. *)
+   *   The legal range for the increment to the flow-control window is 1 to
+   *   2^31-1 (2,147,483,647) octets. *)
   let max_window_size = 1 lsl 31 - 1
 
   (* Ideally `n` here would be an unsigned 32-bit integer, but OCaml doesn't
@@ -83,15 +83,15 @@ let parse_key = function
 let check_value = function
   | EnablePush, v when v != 0 && v != 1 ->
     (* From RFC7540§6.5.2
-         The initial value is 1, which indicates that server push is permitted.
-         Any value other than 0 or 1 MUST be treated as a connection error
-         (Section 5.4.1) of type PROTOCOL_ERROR. *)
+     *   The initial value is 1, which indicates that server push is permitted.
+     *   Any value other than 0 or 1 MUST be treated as a connection error
+     *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
     Some Error.(ConnectionError (ProtocolError, "SETTINGS_ENABLE_PUSH must be 0 or 1"))
   | InitialWindowSize, v when WindowSize.is_window_overflow v ->
     (* From RFC7540§6.5.2
-         Values above the maximum flow-control window size of 2^31-1 MUST be
-         treated as a connection error (Section 5.4.1) of type
-         FLOW_CONTROL_ERROR. *)
+     *   Values above the maximum flow-control window size of 2^31-1 MUST be
+     *   treated as a connection error (Section 5.4.1) of type
+     *   FLOW_CONTROL_ERROR. *)
     Some
       Error.(ConnectionError
         ( FlowControlError
@@ -99,11 +99,11 @@ let check_value = function
             WindowSize.max_window_size))
   | MaxFrameSize, v when v < 16384 || v > 16777215 ->
     (* From RFC7540§6.5.2
-         The initial value is 214 (16,384) octets. The value advertised by an
-         endpoint MUST be between this initial value and the maximum allowed
-         frame size (224-1 or 16,777,215 octets), inclusive. Values outside
-         this range MUST be treated as a connection error (Section 5.4.1) of
-         type PROTOCOL_ERROR. *)
+     *   The initial value is 214 (16,384) octets. The value advertised by an
+     *   endpoint MUST be between this initial value and the maximum allowed
+     *   frame size (224-1 or 16,777,215 octets), inclusive. Values outside
+     *   this range MUST be treated as a connection error (Section 5.4.1) of
+     *   type PROTOCOL_ERROR. *)
     Some Error.(ConnectionError (ProtocolError, "Max frame size must be in the 16384 - 16777215 range"))
   | _ -> None
 
@@ -130,8 +130,8 @@ let default_settings =
   { header_table_size = 0x1000
   ; enable_push = true
     (* From RFC7540§6.5.2:
-         SETTINGS_MAX_CONCURRENT_STREAMS (0x3): [...] Initially, there is no
-         limit to this value. *)
+     *   SETTINGS_MAX_CONCURRENT_STREAMS (0x3): [...] Initially, there is no
+     *   limit to this value. *)
   ; max_concurrent_streams = Int32.(to_int max_int)
   ; initial_window_size = WindowSize.default_initial_window_size
   ; max_frame_size = 0x4000

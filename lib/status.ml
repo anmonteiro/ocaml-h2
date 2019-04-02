@@ -32,20 +32,20 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-(* if we ever drop support for OCaml < 4.06 we can use a variant of the
-   following, and remove all the function forwarding.
-
-   From https://caml.inria.fr/pub/docs/manual-ocaml/extn.html#sec249:
-
-     Prior to OCaml 4.06, there were a number of restrictions: one could only
-     remove types and modules at the outermost level (not inside submodules),
-     and in the case of with type the definition had to be another type
-     constructor with the same type parameters. *)
+(* If we ever drop support for OCaml < 4.06 we can use a variant of the
+ * following, and remove all the function forwarding.
+ *
+ * From https://caml.inria.fr/pub/docs/manual-ocaml/extn.html#sec249:
+ *
+ *   Prior to OCaml 4.06, there were a number of restrictions: one could only
+ *   remove types and modules at the outermost level (not inside submodules),
+ *   and in the case of with type the definition had to be another type
+ *   constructor with the same type parameters. *)
 (* include (Httpaf.Status : Status with type informational := [ | `Continue ]) *)
 
 (* From RFC7540§8.1.1:
-     HTTP/2 removes support for the 101 (Switching Protocols) informational
-     status code ([RFC7231], Section 6.2.2). *)
+ *   HTTP/2 removes support for the 101 (Switching Protocols) informational
+ *   status code ([RFC7231], Section 6.2.2). *)
 type informational = [ `Continue ]
 
 type successful = Httpaf.Status.successful
@@ -54,11 +54,11 @@ type redirection = Httpaf.Status.redirection
 type client_error =
   [ Httpaf.Status.client_error
     (* From RFC7540§9.1.2:
-         The 421 (Misdirected Request) status code indicates that the request
-         was directed at a server that is not able to produce a response. This
-         can be sent by a server that is not configured to produce responses
-         for the combination of scheme and authority that are included in the
-         request URI. *)
+     *   The 421 (Misdirected Request) status code indicates that the request
+     *   was directed at a server that is not able to produce a response. This
+     *   can be sent by a server that is not configured to produce responses
+     *   for the combination of scheme and authority that are included in the
+     *   request URI. *)
   | `Misdirected_request ]
 
 type server_error = Httpaf.Status.server_error
@@ -77,11 +77,11 @@ type t =
   ]
 
 (* Note: The value for reason phrases is never actually serialized to the
-   input or output channels.
-
-   From RFC7540§8.1.2.4:
-     HTTP/2 does not define a way to carry the version or reason phrase that is
-     included in an HTTP/1.1 status line. *)
+ * input or output channels.
+ *
+ * From RFC7540§8.1.2.4:
+ *   HTTP/2 does not define a way to carry the version or reason phrase that is
+ *   included in an HTTP/1.1 status line. *)
 let default_reason_phrase = function
   | `Misdirected_request -> "Misdirected Request"
   | #Httpaf.Status.standard as t -> Httpaf.Status.default_reason_phrase t

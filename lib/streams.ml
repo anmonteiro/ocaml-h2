@@ -74,25 +74,25 @@ module Make (Streamd: StreamDescriptor) = struct
 
     and _ node =
       (* From RFC7540§5.3.1:
-           A stream that is not dependent on any other stream is given a stream
-           dependency of 0x0. In other words, the non-existent stream 0 forms the
-           root of the tree.
-
-         Note:
-           We use a GADT because the root of the tree doesn't have an associated
-           request descriptor. It has the added advantage of allowing us to
-           enforce that all (other) streams in the tree are associated with a
-           request descriptor. *)
+       *   A stream that is not dependent on any other stream is given a stream
+       *   dependency of 0x0. In other words, the non-existent stream 0 forms the
+       *   root of the tree.
+       *
+       * Note:
+       *   We use a GADT because the root of the tree doesn't have an associated
+       *   request descriptor. It has the added advantage of allowing us to
+       *   enforce that all (other) streams in the tree are associated with a
+       *   request descriptor. *)
       | Connection :
         { all_streams : stream StreamsTbl.t
         ; mutable t_last : int
         ; mutable children : PriorityQueue.t
           (* Connection-level flow control window.
-
-             From RFC7540§6.9.1:
-               Two flow-control windows are applicable: the stream flow-control
-               window and the connection flow-control window. *)
-          (* outbound flow control, what we're allowed to send. *)
+           * outbound flow control, what we're allowed to send.
+           *
+           * From RFC7540§6.9.1:
+           *   Two flow-control windows are applicable: the stream flow-control
+           *   window and the connection flow-control window. *)
         ; mutable flow : Settings.WindowSize.t
           (* inbound flow control, what the client is allowed to send. *)
         ; mutable inflow : Settings.WindowSize.t
@@ -105,9 +105,10 @@ module Make (Streamd: StreamDescriptor) = struct
         ; mutable parent : parent
         ; mutable children : PriorityQueue.t
           (* Stream-level flow control window. See connection-level above.
-             From RFC7540§6.9.1:
-               Two flow-control windows are applicable: the stream flow-control
-               window and the connection flow-control window. *)
+           *
+           * From RFC7540§6.9.1:
+           *   Two flow-control windows are applicable: the stream flow-control
+           *   window and the connection flow-control window. *)
         ; mutable flow : Settings.WindowSize.t
         ; mutable inflow : Settings.WindowSize.t
         } -> nonroot node
@@ -145,10 +146,10 @@ module Make (Streamd: StreamDescriptor) = struct
       ; t_last = 0
       ; t = 0
       (* From RFC7540§5.3.5:
-           All streams are initially assigned a non-exclusive dependency on
-           stream 0x0. Pushed streams (Section 8.2) initially depend on their
-           associated stream. In both cases, streams are assigned a default
-           weight of 16. *)
+       *   All streams are initially assigned a non-exclusive dependency on
+       *   stream 0x0. Pushed streams (Section 8.2) initially depend on their
+       *   associated stream. In both cases, streams are assigned a default
+       *   weight of 16. *)
       ; priority = Priority.default_priority
       ; parent
       ; children = PriorityQueue.empty
@@ -163,9 +164,9 @@ module Make (Streamd: StreamDescriptor) = struct
     match parent with
     | Connection root ->
       (* From RFC7540§5.3.1:
-           A stream that is not dependent on any other stream is given a stream
-           dependency of 0x0. In other words, the non-existent stream 0 forms
-           the root of the tree. *)
+       *   A stream that is not dependent on any other stream is given a stream
+       *   dependency of 0x0. In other words, the non-existent stream 0 forms
+       *   the root of the tree. *)
       root.children <- PriorityQueue.remove id root.children
     | Stream stream ->
       stream.children <- PriorityQueue.remove id stream.children
@@ -188,20 +189,20 @@ module Make (Streamd: StreamDescriptor) = struct
       let new_children = children new_parent_node in
       if exclusive then begin
         (* From RFC7540§5.3.3:
-             Dependent streams move with their parent stream if the parent is
-             reprioritized. Setting a dependency with the exclusive flag for a
-             reprioritized stream causes all the dependencies of the new parent
-             stream to become dependent on the reprioritized stream. *)
+         *   Dependent streams move with their parent stream if the parent is
+         *   reprioritized. Setting a dependency with the exclusive flag for a
+         *   reprioritized stream causes all the dependencies of the new parent
+         *   stream to become dependent on the reprioritized stream. *)
         stream.children <-
           PriorityQueue.fold (fun k (Stream p as p_node) pq ->
             p.parent <- Parent stream_node;
             PriorityQueue.add k p_node pq)
           stream.children new_children;
         (* From RFC7540§5.3.1:
-             An exclusive flag allows for the insertion of a new level of
-             dependencies. The exclusive flag causes the stream to become the
-             sole dependency of its parent stream, causing other dependencies to
-             become dependent on the exclusive stream. *)
+         *   An exclusive flag allows for the insertion of a new level of
+         *   dependencies. The exclusive flag causes the stream to become the
+         *   sole dependency of its parent stream, causing other dependencies to
+         *   become dependent on the exclusive stream. *)
         PriorityQueue.sg stream_id stream_node
       end else
         pq_add stream_id stream_node new_children
@@ -232,9 +233,9 @@ module Make (Streamd: StreamDescriptor) = struct
         | Some parent_stream -> (Parent parent_stream), priority
         | None ->
           (* From RFC7540§5.3.1:
-               A dependency on a stream that is not currently in the tree — such
-               as a stream in the "idle" state — results in that stream being
-               given a default priority (Section 5.3.5). *)
+           *   A dependency on a stream that is not currently in the tree — such
+           *   as a stream in the "idle" state — results in that stream being
+           *   given a default priority (Section 5.3.5). *)
           (Parent t), Priority.default_priority
     in
     (* bail early if trying to set the same priority *)
@@ -251,10 +252,10 @@ module Make (Streamd: StreamDescriptor) = struct
         | Stream new_parent_stream ->
           if would_create_cycle ~new_parent stream_node then begin
             (* From RFC7540§5.3.3:
-                 If a stream is made dependent on one of its own dependencies, the
-                 formerly dependent stream is first moved to be dependent on the
-                 reprioritized stream's previous parent. The moved dependency
-                 retains its weight. *)
+             *   If a stream is made dependent on one of its own dependencies, the
+             *   formerly dependent stream is first moved to be dependent on the
+             *   reprioritized stream's previous parent. The moved dependency
+             *   retains its weight. *)
             set_parent new_parent_node ~exclusive:false stream.parent;
             new_parent_stream.priority <-
               { new_parent_stream.priority
@@ -267,8 +268,8 @@ module Make (Streamd: StreamDescriptor) = struct
           ()
         end;
         (* From RFC7540§5.3.1:
-             When assigning a dependency on another stream, the stream is added
-             as a new dependency of the parent stream. *)
+         *   When assigning a dependency on another stream, the stream is added
+         *   as a new dependency of the parent stream. *)
         set_parent stream_node ~exclusive new_parent;
       end;
       stream.priority <- priority;
@@ -307,18 +308,18 @@ module Make (Streamd: StreamDescriptor) = struct
   let write (Connection root as t) stream_node =
     let (Stream ({streamd;_ } as stream)) = stream_node in
     (* From RFC7540§6.9.1:
-         Two flow-control windows are applicable: the stream flow-control
-         window and the connection flow-control window. The sender MUST NOT
-         send a flow-controlled frame with a length that exceeds the space
-         available in either of the flow-control windows advertised by the
-         receiver. *)
+     *   Two flow-control windows are applicable: the stream flow-control
+     *   window and the connection flow-control window. The sender MUST NOT
+     *   send a flow-controlled frame with a length that exceeds the space
+     *   available in either of the flow-control windows advertised by the
+     *   receiver. *)
     if allowed_to_transmit t stream_node then begin
       let allowed_bytes = min root.flow stream.flow in
       let written = Streamd.flush_write_body ~max_bytes:allowed_bytes streamd
       in
       (* From RFC7540§6.9.1:
-           After sending a flow-controlled frame, the sender reduces the space
-           available in both windows by the length of the transmitted frame. *)
+       *   After sending a flow-controlled frame, the sender reduces the space
+       *   available in both windows by the length of the transmitted frame. *)
       root.flow <- root.flow - written;
       stream.flow <- stream.flow - written;
       written
@@ -334,20 +335,20 @@ module Make (Streamd: StreamDescriptor) = struct
     stream.t <- tlast_p + n * 256 / stream.priority.weight
 
   (* Scheduling algorithm from https://goo.gl/3sSHXJ (based on nghttp2):
-
-     1  def schedule(p):
-     2    if stream #p has data to send:
-     3      send data for #p, update nsent[p]
-     4      return
-     5    if #p's queue is empty:
-     6      return
-     7    pop #i from queue
-     8    update t_last[p] = t[i]
-     9    schedule(i)
-     10   if #i or its descendant is "active":
-     11     update t[i] and push it into queue again
-     12
-     13 schedule(0)
+   *
+   * 1  def schedule(p):
+   * 2    if stream #p has data to send:
+   * 3      send data for #p, update nsent[p]
+   * 4      return
+   * 5    if #p's queue is empty:
+   * 6      return
+   * 7    pop #i from queue
+   * 8    update t_last[p] = t[i]
+   * 9    schedule(i)
+   * 10   if #i or its descendant is "active":
+   * 11     update t[i] and push it into queue again
+   * 12
+   * 13 schedule(0)
    *)
   let flush t =
     let rec schedule: type a. a node -> int * bool = function
@@ -443,9 +444,9 @@ module Make (Streamd: StreamDescriptor) = struct
     let implicitly_close_stream streamd =
       if Streamd.is_idle streamd then
         (* From RFC7540§5.1.1:
-             The first use of a new stream identifier implicitly closes all
-             streams in the "idle" state that might have been initiated by
-             that peer with a lower-valued stream identifier. *)
+         *   The first use of a new stream identifier implicitly closes all
+         *   streams in the "idle" state that might have been initiated by
+         *   that peer with a lower-valued stream identifier. *)
         Streamd.finish_stream streamd Finished
       else match Streamd.closed streamd with
       | Some c ->

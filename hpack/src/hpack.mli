@@ -34,8 +34,8 @@ type header =
   { name : string
   ; value : string
     (* From RFC7541§7.1.3:
-         Implementations can also choose to protect sensitive header fields by
-         not compressing them and instead encoding their value as literals. *)
+     *   Implementations can also choose to protect sensitive header fields by
+     *   not compressing them and instead encoding their value as literals. *)
   ; sensitive : bool
   }
 

@@ -33,8 +33,8 @@
 
 
 (* This module contains functionality that applies to both requests and
-   responses, which are collectively referred to in the HTTP 1.1 specifications
-   as 'messages'. *)
+ * responses, which are collectively referred to in the HTTP 1.1 specifications
+ * as 'messages'. *)
 
 let sort_uniq xs =
   (* Though {!List.sort_uniq} performs a check on the input length and returns

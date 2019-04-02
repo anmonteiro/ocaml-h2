@@ -36,26 +36,26 @@ type t =
   ; mutable offset : int
   ; mutable capacity : int
     (* `length` above is the number of entries in the dynamic table. We track
-       the HPACK size in `size`.
-
-       From RFC7541§4.1:
-         The size of the dynamic table is the sum of the size of its entries.
-
-         The size of an entry is the sum of its name's length in octets (as
-         defined in Section 5.2), its value's length in octets, and 32. *)
+     * the HPACK size in `size`.
+     *
+     * From RFC7541§4.1:
+     *   The size of the dynamic table is the sum of the size of its entries.
+     *
+     *   The size of an entry is the sum of its name's length in octets (as
+     *   defined in Section 5.2), its value's length in octets, and 32. *)
   ; mutable size : int
     (* From RFC7541§4.2:
-         Protocols that use HPACK determine the maximum size that the encoder
-         is permitted to use for the dynamic table. In HTTP/2, this value is
-         determined by the SETTINGS_HEADER_TABLE_SIZE setting (see Section
-         6.5.2 of [HTTP2]). *)
+     *   Protocols that use HPACK determine the maximum size that the encoder
+     *   is permitted to use for the dynamic table. In HTTP/2, this value is
+     *   determined by the SETTINGS_HEADER_TABLE_SIZE setting (see Section
+     *   6.5.2 of [HTTP2]). *)
   ; mutable max_size : int
   ; on_evict : (string * string) -> unit
   }
 
 (* From RFC7541§4.1:
-     The size of an entry is the sum of its name's length in octets (as defined
-     in Section 5.2), its value's length in octets, and 32. *)
+ *   The size of an entry is the sum of its name's length in octets (as defined
+ *   in Section 5.2), its value's length in octets, and 32. *)
 let default_entry = ("", "", 32)
 let default_evict = Sys.opaque_identity (fun _ -> ())
 
@@ -79,8 +79,8 @@ let[@inline] get table i =
 
 let[@inline] entry_size name value =
   (* From RFC7541§4.1:
-       The size of an entry is the sum of its name's length in octets (as
-       defined in Section 5.2), its value's length in octets, and 32. *)
+   *   The size of an entry is the sum of its name's length in octets (as
+   *   defined in Section 5.2), its value's length in octets, and 32. *)
   String.length name + String.length value + 32
 
 (* Note: Assumes table.size is positive. Doesn't perform any checking. *)
@@ -109,18 +109,18 @@ let increase_capacity table =
 let add ({ max_size; _ } as table) (name, value) =
   let entry_size = entry_size name value in
   (* From RFC7541§4.4:
-       Before a new entry is added to the dynamic table, entries are evicted
-       from the end of the dynamic table until the size of the dynamic table is
-       less than or equal to (maximum size - new entry size) or until the table
-       is empty. *)
+   *   Before a new entry is added to the dynamic table, entries are evicted
+   *   from the end of the dynamic table until the size of the dynamic table is
+   *   less than or equal to (maximum size - new entry size) or until the table
+   *   is empty. *)
   if table.size > 0 then begin
     while table.size + entry_size > max_size do
       evict_one table
     done
   end;
   (* From RFC7541§4.4:
-       If the size of the new entry is less than or equal to the maximum size,
-       that entry is added to the table. *)
+   *   If the size of the new entry is less than or equal to the maximum size,
+   *   that entry is added to the table. *)
   if table.size + entry_size <= max_size then begin
     if table.length = table.capacity then
       increase_capacity table;
@@ -136,9 +136,9 @@ let[@inline] table_size table = table.length
 let set_capacity table max_size =
   table.max_size <- max_size;
   (* From RFC7541§4.3:
-       Whenever the maximum size for the dynamic table is reduced, entries are
-       evicted from the end of the dynamic table until the size of the dynamic
-       table is less than or equal to the maximum size. *)
+   *   Whenever the maximum size for the dynamic table is reduced, entries are
+   *   evicted from the end of the dynamic table until the size of the dynamic
+   *   table is less than or equal to the maximum size. *)
   while table.size > max_size do
     evict_one table
   done
