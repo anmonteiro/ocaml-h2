@@ -31,68 +31,68 @@
  *---------------------------------------------------------------------------*)
 
 type error_code =
-    (* From RFC7540§7:
-     *   NO_ERROR (0x0): The associated condition is not a result of an
-     *   error. *)
+  (* From RFC7540§7:
+   *   NO_ERROR (0x0): The associated condition is not a result of an
+   *   error. *)
   | NoError
-    (* From RFC7540§7:
-     *   PROTOCOL_ERROR (0x1): The endpoint detected an unspecific protocol
-     *   error. This error is for use when a more specific error code is not
-     *   available. *)
+  (* From RFC7540§7:
+   *   PROTOCOL_ERROR (0x1): The endpoint detected an unspecific protocol
+   *   error. This error is for use when a more specific error code is not
+   *   available. *)
   | ProtocolError
-    (* From RFC7540§7:
-     *   INTERNAL_ERROR (0x2): The endpoint encountered an unexpected internal
-     *   error. *)
+  (* From RFC7540§7:
+   *   INTERNAL_ERROR (0x2): The endpoint encountered an unexpected internal
+   *   error. *)
   | InternalError
-    (* From RFC7540§7:
-     *   FLOW_CONTROL_ERROR (0x3): The endpoint detected that its peer violated
-     *   the flow-control protocol. *)
+  (* From RFC7540§7:
+   *   FLOW_CONTROL_ERROR (0x3): The endpoint detected that its peer violated
+   *   the flow-control protocol. *)
   | FlowControlError
-    (* From RFC7540§7:
-     *   SETTINGS_TIMEOUT (0x4): The endpoint sent a SETTINGS frame but did not
-     *   receive a response in a timely manner. *)
+  (* From RFC7540§7:
+   *   SETTINGS_TIMEOUT (0x4): The endpoint sent a SETTINGS frame but did not
+   *   receive a response in a timely manner. *)
   | SettingsTimeout
-    (* From RFC7540§7:
-     *   STREAM_CLOSED (0x5): The endpoint received a frame after a stream was
-     *   half-closed. *)
+  (* From RFC7540§7:
+   *   STREAM_CLOSED (0x5): The endpoint received a frame after a stream was
+   *   half-closed. *)
   | StreamClosed
-    (* From RFC7540§7:
-     *   FRAME_SIZE_ERROR (0x6): The endpoint received a frame with an invalid
-     *   size. *)
+  (* From RFC7540§7:
+   *   FRAME_SIZE_ERROR (0x6): The endpoint received a frame with an invalid
+   *   size. *)
   | FrameSizeError
-    (* From RFC7540§7:
-     *   REFUSED_STREAM (0x7): The endpoint refused the stream prior to
-     *   performing any application processing (see Section 8.1.4 for
-     *   details). *)
+  (* From RFC7540§7:
+   *   REFUSED_STREAM (0x7): The endpoint refused the stream prior to
+   *   performing any application processing (see Section 8.1.4 for
+   *   details). *)
   | RefusedStream
-    (* From RFC7540§7:
-     *   CANCEL (0x8): Used by the endpoint to indicate that the stream is no
-     *   longer needed. *)
+  (* From RFC7540§7:
+   *   CANCEL (0x8): Used by the endpoint to indicate that the stream is no
+   *   longer needed. *)
   | Cancel
-    (* From RFC7540§7:
-     *   COMPRESSION_ERROR (0x9): The endpoint is unable to maintain the header
-     *   compression context for the connection. *)
+  (* From RFC7540§7:
+   *   COMPRESSION_ERROR (0x9): The endpoint is unable to maintain the header
+   *   compression context for the connection. *)
   | CompressionError
-    (* From RFC7540§7:
-     *   CONNECT_ERROR (0xa): The connection established in response to a
-     *   CONNECT request (Section 8.3) was reset or abnormally closed. *)
+  (* From RFC7540§7:
+   *   CONNECT_ERROR (0xa): The connection established in response to a
+   *   CONNECT request (Section 8.3) was reset or abnormally closed. *)
   | ConnectError
-    (* From RFC7540§7:
-     *   ENHANCE_YOUR_CALM (0xb): The endpoint detected that its peer is
-     *   exhibiting a behavior that might be generating excessive load. *)
+  (* From RFC7540§7:
+   *   ENHANCE_YOUR_CALM (0xb): The endpoint detected that its peer is
+   *   exhibiting a behavior that might be generating excessive load. *)
   | EnhanceYourCalm
-    (* From RFC7540§7:
-     *   INADEQUATE_SECURITY (0xc): The underlying transport has properties
-     *   that do not meet minimum security requirements (see Section 9.2). *)
+  (* From RFC7540§7:
+   *   INADEQUATE_SECURITY (0xc): The underlying transport has properties
+   *   that do not meet minimum security requirements (see Section 9.2). *)
   | InadequateSecurity
-    (* From RFC7540§7:
-     *   HTTP_1_1_REQUIRED (0xd): The endpoint requires that HTTP/1.1 be used
-     *   instead of HTTP/2. *)
+  (* From RFC7540§7:
+   *   HTTP_1_1_REQUIRED (0xd): The endpoint requires that HTTP/1.1 be used
+   *   instead of HTTP/2. *)
   | HTTP11Required
-    (* From RFC7540§7:
-     *   Unknown or unsupported error codes MUST NOT trigger any special
-     *   behavior. These MAY be treated by an implementation as being
-     *   equivalent to INTERNAL_ERROR. *)
+  (* From RFC7540§7:
+   *   Unknown or unsupported error codes MUST NOT trigger any special
+   *   behavior. These MAY be treated by an implementation as being
+   *   equivalent to INTERNAL_ERROR. *)
   | UnknownErrorCode of int32
 
 (* From RFC7540§5.4:
@@ -109,35 +109,65 @@ type t =
  *   Error codes are 32-bit fields that are used in RST_STREAM and GOAWAY
  *   frames to convey the reasons for the stream or connection error. *)
 let serialize = function
-  | NoError             -> 0x0l
-  | ProtocolError       -> 0x1l
-  | InternalError       -> 0x2l
-  | FlowControlError    -> 0x3l
-  | SettingsTimeout     -> 0x4l
-  | StreamClosed        -> 0x5l
-  | FrameSizeError      -> 0x6l
-  | RefusedStream       -> 0x7l
-  | Cancel              -> 0x8l
-  | CompressionError    -> 0x9l
-  | ConnectError        -> 0xal
-  | EnhanceYourCalm     -> 0xbl
-  | InadequateSecurity  -> 0xcl
-  | HTTP11Required      -> 0xdl
-  | UnknownErrorCode id -> id
+  | NoError ->
+    0x0l
+  | ProtocolError ->
+    0x1l
+  | InternalError ->
+    0x2l
+  | FlowControlError ->
+    0x3l
+  | SettingsTimeout ->
+    0x4l
+  | StreamClosed ->
+    0x5l
+  | FrameSizeError ->
+    0x6l
+  | RefusedStream ->
+    0x7l
+  | Cancel ->
+    0x8l
+  | CompressionError ->
+    0x9l
+  | ConnectError ->
+    0xal
+  | EnhanceYourCalm ->
+    0xbl
+  | InadequateSecurity ->
+    0xcl
+  | HTTP11Required ->
+    0xdl
+  | UnknownErrorCode id ->
+    id
 
 let parse = function
-  | 0x0l -> NoError
-  | 0x1l -> ProtocolError
-  | 0x2l -> InternalError
-  | 0x3l -> FlowControlError
-  | 0x4l -> SettingsTimeout
-  | 0x5l -> StreamClosed
-  | 0x6l -> FrameSizeError
-  | 0x7l -> RefusedStream
-  | 0x8l -> Cancel
-  | 0x9l -> CompressionError
-  | 0xal -> ConnectError
-  | 0xbl -> EnhanceYourCalm
-  | 0xcl -> InadequateSecurity
-  | 0xdl -> HTTP11Required
-  | id   -> UnknownErrorCode id
+  | 0x0l ->
+    NoError
+  | 0x1l ->
+    ProtocolError
+  | 0x2l ->
+    InternalError
+  | 0x3l ->
+    FlowControlError
+  | 0x4l ->
+    SettingsTimeout
+  | 0x5l ->
+    StreamClosed
+  | 0x6l ->
+    FrameSizeError
+  | 0x7l ->
+    RefusedStream
+  | 0x8l ->
+    Cancel
+  | 0x9l ->
+    CompressionError
+  | 0xal ->
+    ConnectError
+  | 0xbl ->
+    EnhanceYourCalm
+  | 0xcl ->
+    InadequateSecurity
+  | 0xdl ->
+    HTTP11Required
+  | id ->
+    UnknownErrorCode id

@@ -33,31 +33,32 @@
  *---------------------------------------------------------------------------*)
 
 type _ t =
-  { faraday                        : Faraday.t
-  ; mutable read_scheduled         : bool
+  { faraday : Faraday.t
+  ; mutable read_scheduled : bool
   ; mutable write_final_data_frame : bool
-  ; mutable on_eof                 : unit -> unit
-  ; mutable on_read                : Bigstringaf.t -> off:int -> len:int -> unit
-  ; mutable when_ready_to_write    : unit -> unit
-  ; buffered_bytes                 : int ref
+  ; mutable on_eof : unit -> unit
+  ; mutable on_read : Bigstringaf.t -> off:int -> len:int -> unit
+  ; mutable when_ready_to_write : unit -> unit
+  ; buffered_bytes : int ref
   }
 
-let default_on_eof         = Sys.opaque_identity (fun () -> ())
-let default_on_read        = Sys.opaque_identity (fun _ ~off:_ ~len:_ -> ())
+let default_on_eof = Sys.opaque_identity (fun () -> ())
+
+let default_on_read = Sys.opaque_identity (fun _ ~off:_ ~len:_ -> ())
+
 let default_ready_to_write = Sys.opaque_identity (fun () -> ())
 
 let of_faraday faraday =
   { faraday
-  ; read_scheduled         = false
+  ; read_scheduled = false
   ; write_final_data_frame = true
-  ; on_eof                 = default_on_eof
-  ; on_read                = default_on_read
-  ; when_ready_to_write    = default_ready_to_write
-  ; buffered_bytes         = ref 0
+  ; on_eof = default_on_eof
+  ; on_read = default_on_read
+  ; when_ready_to_write = default_ready_to_write
+  ; buffered_bytes = ref 0
   }
 
-let create buffer =
-  of_faraday (Faraday.of_bigstring buffer)
+let create buffer = of_faraday (Faraday.of_bigstring buffer)
 
 let create_empty () =
   let t = create Bigstringaf.empty in
@@ -83,7 +84,7 @@ let write_bigstring t ?off ?len b =
   Faraday.write_bigstring ?off ?len t.faraday b;
   ready_to_write t
 
-let schedule_bigstring t ?off ?len (b:Bigstringaf.t) =
+let schedule_bigstring t ?off ?len (b : Bigstringaf.t) =
   Faraday.schedule_bigstring ?off ?len t.faraday b;
   ready_to_write t
 
@@ -91,47 +92,46 @@ let flush t kontinue =
   Faraday.flush t.faraday kontinue;
   ready_to_write t
 
-let is_closed t =
-  Faraday.is_closed t.faraday
+let is_closed t = Faraday.is_closed t.faraday
 
 let close_writer t =
   Faraday.close t.faraday;
-  ready_to_write t;
-;;
+  ready_to_write t
 
-let unsafe_faraday t =
-  t.faraday
+let unsafe_faraday t = t.faraday
 
 let rec do_execute_read t on_eof on_read =
   match Faraday.operation t.faraday with
-  | `Yield           -> ()
-  | `Close           ->
+  | `Yield ->
+    ()
+  | `Close ->
     t.read_scheduled <- false;
-    t.on_eof         <- default_on_eof;
-    t.on_read        <- default_on_read;
+    t.on_eof <- default_on_eof;
+    t.on_read <- default_on_read;
     on_eof ()
-  | `Writev []       -> assert false
-  | `Writev (iovec::_) ->
+  | `Writev [] ->
+    assert false
+  | `Writev (iovec :: _) ->
     t.read_scheduled <- false;
-    t.on_eof         <- default_on_eof;
-    t.on_read        <- default_on_read;
+    t.on_eof <- default_on_eof;
+    t.on_read <- default_on_read;
     let { Httpaf.IOVec.buffer; off; len } = iovec in
     Faraday.shift t.faraday len;
     on_read buffer ~off ~len;
     execute_read t
+
 and execute_read t =
   if t.read_scheduled then do_execute_read t t.on_eof t.on_read
 
 let schedule_read t ~on_eof ~on_read =
-  if t.read_scheduled
-  then failwith "Body.schedule_read: reader already scheduled";
-  if is_closed t
-  then do_execute_read t on_eof on_read
-  else begin
+  if t.read_scheduled then
+    failwith "Body.schedule_read: reader already scheduled";
+  if is_closed t then
+    do_execute_read t on_eof on_read
+  else (
     t.read_scheduled <- true;
-    t.on_eof         <- on_eof;
-    t.on_read        <- on_read
-  end
+    t.on_eof <- on_eof;
+    t.on_read <- on_read)
 
 let has_pending_output t =
   (* Force another write poll to make sure that the final chunk is emitted for
@@ -142,7 +142,6 @@ let has_pending_output t =
 let close_reader t =
   Faraday.close t.faraday;
   execute_read t
-;;
 
 let when_ready_to_write t callback =
   (* Due to the flow-control window, this function might be called when another
@@ -157,9 +156,10 @@ let when_ready_to_write t callback =
 let transfer_to_writer t writer ~max_frame_size ~max_bytes stream_id =
   let faraday = t.faraday in
   match Faraday.operation faraday with
-  | `Yield -> 0
+  | `Yield ->
+    0
   | `Close ->
-    if t.write_final_data_frame then begin
+    if t.write_final_data_frame then (
       t.write_final_data_frame <- false;
       (* Note: we don't need to check if we're flow-controlled here.
        *
@@ -173,13 +173,12 @@ let transfer_to_writer t writer ~max_frame_size ~max_bytes stream_id =
           ~flags:Flags.(set_end_stream default_flags)
           stream_id
       in
-      Serialize.Writer.schedule_data writer frame_info ~len:0 Bigstringaf.empty
-    end;
+      Serialize.Writer.schedule_data writer frame_info ~len:0 Bigstringaf.empty);
     0
   | `Writev iovecs ->
     let buffered = t.buffered_bytes in
-    let iovecs   = Httpaf.IOVec.shiftv  iovecs !buffered in
-    let lengthv  = Httpaf.IOVec.lengthv iovecs in
+    let iovecs = Httpaf.IOVec.shiftv iovecs !buffered in
+    let lengthv = Httpaf.IOVec.lengthv iovecs in
     let writev_len = if max_bytes < lengthv then max_bytes else lengthv in
     buffered := !buffered + writev_len;
     let frame_info =
@@ -187,6 +186,6 @@ let transfer_to_writer t writer ~max_frame_size ~max_bytes stream_id =
     in
     Serialize.Writer.schedule_iovecs writer frame_info ~len:writev_len iovecs;
     Serialize.Writer.flush writer (fun () ->
-      Faraday.shift faraday writev_len;
-      buffered := !buffered - writev_len);
+        Faraday.shift faraday writev_len;
+        buffered := !buffered - writev_len);
     writev_len

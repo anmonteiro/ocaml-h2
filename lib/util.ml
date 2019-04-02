@@ -30,8 +30,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
-let test_bit_int32 x i =
-  not Int32.(equal (logand x (shift_left 1l i)) 0l)
+let test_bit_int32 x i = not Int32.(equal (logand x (shift_left 1l i)) 0l)
 
 let test_bit x i = x land (1 lsl i) != 0
 

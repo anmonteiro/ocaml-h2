@@ -41,13 +41,10 @@ let sort_uniq xs =
    * immediately for lists of length less than [2], it still allocates closures
    * before it does that check! To avoid that just do our own checking here to
    * avoid the allocations in the common case. *)
-  match xs with
-  | [] | [ _ ] -> xs
-  | _          -> List.sort_uniq String.compare xs
+  match xs with [] | [ _ ] -> xs | _ -> List.sort_uniq String.compare xs
 
 let unique_content_length_values headers =
   (* XXX(seliopou): perform proper content-length parsing *)
   sort_uniq (Headers.get_multi headers "content-length")
 
-let content_length_of_string s =
-  try Int64.of_string s with _ -> -1L
+let content_length_of_string s = try Int64.of_string s with _ -> -1L

@@ -35,43 +35,44 @@
 module Writer = Serialize.Writer
 
 type error =
-  [ `Bad_request | `Internal_server_error | `Exn of exn ]
+  [ `Bad_request
+  | `Internal_server_error
+  | `Exn of exn
+  ]
 
 type error_handler =
-  ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
+  ?request:Request.t -> error -> (Headers.t -> [ `write ] Body.t) -> unit
 
 type fixed_response =
-  { response: Response.t
-  ; mutable iovec:
-      [ `String of string
-      | `Bigstring of Bigstringaf.t
-      ] Httpaf.IOVec.t
+  { response : Response.t
+  ; mutable iovec :
+      [ `String of string | `Bigstring of Bigstringaf.t ] Httpaf.IOVec.t
   }
 
 type response_state =
   | Waiting of (unit -> unit) ref
   | Fixed of fixed_response
-  | Streaming of Response.t * [`write] Body.t
+  | Streaming of Response.t * [ `write ] Body.t
   | Complete of Response.t
 
 type active_request =
-  { request                      : Request.t
-  ; request_body                 : [`read] Body.t
-  ; mutable request_body_bytes   : int64
+  { request : Request.t
+  ; request_body : [ `read ] Body.t
+  ; mutable request_body_bytes : int64
   }
 
 type 'a active_stream =
-  { body_buffer_size    : int
-  ; encoder                      : Hpack.Encoder.t
-  ; request_info                 : 'a
-  ; mutable response_state       : response_state
+  { body_buffer_size : int
+  ; encoder : Hpack.Encoder.t
+  ; request_info : 'a
+  ; mutable response_state : response_state
   ; mutable wait_for_first_flush : bool
-    (* We're not doing anything with these yet, we could probably have a
-     * `Reqd.schedule_read_trailers` function that would be called once trailer
-     * headers are emitted. *)
-  ; mutable trailers_parser      : Stream.partial_headers option
-  ; mutable trailers             : Headers.t option
-  ; create_push_stream           : unit -> (t * (unit -> unit), string) result
+        (* We're not doing anything with these yet, we could probably have a
+         * `Reqd.schedule_read_trailers` function that would be called once trailer
+         * headers are emitted. *)
+  ; mutable trailers_parser : Stream.partial_headers option
+  ; mutable trailers : Headers.t option
+  ; create_push_stream : unit -> (t * (unit -> unit), string) result
   }
 
 and request_info =
@@ -82,43 +83,40 @@ and request_info =
 and state =
   | Idle
   | Open of request_info
-    (* We purposely name this tag `HalfClosedRemote` to be explicit that once
-     * a stream is in this state it means that the client has stopped sending
-     * us data. The server still has data to send. *)
+  (* We purposely name this tag `HalfClosedRemote` to be explicit that once
+   * a stream is in this state it means that the client has stopped sending
+   * us data. The server still has data to send. *)
   | HalfClosedRemote of active_request active_stream
-    (* TODO: make the `request{,_exn}` / `response{,_exn}` functions work
-     * in this state. *)
+  (* TODO: make the `request{,_exn}` / `response{,_exn}` functions work
+   * in this state. *)
   | Closed of Stream.closed
   | Reserved of active_request active_stream
 
 and t =
-  { id                     : Stream_identifier.t
-  ; writer                 : Writer.t
-  ; error_handler          : error_handler
-  ; mutable error_code     : [`Ok | error ] * Error.error_code option
-  ; mutable state   : state
-    (* The largest frame payload we're allowed to write. *)
+  { id : Stream_identifier.t
+  ; writer : Writer.t
+  ; error_handler : error_handler
+  ; mutable error_code : [ `Ok | error ] * Error.error_code option
+  ; mutable state : state
+        (* The largest frame payload we're allowed to write. *)
   ; mutable max_frame_size : int
-  ; on_stream_closed       : unit -> unit
+  ; on_stream_closed : unit -> unit
   }
 
 let default_waiting = Sys.opaque_identity (fun () -> ())
+
 let initial_ttl = 10
 
 let create_active_request active_stream request request_body =
   { active_stream with
-    request_info =
-      { request
-      ; request_body
-      ; request_body_bytes = Int64.zero
-      }
+    request_info = { request; request_body; request_body_bytes = Int64.zero }
   }
 
 let create_active_stream encoder body_buffer_size create_push_stream =
   { request_info = ()
   ; body_buffer_size
   ; encoder
-  ; response_state  = Waiting (ref default_waiting)
+  ; response_state = Waiting (ref default_waiting)
   ; wait_for_first_flush = true
   ; trailers_parser = None
   ; trailers = None
@@ -129,8 +127,8 @@ let create id ~max_frame_size writer error_handler on_stream_closed =
   { id
   ; writer
   ; error_handler
-  ; state   = Idle
-  ; error_code     = `Ok, None
+  ; state = Idle
+  ; error_code = `Ok, None
   ; max_frame_size
   ; on_stream_closed
   }
@@ -142,83 +140,85 @@ let done_waiting when_done_waiting =
 
 let request t =
   match t.state with
-  | Idle
-  | Open (PartialHeaders _)
-  | Open (FullHeaders _) -> assert false
+  | Idle | Open (PartialHeaders _) | Open (FullHeaders _) ->
+    assert false
   | Open (ActiveRequest { request_info = { request; _ }; _ })
   | HalfClosedRemote { request_info = { request; _ }; _ }
-  | Reserved { request_info = { request; _ }; _ } -> request
-  | Closed _ -> assert false
+  | Reserved { request_info = { request; _ }; _ } ->
+    request
+  | Closed _ ->
+    assert false
 
 let request_body t =
   match t.state with
-  | Idle
-  | Open (PartialHeaders _)
-  | Open (FullHeaders _) -> assert false
+  | Idle | Open (PartialHeaders _) | Open (FullHeaders _) ->
+    assert false
   | Open (ActiveRequest { request_info = { request_body; _ }; _ })
   | HalfClosedRemote { request_info = { request_body; _ }; _ } ->
     request_body
   | Reserved _ ->
     (* From RFC7540§8.1:
      *   Promised requests MUST NOT include a request body. *)
-    failwith "h2.Reqd.request_body: Promised requests must not include a request body"
-  | Closed _ -> assert false
+    failwith
+      "h2.Reqd.request_body: Promised requests must not include a request body"
+  | Closed _ ->
+    assert false
 
 let response t =
   match t.state with
-  | Idle
-  | Open (PartialHeaders _) -> None
+  | Idle | Open (PartialHeaders _) ->
+    None
   | Open (FullHeaders { response_state; _ })
   | Open (ActiveRequest { response_state; _ })
   | HalfClosedRemote { response_state; _ }
   | Reserved { response_state; _ } ->
-    begin match response_state with
-    | Waiting _ -> None
-    | Streaming(response, _)
-    | Fixed { response; _ }
-    | Complete response -> Some response
-    end
-  | Closed _ -> None
+    (match response_state with
+    | Waiting _ ->
+      None
+    | Streaming (response, _) | Fixed { response; _ } | Complete response ->
+      Some response)
+  | Closed _ ->
+    None
 
 let response_exn t =
   match t.state with
-  | Idle
-  | Open (PartialHeaders _) ->
+  | Idle | Open (PartialHeaders _) ->
     failwith "h2.Reqd.response_exn: response has not started"
   | Open (FullHeaders { response_state; _ })
   | Open (ActiveRequest { response_state; _ })
   | HalfClosedRemote { response_state; _ }
   | Reserved { response_state; _ } ->
-    begin match response_state with
-    | Waiting _ -> failwith "h2.Reqd.response_exn: response has not started"
-    | Streaming(response, _)
-    | Fixed { response; _ }
-    | Complete response -> response
-    end
+    (match response_state with
+    | Waiting _ ->
+      failwith "h2.Reqd.response_exn: response has not started"
+    | Streaming (response, _) | Fixed { response; _ } | Complete response ->
+      response)
   | Closed _ ->
     assert false
 
 let send_fixed_response t s response data =
   match s.response_state with
   | Waiting when_done_waiting ->
-    let iovec, length = match data with
-    | `String s ->
-      let len = String.length s in
-      let iovec = { Httpaf.IOVec.buffer = `String s ; off = 0 ; len } in
-      iovec, len
-    | `Bigstring b ->
-      let len = Bigstringaf.length b in
-      let iovec = { Httpaf.IOVec.buffer = `Bigstring b ; off = 0 ; len } in
-      iovec, len
+    let iovec, length =
+      match data with
+      | `String s ->
+        let len = String.length s in
+        let iovec = { Httpaf.IOVec.buffer = `String s; off = 0; len } in
+        iovec, len
+      | `Bigstring b ->
+        let len = Bigstringaf.length b in
+        let iovec = { Httpaf.IOVec.buffer = `Bigstring b; off = 0; len } in
+        iovec, len
     in
     let should_send_data = length != 0 in
     let frame_info =
       Writer.make_frame_info
         ~max_frame_size:t.max_frame_size
-        ~flags:(if should_send_data then
-          Flags.default_flags
-        else
-          Flags.(set_end_stream default_flags))
+        ~flags:
+          (if should_send_data then
+             Flags.default_flags
+          else
+            Flags.(set_end_stream default_flags))
         t.id
     in
     Writer.write_response_headers t.writer s.encoder frame_info response;
@@ -227,46 +227,43 @@ let send_fixed_response t s response data =
      *   [...] A response starts with a HEADERS frame and ends with a frame
      *   bearing END_STREAM, which places the stream in the "closed" state. *)
     if should_send_data then
-      s.response_state <- Fixed
-        { response
-        ; iovec
-        }
+      s.response_state <- Fixed { response; iovec }
     else
       s.response_state <- Complete response;
-    done_waiting when_done_waiting;
+    done_waiting when_done_waiting
   | Streaming _ ->
     failwith "h2.Reqd.respond_with_*: response already started"
-  | Fixed _
-  | Complete _ ->
+  | Fixed _ | Complete _ ->
     failwith "h2.Reqd.respond_with_*: response already complete"
 
 let unsafe_respond_with_data t response data =
   match t.state with
-  | Idle
-  | Open (PartialHeaders _) -> assert false
+  | Idle | Open (PartialHeaders _) ->
+    assert false
   | Open (FullHeaders stream) ->
-    send_fixed_response t stream response data;
-  | Open (ActiveRequest stream)
-  | HalfClosedRemote stream ->
-    send_fixed_response t stream response data;
+    send_fixed_response t stream response data
+  | Open (ActiveRequest stream) | HalfClosedRemote stream ->
+    send_fixed_response t stream response data
   | Reserved stream ->
     send_fixed_response t stream response data;
     (* From RFC7540§8.1:
      *   reserved (local): [...] In this state, only the following transitions
      *   are possible: The endpoint can send a HEADERS frame. This causes the
      *   stream to open in a "half-closed (remote)" state. *)
-    Writer.flush t.writer (fun () ->
-      t.state <- HalfClosedRemote stream)
-  | Closed _ -> assert false
+    Writer.flush t.writer (fun () -> t.state <- HalfClosedRemote stream)
+  | Closed _ ->
+    assert false
 
 let respond_with_string t response str =
   if fst t.error_code <> `Ok then
-    failwith "h2.Reqd.respond_with_string: invalid state, currently handling error";
+    failwith
+      "h2.Reqd.respond_with_string: invalid state, currently handling error";
   unsafe_respond_with_data t response (`String str)
 
 let respond_with_bigstring t response bstr =
   if fst t.error_code <> `Ok then
-    failwith "h2.Reqd.respond_with_bigstring: invalid state, currently handling error";
+    failwith
+      "h2.Reqd.respond_with_bigstring: invalid state, currently handling error";
   unsafe_respond_with_data t response (`Bigstring bstr)
 
 let send_streaming_response ~flush_headers_immediately t s response =
@@ -276,28 +273,25 @@ let send_streaming_response ~flush_headers_immediately t s response =
     let frame_info =
       Writer.make_frame_info ~max_frame_size:t.max_frame_size t.id
     in
-    let response_body_buffer = Bigstringaf.create s.body_buffer_size
-    in
+    let response_body_buffer = Bigstringaf.create s.body_buffer_size in
     let response_body = Body.create response_body_buffer in
     Writer.write_response_headers t.writer s.encoder frame_info response;
     if s.wait_for_first_flush then Writer.yield t.writer;
-    s.response_state <- Streaming(response, response_body);
+    s.response_state <- Streaming (response, response_body);
     done_waiting when_done_waiting;
     response_body
   | Streaming _ ->
     failwith "h2.Reqd.respond_with_streaming: response already started"
-  | Fixed _
-  | Complete _ ->
+  | Fixed _ | Complete _ ->
     failwith "h2.Reqd.respond_with_streaming: response already complete"
 
 let unsafe_respond_with_streaming t ~flush_headers_immediately response =
   match t.state with
-  | Idle
-  | Open (PartialHeaders _) -> assert false
+  | Idle | Open (PartialHeaders _) ->
+    assert false
   | Open (FullHeaders s) ->
     send_streaming_response ~flush_headers_immediately t s response
-  | Open (ActiveRequest s)
-  | HalfClosedRemote s ->
+  | Open (ActiveRequest s) | HalfClosedRemote s ->
     send_streaming_response ~flush_headers_immediately t s response
   | Reserved s ->
     let response_body =
@@ -307,14 +301,15 @@ let unsafe_respond_with_streaming t ~flush_headers_immediately response =
      *   reserved (local): [...] In this state, only the following transitions
      *   are possible: The endpoint can send a HEADERS frame. This causes the
      *   stream to open in a "half-closed (remote)" state. *)
-    Writer.flush t.writer (fun () ->
-      t.state <- HalfClosedRemote s);
+    Writer.flush t.writer (fun () -> t.state <- HalfClosedRemote s);
     response_body
-  | Closed _ -> assert false
+  | Closed _ ->
+    assert false
 
-let respond_with_streaming t ?(flush_headers_immediately=false) response =
+let respond_with_streaming t ?(flush_headers_immediately = false) response =
   if fst t.error_code <> `Ok then
-    failwith "h2.Reqd.respond_with_streaming: invalid state, currently handling error";
+    failwith
+      "h2.Reqd.respond_with_streaming: invalid state, currently handling error";
   unsafe_respond_with_streaming ~flush_headers_immediately t response
 
 let start_push_stream t s request =
@@ -330,14 +325,13 @@ let start_push_stream t s request =
       ~promised_id:promised_reqd.id
       request;
     let { encoder; body_buffer_size; create_push_stream; _ } = s in
-    let active_stream = create_active_stream
-        encoder
-        body_buffer_size
-        create_push_stream
+    let active_stream =
+      create_active_stream encoder body_buffer_size create_push_stream
     in
     (* From RFC7540§8.2:
      *   Promised requests [...] MUST NOT include a request body. *)
-    let active_request = create_active_request active_stream request Body.empty
+    let active_request =
+      create_active_request active_stream request Body.empty
     in
     (* From RFC7540§8.2.1:
      *   Sending a PUSH_PROMISE frame creates a new stream and puts the stream
@@ -363,16 +357,15 @@ let unsafe_push t request =
    *   be safe (see [RFC7231], Section 4.2.1), and MUST NOT include a request
    *   body. *)
   match t.state with
-  | Idle
-  | Open (PartialHeaders _) -> assert false
+  | Idle | Open (PartialHeaders _) ->
+    assert false
   | Open (FullHeaders s) ->
     start_push_stream t s request
-  | Open (ActiveRequest s)
-  | HalfClosedRemote s ->
+  | Open (ActiveRequest s) | HalfClosedRemote s ->
     start_push_stream t s request
   (* Already checked in `push` *)
-  | Reserved _
-  | Closed _ -> assert false
+  | Reserved _ | Closed _ ->
+    assert false
 
 (* TODO: this needs a bit of documentation stating that PUSH_PROMISE frames
  * must only be sent in open or half-closed (remote) states. In practice, it's
@@ -386,7 +379,9 @@ let push t request =
     (* From RFC7540§6.6:
      *   PUSH_PROMISE frames MUST only be sent on a peer-initiated stream that
      *   is in either the "open" or "half-closed (remote)" state. *)
-    failwith "h2.Reqd.push: PUSH_PROMISE frames MUST only be sent on a peer-initiated stream";
+    failwith
+      "h2.Reqd.push: PUSH_PROMISE frames MUST only be sent on a \
+       peer-initiated stream";
   unsafe_push t request
 
 let finish_stream t reason =
@@ -396,17 +391,15 @@ let finish_stream t reason =
 let reset_stream t error_code =
   let frame_info = Writer.make_frame_info t.id in
   Writer.write_rst_stream t.writer frame_info error_code;
-  Writer.flush t.writer (fun () ->
-    finish_stream t (ResetByUs error_code))
+  Writer.flush t.writer (fun () -> finish_stream t (ResetByUs error_code))
 
 let close_stream t =
   match t.error_code with
   | _, Some error_code ->
     reset_stream t error_code
   | _, None ->
-    match t.state with
-    | Open (FullHeaders _)
-    | Open (ActiveRequest _) ->
+    (match t.state with
+    | Open (FullHeaders _) | Open (ActiveRequest _) ->
       (* From RFC7540§8.1:
        *   A server can send a complete response prior to the client sending an
        *   entire request if the response does not depend on any portion of the
@@ -418,30 +411,36 @@ let close_stream t =
       reset_stream t Error.NoError
     | HalfClosedRemote _ ->
       Writer.flush t.writer (fun () -> finish_stream t Finished)
-    | _ -> assert false
+    | _ ->
+      assert false)
 
 let _report_error ?request t s exn error_code =
   match s.response_state, fst t.error_code with
   | Waiting _, `Ok ->
-    t.error_code <- (exn :> [`Ok | error]), Some error_code;
+    t.error_code <- (exn :> [ `Ok | error ]), Some error_code;
     let status =
-      match (exn :> [error | Status.standard]) with
-      | `Exn _                     -> `Internal_server_error
-      | #Status.standard as status -> status
+      match (exn :> [ error | Status.standard ]) with
+      | `Exn _ ->
+        `Internal_server_error
+      | #Status.standard as status ->
+        status
     in
     t.error_handler ?request exn (fun headers ->
-      let response = Response.create ~headers status in
-      unsafe_respond_with_streaming ~flush_headers_immediately:true t response)
+        let response = Response.create ~headers status in
+        unsafe_respond_with_streaming
+          ~flush_headers_immediately:true
+          t
+          response)
   | Waiting _, `Exn _ ->
     (* XXX(seliopou): Decide what to do in this unlikely case. There is an
      * outstanding call to the [error_handler], but an intervening exception
      * has been reported as well. *)
     failwith "h2.Reqd.report_exn: NYI"
-  | Streaming(_response, response_body), `Ok ->
+  | Streaming (_response, response_body), `Ok ->
     Body.close_writer response_body;
-    t.error_code <- (exn :> [`Ok | error]), Some error_code;
+    t.error_code <- (exn :> [ `Ok | error ]), Some error_code;
     reset_stream t error_code
-  | Streaming(_response, response_body), `Exn _ ->
+  | Streaming (_response, response_body), `Exn _ ->
     Body.close_writer response_body;
     t.error_code <- fst t.error_code, Some error_code;
     reset_stream t error_code;
@@ -456,87 +455,96 @@ let _report_error ?request t s exn error_code =
 
 let report_error t exn error_code =
   match t.state with
-  | Idle
-  | Reserved _
-  | Open (PartialHeaders _) -> assert false
+  | Idle | Reserved _ | Open (PartialHeaders _) ->
+    assert false
   | Open (FullHeaders s) ->
     _report_error t s exn error_code
-  | Open (ActiveRequest ({ request_info = { request; request_body; _ }; _ } as s))
-  | HalfClosedRemote ({ request_info = { request; request_body; _ }; _ } as s) ->
+  | Open
+      (ActiveRequest ({ request_info = { request; request_body; _ }; _ } as s))
+  | HalfClosedRemote ({ request_info = { request; request_body; _ }; _ } as s)
+    ->
     Body.close_reader request_body;
     _report_error t s ~request exn error_code
-  | Closed _ -> ()
+  | Closed _ ->
+    ()
 
-let report_exn t exn =
-  report_error t (`Exn exn) Error.InternalError
+let report_exn t exn = report_error t (`Exn exn) Error.InternalError
 
 let try_with t f : (unit, exn) Result.result =
-  try f (); Ok () with exn -> report_exn t exn; Error exn
+  try
+    f ();
+    Ok ()
+  with
+  | exn ->
+    report_exn t exn;
+    Error exn
 
 (* Private API, not exposed to the user through h2.mli *)
 
-let close_request_body { request_body; _ } =
-  Body.close_reader request_body
+let close_request_body { request_body; _ } = Body.close_reader request_body
 
 let error_code t =
-  match fst t.error_code with
-  | #error as error -> Some error
-  | `Ok             -> None
+  match fst t.error_code with #error as error -> Some error | `Ok -> None
 
 let on_more_output_available t f =
   match t.state with
-  | Idle
-  | Reserved _ -> assert false
-  | Open (PartialHeaders _) -> assert false
+  | Idle | Reserved _ ->
+    assert false
+  | Open (PartialHeaders _) ->
+    assert false
   | Open (FullHeaders { response_state; _ })
   | Open (ActiveRequest { response_state; _ })
   | HalfClosedRemote { response_state; _ } ->
-    begin match response_state with
+    (match response_state with
     | Waiting when_done_waiting ->
       (* Due to the flow-control window, this function might be called when
        * another callback is already stored. We don't enforce that the
        * currently stored callback is equal to `default_waiting` because it is
        * OK for that not to happen. *)
       when_done_waiting := f
-    | Streaming(_, response_body) ->
+    | Streaming (_, response_body) ->
       Body.when_ready_to_write response_body f
-    | Fixed _ -> ()
+    | Fixed _ ->
+      ()
     | Complete _ ->
-      failwith "h2.Reqd.on_more_output_available: response already complete"
-    end
-  | Closed _ -> assert false
+      failwith "h2.Reqd.on_more_output_available: response already complete")
+  | Closed _ ->
+    assert false
 
 let response_body_requires_output response_body =
-  not (Body.is_closed response_body)
-  || Body.has_pending_output response_body
+  (not (Body.is_closed response_body)) || Body.has_pending_output response_body
 
 let requires_output t =
   match t.state with
-  | Idle -> false
-  | Reserved _ -> true
+  | Idle ->
+    false
+  | Reserved _ ->
+    true
   (* From RFC7540§8.1:
    *   A server can send a complete response prior to the client sending an
    *   entire request if the response does not depend on any portion of the
    *   request that has not been sent and received. *)
-  | Open (PartialHeaders _) -> false
+  | Open (PartialHeaders _) ->
+    false
   | Open (FullHeaders { response_state; _ })
   | Open (ActiveRequest { response_state; _ })
   | HalfClosedRemote { response_state; _ } ->
-    begin match response_state with
-    | Complete _ -> false
+    (match response_state with
+    | Complete _ ->
+      false
     | Fixed { iovec = { len; _ }; _ } ->
       len > 0
     | Streaming (_, response_body) ->
       response_body_requires_output response_body
-    | Waiting _ -> true
-    end
-  | Closed _ -> false
+    | Waiting _ ->
+      true)
+  | Closed _ ->
+    false
 
 let flush_request_body t =
   let request_body = request_body t in
-  if Body.has_pending_output request_body
-  then try Body.execute_read request_body
-  with exn -> report_exn t exn
+  if Body.has_pending_output request_body then
+    try Body.execute_read request_body with exn -> report_exn t exn
 
 let write_buffer_data writer ~off ~len frame_info buffer =
   match buffer with
@@ -550,28 +558,30 @@ let flush_response_body t ~max_bytes =
   | Open (FullHeaders { response_state; _ })
   | Open (ActiveRequest { response_state; _ })
   | HalfClosedRemote { response_state; _ } ->
-    begin match response_state with
+    (match response_state with
     | Streaming (_, response_body) ->
       let written =
-        Body.transfer_to_writer response_body
+        Body.transfer_to_writer
+          response_body
           t.writer
           ~max_frame_size:t.max_frame_size
-          ~max_bytes t.id
+          ~max_bytes
+          t.id
       in
       if not (response_body_requires_output response_body) then
         close_stream t;
       written
     | Fixed r ->
-      begin match r.iovec with
+      (match r.iovec with
       | { buffer; off; len } as iovec ->
-        if max_bytes < len then begin
+        if max_bytes < len then (
           let frame_info =
             Writer.make_frame_info ~max_frame_size:t.max_frame_size t.id
           in
           write_buffer_data t.writer ~off ~len:max_bytes frame_info buffer;
           r.iovec <- Httpaf.IOVec.shift iovec max_bytes;
-          max_bytes
-        end else begin
+          max_bytes)
+        else
           let frame_info =
             Writer.make_frame_info
               ~max_frame_size:t.max_frame_size
@@ -580,21 +590,18 @@ let flush_response_body t ~max_bytes =
           in
           write_buffer_data t.writer ~off ~len frame_info buffer;
           close_stream t;
-          len
-        end
-      end
-    | Waiting _
-    | Complete _ -> 0
-    end
-  | _ -> 0
+          len)
+    | Waiting _ | Complete _ ->
+      0)
+  | _ ->
+    0
 
 let deliver_trailer_headers t headers =
   match t.state with
-  | Open (PartialHeaders _)
-  | Open (FullHeaders _) -> assert false
-  | Open (ActiveRequest s)
-  | HalfClosedRemote s ->
+  | Open (PartialHeaders _) | Open (FullHeaders _) ->
+    assert false
+  | Open (ActiveRequest s) | HalfClosedRemote s ->
     (* TODO: call the schedule_trailers callback *)
     s.trailers <- Some headers
-  | _ -> assert false
-
+  | _ ->
+    assert false

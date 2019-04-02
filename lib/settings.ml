@@ -41,7 +41,7 @@ module WindowSize = struct
   (* From RFC7540§6.9:
    *   The legal range for the increment to the flow-control window is 1 to
    *   2^31-1 (2,147,483,647) octets. *)
-  let max_window_size = 1 lsl 31 - 1
+  let max_window_size = (1 lsl 31) - 1
 
   (* Ideally `n` here would be an unsigned 32-bit integer, but OCaml doesn't
    * support them. We avoid introducing a new dependency on an unsigned integer
@@ -64,21 +64,34 @@ type value = int
 type settings_list = (key * value) list
 
 let serialize_key = function
-  | HeaderTableSize -> 0x1
-  | EnablePush -> 0x2
-  | MaxConcurrentStreams -> 0x3
-  | InitialWindowSize -> 0x4
-  | MaxFrameSize -> 0x5
-  | MaxHeaderListSize -> 0x6
+  | HeaderTableSize ->
+    0x1
+  | EnablePush ->
+    0x2
+  | MaxConcurrentStreams ->
+    0x3
+  | InitialWindowSize ->
+    0x4
+  | MaxFrameSize ->
+    0x5
+  | MaxHeaderListSize ->
+    0x6
 
 let parse_key = function
-  | 0x1 -> Some HeaderTableSize
-  | 0x2 -> Some EnablePush
-  | 0x3 -> Some MaxConcurrentStreams
-  | 0x4 -> Some InitialWindowSize
-  | 0x5 -> Some MaxFrameSize
-  | 0x6 -> Some MaxHeaderListSize
-  | _ -> None
+  | 0x1 ->
+    Some HeaderTableSize
+  | 0x2 ->
+    Some EnablePush
+  | 0x3 ->
+    Some MaxConcurrentStreams
+  | 0x4 ->
+    Some InitialWindowSize
+  | 0x5 ->
+    Some MaxFrameSize
+  | 0x6 ->
+    Some MaxHeaderListSize
+  | _ ->
+    None
 
 let check_value = function
   | EnablePush, v when v != 0 && v != 1 ->
@@ -86,17 +99,21 @@ let check_value = function
      *   The initial value is 1, which indicates that server push is permitted.
      *   Any value other than 0 or 1 MUST be treated as a connection error
      *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-    Some Error.(ConnectionError (ProtocolError, "SETTINGS_ENABLE_PUSH must be 0 or 1"))
+    Some
+      Error.(
+        ConnectionError (ProtocolError, "SETTINGS_ENABLE_PUSH must be 0 or 1"))
   | InitialWindowSize, v when WindowSize.is_window_overflow v ->
     (* From RFC7540§6.5.2
      *   Values above the maximum flow-control window size of 2^31-1 MUST be
      *   treated as a connection error (Section 5.4.1) of type
      *   FLOW_CONTROL_ERROR. *)
     Some
-      Error.(ConnectionError
-        ( FlowControlError
-        , Format.sprintf "Window size must be less than or equal to %d"
-            WindowSize.max_window_size))
+      Error.(
+        ConnectionError
+          ( FlowControlError
+          , Format.sprintf
+              "Window size must be less than or equal to %d"
+              WindowSize.max_window_size ))
   | MaxFrameSize, v when v < 16384 || v > 16777215 ->
     (* From RFC7540§6.5.2
      *   The initial value is 214 (16,384) octets. The value advertised by an
@@ -104,17 +121,24 @@ let check_value = function
      *   frame size (224-1 or 16,777,215 octets), inclusive. Values outside
      *   this range MUST be treated as a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
-    Some Error.(ConnectionError (ProtocolError, "Max frame size must be in the 16384 - 16777215 range"))
-  | _ -> None
+    Some
+      Error.(
+        ConnectionError
+          ( ProtocolError
+          , "Max frame size must be in the 16384 - 16777215 range" ))
+  | _ ->
+    None
 
 (* Check incoming settings and report an error if any. *)
 let rec check_settings_list = function
-  | [] -> None
-  | x::xs ->
-    begin match check_value x with
-    | None -> check_settings_list xs
-    | Some _ as err -> err
-    end
+  | [] ->
+    None
+  | x :: xs ->
+    (match check_value x with
+    | None ->
+      check_settings_list xs
+    | Some _ as err ->
+      err)
 
 type t =
   { mutable header_table_size : int
@@ -128,10 +152,11 @@ type t =
 (* From RFC7540§11.3 *)
 let default_settings =
   { header_table_size = 0x1000
-  ; enable_push = true
-    (* From RFC7540§6.5.2:
-     *   SETTINGS_MAX_CONCURRENT_STREAMS (0x3): [...] Initially, there is no
-     *   limit to this value. *)
+  ; enable_push =
+      true
+      (* From RFC7540§6.5.2:
+       *   SETTINGS_MAX_CONCURRENT_STREAMS (0x3): [...] Initially, there is no
+       *   limit to this value. *)
   ; max_concurrent_streams = Int32.(to_int max_int)
   ; initial_window_size = WindowSize.default_initial_window_size
   ; max_frame_size = 0x4000
@@ -146,13 +171,17 @@ let settings_for_the_connection settings =
       []
   in
   let settings_list =
-    if settings.max_concurrent_streams <> default_settings.max_concurrent_streams then
+    if
+      settings.max_concurrent_streams
+      <> default_settings.max_concurrent_streams
+    then
       (MaxConcurrentStreams, settings.max_concurrent_streams) :: settings_list
     else
       settings_list
   in
   let settings_list =
-    if settings.initial_window_size <> default_settings.initial_window_size then
+    if settings.initial_window_size <> default_settings.initial_window_size
+    then
       (InitialWindowSize, settings.initial_window_size) :: settings_list
     else
       settings_list

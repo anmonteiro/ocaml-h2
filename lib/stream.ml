@@ -34,7 +34,7 @@ module AB = Angstrom.Buffered
 
 type partial_headers =
   { mutable parse_state : (Headers.t, Hpack.error) result AB.state
-  ; end_stream          : bool
+  ; end_stream : bool
   }
 
 type closed_reason =
@@ -50,15 +50,15 @@ type closed_reason =
    *   time. This behavior is permitted to deal with misbehaving
    *   implementations. *)
   | ResetByUs of Error.error_code
-    (* Received an RST_STREAM frame from the peer. *)
+  (* Received an RST_STREAM frame from the peer. *)
   | ResetByThem of Error.error_code
 
 type closed =
   { reason : closed_reason
-    (* When a stream is closed, we may want to keep it around in the hash
-     * table for a while (e.g. to know whether this stream was reset by the
-     * peer - some error handling code depends on that). We start with a
-     * default value, and on every writer yield we decrement it. If it
-     * reaches 0, the stream is finally removed from the hash table. *)
+        (* When a stream is closed, we may want to keep it around in the hash
+         * table for a while (e.g. to know whether this stream was reset by the
+         * peer - some error handling code depends on that). We start with a
+         * default value, and on every writer yield we decrement it. If it
+         * reaches 0, the stream is finally removed from the hash table. *)
   ; mutable ttl : int
   }

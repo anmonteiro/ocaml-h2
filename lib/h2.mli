@@ -44,12 +44,11 @@
 
 (** {2 Basic HTTP Types} *)
 
-
 (** Request Method
 
-    The request method token is the primary source of request semantics;
-    it indicates the purpose for which the client has made this request
-    and what is expected by the client as a successful result.
+    The request method token is the primary source of request semantics; it
+    indicates the purpose for which the client has made this request and what
+    is expected by the client as a successful result.
 
     See {{:https://tools.ietf.org/html/rfc7231#section-4} RFC7231§4} for more
     details.
@@ -57,7 +56,6 @@
     This module is a proxy to [Httpaf.Method] and is included in h2 for
     convenience. *)
 module Method : module type of Httpaf.Method
-
 
 (** Response Status Codes
 
@@ -72,41 +70,34 @@ module Method : module type of Httpaf.Method
     [Switching_protocols] tag, as per the HTTP/2 spec (relevant portion
     reproduced below).
 
-    From RFC7540§8.1.1:
-      HTTP/2 removes support for the 101 (Switching Protocols) informational
-      status code ([RFC7231], Section 6.2.2).
+    From RFC7540§8.1.1: HTTP/2 removes support for the 101 (Switching
+    Protocols) informational status code ([RFC7231], Section 6.2.2).
 
     See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1}
     for more details. *)
 module Status : sig
-  type informational = [ `Continue ]
   (** The 1xx (Informational) class of status code indicates an interim
-      response for communicating connection status or request progress
-      prior to completing the requested action and sending a final
-      response.
+      response for communicating connection status or request progress prior to
+      completing the requested action and sending a final response.
 
-      See {{:https://tools.ietf.org/html/rfc7231#section-6.2} RFC7231§6.2}
-      for more details. *)
+      See {{:https://tools.ietf.org/html/rfc7231#section-6.2} RFC7231§6.2} for
+      more details. *)
+  type informational = [ `Continue ]
 
-  type successful = Httpaf.Status.successful
   (** The 2xx (Successful) class of status code indicates that the client's
       request was successfully received, understood, and accepted.
 
-      See {{:https://tools.ietf.org/html/rfc7231#section-6.3} RFC7231§6.3}
-      for more details. *)
+      See {{:https://tools.ietf.org/html/rfc7231#section-6.3} RFC7231§6.3} for
+      more details. *)
+  type successful = Httpaf.Status.successful
 
-  type redirection = Httpaf.Status.redirection
-  (** The 3xx (Redirection) class of status code indicates that further
-      action needs to be taken by the user agent in order to fulfill the
-      request.
+  (** The 3xx (Redirection) class of status code indicates that further action
+      needs to be taken by the user agent in order to fulfill the request.
 
       See {{:https://tools.ietf.org/html/rfc7231#section-6.4} RFC7231§6.4} for
       more details. *)
+  type redirection = Httpaf.Status.redirection
 
-  type client_error =
-    [ Httpaf.Status.client_error
-    | `Misdirected_request
-    ]
   (** The 4xx (Client Error) class of status code indicates that the client
       seems to have erred.
 
@@ -116,22 +107,19 @@ module Status : sig
       In addition to http/af, this type also includes the 421 (Misdirected
       Request) tag. See {{:https://tools.ietf.org/html/rfc7540#section-9.1.2}
       RFC7540§9.1.2} for more details. *)
+  type client_error =
+    [ Httpaf.Status.client_error
+    | `Misdirected_request
+    ]
 
-  type server_error = Httpaf.Status.server_error
   (** The 5xx (Server Error) class of status code indicates that the server is
       aware that it has erred or is incapable of performing the requested
       method.
 
       See {{:https://tools.ietf.org/html/rfc7231#section-6.6} RFC7231§6.6} for
       more details. *)
+  type server_error = Httpaf.Status.server_error
 
-  type standard =
-    [ informational
-    | successful
-    | redirection
-    | client_error
-    | server_error
-    ]
   (** The status codes defined in the HTTP/1.1 RFCs, excluding the [Switching
       Protocols] status and including the [Misdirected Request] as per the
       HTTP/2 RFC.
@@ -139,15 +127,23 @@ module Status : sig
       See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1}
       and {{:https://tools.ietf.org/html/rfc7540#section-9.1.2} RFC7540§9.1.2}
       for more details. *)
+  type standard =
+    [ informational
+    | successful
+    | redirection
+    | client_error
+    | server_error
+    ]
 
-  type t = [
-    | standard
-    | `Code of int ]
   (** The standard codes along with support for custom codes. *)
+  type t =
+    [ standard
+    | `Code of int
+    ]
 
   val default_reason_phrase : standard -> string
-  (** [default_reason_phrase standard] is the example reason phrase provided
-      by RFC7231 for the [standard] status code. The RFC allows servers to use
+  (** [default_reason_phrase standard] is the example reason phrase provided by
+      RFC7231 for the [standard] status code. The RFC allows servers to use
       reason phrases besides these in responses. *)
 
   val to_code : t -> int
@@ -187,11 +183,11 @@ module Status : sig
       Server Error class of status codes. *)
 
   val to_string : t -> string
+
   val of_string : string -> t
 
   val pp_hum : Format.formatter -> t -> unit
 end
-
 
 (** Header Fields
 
@@ -199,13 +195,13 @@ end
     value}. Per the HTTP/2 specification, header field names {b must} be
     converted to lowercase prior to their encoding in HTTP/2 (see
     {{:https://tools.ietf.org/html/rfc7540#section-8.1.2} RFC7540§8.1.2} for
-    more details). h2 does {b not} convert field names to lowercase; it
-    is therefore the responsibility of the caller of the functions contained in
+    more details). h2 does {b not} convert field names to lowercase; it is
+    therefore the responsibility of the caller of the functions contained in
     this module to use lowercase names for header fields.
 
-    The order in which header fields {i with differing field names}
-    are received is not significant, except for pseudo-header fields, which
-    {b must} appear in header blocks before regular fields (see
+    The order in which header fields {i with differing field names} are
+    received is not significant, except for pseudo-header fields, which {b
+    must} appear in header blocks before regular fields (see
     {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.1} RFC7540§8.1.2.1}
     for more details).
 
@@ -229,14 +225,14 @@ end
     See {{:https://tools.ietf.org/html/rfc7230#section-3.2} RFC7230§3.2} for
     more details. *)
 module Headers : sig
-  type t
   (** The type of a group of header fields. *)
+  type t
 
-  type name = string
   (** The type of a lowercase header name. *)
+  type name = string
 
-  type value = string
   (** The type of a header value. *)
+  type value = string
 
   (** {3 Constructor} *)
 
@@ -249,9 +245,8 @@ module Headers : sig
       [assoc] is the intended transmission order. The following equations
       should hold:
 
-        {ul
-        {- [to_list (of_list lst) = lst] }
-        {- [get (of_list [("k", "v1"); ("k", "v2")]) "k" = Some "v2"]. }} *)
+      {ul {- [to_list (of_list lst) = lst] } {- [get (of_list [("k", "v1");
+      ("k", "v2")]) "k" = Some "v2"]. }} *)
 
   val of_rev_list : (name * value) list -> t
   (** [of_list assoc] is a collection of header fields defined by the
@@ -259,9 +254,8 @@ module Headers : sig
       [assoc] is the {i reverse} of the intended trasmission order. The
       following equations should hold:
 
-        {ul
-        {- [to_list (of_rev_list lst) = List.rev lst] }
-        {- [get (of_rev_list [("k", "v1"); ("k", "v2")]) "k" = Some "v1"]. }} *)
+      {ul {- [to_list (of_rev_list lst) = List.rev lst] } {- [get (of_rev_list
+      [("k", "v1"); ("k", "v2")]) "k" = Some "v1"]. }} *)
 
   val to_list : t -> (name * value) list
   (** [to_list t] is the association list of header fields contained in [t] in
@@ -275,15 +269,14 @@ module Headers : sig
   (** [add t ?sensitive name value] is a collection of header fields that is
       the same as [t] except with [(name, value)] added at the end of the
       trasmission order. Additionally, [sensitive] specifies whether this
-      header field should not be compressed by HPACK and instead encoded as
-      a never-indexed literal (see
+      header field should not be compressed by HPACK and instead encoded as a
+      never-indexed literal (see
       {{:https://tools.ietf.org/html/rfc7541#section-7.1.3} RFC7541§7.1.3} for
       more details).
 
       The following equations should hold:
 
-        {ul
-        {- [get (add t name value) name = Some value] }} *)
+      {ul {- [get (add t name value) name = Some value] }} *)
 
   val add_unless_exists : t -> ?sensitive:bool -> name -> value -> t
   (** [add_unless_exists t ?sensitive name value] is a collection of header
@@ -298,17 +291,13 @@ module Headers : sig
   val add_multi : t -> (name * value list) list -> t
   (** [add_multi t assoc] is the same as
 
-      {[
-        add_list t (List.concat_map assoc ~f:(fun (name, values) ->
-          List.map values ~f:(fun value -> (name, value))))
-      ]}
+      {[ add_list t (List.concat_map assoc ~f:(fun (name, values) -> List.map
+      values ~f:(fun value -> (name, value)))) ]}
 
       but is implemented more efficiently. For example,
 
-      {[
-        add_multi t ["name1", ["x", "y"]; "name2", ["p", "q"]]
-          = add_list ["name1", "x"; "name1", "y"; "name2", "p"; "name2", "q"]
-      ]} *)
+      {[ add_multi t ["name1", ["x", "y"]; "name2", ["p", "q"]] = add_list
+      ["name1", "x"; "name1", "y"; "name2", "p"; "name2", "q"] ]} *)
 
   val remove : t -> name -> t
   (** [remove t name] is a collection of header fields that contains all the
@@ -348,6 +337,7 @@ module Headers : sig
   (** {3 Iteration} *)
 
   val iter : f:(name -> value -> unit) -> t -> unit
+
   val fold : f:(name -> value -> 'a -> 'a) -> init:'a -> t -> 'a
 
   (** {3 Utilities} *)
@@ -363,9 +353,9 @@ module Body : sig
   type 'rw t
 
   val schedule_read
-    :  [`read] t
-    -> on_eof  : (unit -> unit)
-    -> on_read : (Bigstringaf.t -> off:int -> len:int -> unit)
+    :  [ `read ] t
+    -> on_eof:(unit -> unit)
+    -> on_read:(Bigstringaf.t -> off:int -> len:int -> unit)
     -> unit
   (** [schedule_read t ~on_eof ~on_read] will setup [on_read] and [on_eof] as
       callbacks for when bytes are available in [t] for the application to
@@ -376,28 +366,37 @@ module Body : sig
       The application is responsible for scheduling subsequent reads, either
       within the [on_read] callback or by some other mechanism. *)
 
-  val write_char : [`write] t -> char -> unit
+  val write_char : [ `write ] t -> char -> unit
   (** [write_char w char] copies [char] into an internal buffer. If possible,
       this write will be combined with previous and/or subsequent writes before
       transmission. *)
 
-  val write_string : [`write] t -> ?off:int -> ?len:int -> string -> unit
+  val write_string : [ `write ] t -> ?off:int -> ?len:int -> string -> unit
   (** [write_string w ?off ?len str] copies [str] into an internal buffer. If
       possible, this write will be combined with previous and/or subsequent
       writes before transmission. *)
 
-  val write_bigstring : [`write] t -> ?off:int -> ?len:int -> Bigstringaf.t -> unit
+  val write_bigstring
+    :  [ `write ] t
+    -> ?off:int
+    -> ?len:int
+    -> Bigstringaf.t
+    -> unit
   (** [write_bigstring w ?off ?len bs] copies [bs] into an internal buffer. If
       possible, this write will be combined with previous and/or subsequent
       writes before transmission. *)
 
-  val schedule_bigstring : [`write] t -> ?off:int -> ?len:int -> Bigstringaf.t -> unit
+  val schedule_bigstring
+    :  [ `write ] t
+    -> ?off:int
+    -> ?len:int
+    -> Bigstringaf.t
+    -> unit
   (** [schedule_bigstring w ?off ?len bs] schedules [bs] to be transmitted at
       the next opportunity without performing a copy. [bs] should not be
-      modified until a subsequent call to {!flush} has successfully
-      completed. *)
+      modified until a subsequent call to {!flush} has successfully completed. *)
 
-  val flush : [`write] t -> (unit -> unit) -> unit
+  val flush : [ `write ] t -> (unit -> unit) -> unit
   (** [flush t f] makes all bytes in [t] available for writing to the awaiting
       output channel. Once those bytes have reached that output channel, [f]
       will be called.
@@ -406,11 +405,11 @@ module Body : sig
       about whether those packets have been queued for delivery or have
       actually been received by the intended recipient. *)
 
-  val close_reader : [`read] t -> unit
+  val close_reader : [ `read ] t -> unit
   (** [close_reader t] closes [t], indicating that any subsequent input
       received should be discarded. *)
 
-  val close_writer : [`write] t -> unit
+  val close_writer : [ `write ] t -> unit
   (** [close_writer t] closes [t], causing subsequent write calls to raise. If
       [t] is writable, this will cause any pending output to become available
       to the output channel. *)
@@ -420,7 +419,6 @@ module Body : sig
       otherwise. A closed [t] may still have pending output. *)
 end
 
-
 (** {2 Message Types} *)
 
 (** Request
@@ -428,14 +426,15 @@ end
     A client-initiated HTTP message. *)
 module Request : sig
   type t =
-    { meth    : Method.t
-    ; target  : string
-    ; scheme  : string
-    ; headers : Headers.t }
+    { meth : Method.t
+    ; target : string
+    ; scheme : string
+    ; headers : Headers.t
+    }
 
   val create
     :  ?headers:Headers.t (** default is {!Headers.empty} *)
-    -> scheme: string
+    -> scheme:string
     -> Method.t
     -> string
     -> t
@@ -443,29 +442,28 @@ module Request : sig
   val pp_hum : Format.formatter -> t -> unit
 end
 
-
 (** Response
 
     A server-generated message to a {!Request.t}. *)
 module Response : sig
   type t =
-    { status  : Status.t
-    ; headers : Headers.t }
+    { status : Status.t
+    ; headers : Headers.t
+    }
 
   val create
     :  ?headers:Headers.t (** default is {!Headers.empty} *)
     -> Status.t
     -> t
   (** [create ?headers status] creates an HTTP response with the given
-      parameters. Unlike the [Response] type in http/af, h2 does not
-      define a way for responses to carry reason phrases or protocol version.
+      parameters. Unlike the [Response] type in http/af, h2 does not define a
+      way for responses to carry reason phrases or protocol version.
 
       See {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.4}
       RFC7540§8.1.2.4} for more details. *)
 
   val pp_hum : Format.formatter -> t -> unit
 end
-
 
 (** IOVec *)
 module IOVec : module type of Httpaf.IOVec
@@ -475,9 +473,11 @@ module Reqd : sig
   type t
 
   val request : t -> Request.t
-  val request_body : t -> [`read] Body.t
+
+  val request_body : t -> [ `read ] Body.t
 
   val response : t -> Response.t option
+
   val response_exn : t -> Response.t
 
   (** Responding
@@ -486,12 +486,18 @@ module Reqd : sig
       request in [t]. When the response is fully transmitted to the wire, the
       stream completes.
 
-      From {{:https://tools.ietf.org/html/rfc7540#section-8.1} RFC7540§8.1}:
-        An HTTP request/response exchange fully consumes a single stream. *)
+      From {{:https://tools.ietf.org/html/rfc7540#section-8.1} RFC7540§8.1}: An
+      HTTP request/response exchange fully consumes a single stream. *)
 
-  val respond_with_string    : t -> Response.t -> string -> unit
+  val respond_with_string : t -> Response.t -> string -> unit
+
   val respond_with_bigstring : t -> Response.t -> Bigstringaf.t -> unit
-  val respond_with_streaming : t -> ?flush_headers_immediately:bool -> Response.t -> [`write] Body.t
+
+  val respond_with_streaming
+    :  t
+    -> ?flush_headers_immediately:bool
+    -> Response.t
+    -> [ `write ] Body.t
 
   val push : t -> Request.t -> t
   (** Pushing
@@ -512,26 +518,28 @@ module Reqd : sig
   (** {3 Exception Handling} *)
 
   val report_exn : t -> exn -> unit
+
   val try_with : t -> (unit -> unit) -> (unit, exn) result
 end
 
 (** {2 HTTP/2 Configuration} *)
 module Config : sig
   type t =
-    { read_buffer_size          : int
-      (** [read_buffer_size] specifies the size of the largest frame payload
-          that the sender is willing to receive, in octets. Defaults to
-          [16384] *)
-    ; request_body_buffer_size  : int  (** Defaults to [4096] *)
-    ; response_buffer_size      : int  (** Defaults to [1024] *)
+    { read_buffer_size : int
+          (** [read_buffer_size] specifies the size of the largest frame
+              payload that the sender is willing to receive, in octets.
+              Defaults to [16384] *)
+    ; request_body_buffer_size : int  (** Defaults to [4096] *)
+    ; response_buffer_size : int  (** Defaults to [1024] *)
     ; response_body_buffer_size : int  (** Defaults to [4096] *)
-    ; enable_server_push        : bool (** Defaults to [true] *)
-    ; max_concurrent_streams    : int
-      (** [max_concurrent_streams] specifies the maximum number of streams that
-          the sender will allow the peer to initiate. Defaults to [1^31 - 1] *)
-    ; initial_window_size       : int
-      (** [initial_window_size] specifies the initial window size for flow
-          control tokens. Defaults to [65535] *)
+    ; enable_server_push : bool  (** Defaults to [true] *)
+    ; max_concurrent_streams : int
+          (** [max_concurrent_streams] specifies the maximum number of streams
+              that the sender will allow the peer to initiate. Defaults to
+              [1^31 - 1] *)
+    ; initial_window_size : int
+          (** [initial_window_size] specifies the initial window size for flow
+              control tokens. Defaults to [65535] *)
     }
 
   val default : t
@@ -545,12 +553,15 @@ module Server_connection : sig
   type t
 
   type error =
-    [ `Bad_request | `Internal_server_error | `Exn of exn ]
+    [ `Bad_request
+    | `Internal_server_error
+    | `Exn of exn
+    ]
 
   type request_handler = Reqd.t -> unit
 
   type error_handler =
-    ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
+    ?request:Request.t -> error -> (Headers.t -> [ `write ] Body.t) -> unit
 
   val create
     :  ?config:Config.t
@@ -567,36 +578,33 @@ module Server_connection : sig
   val read : t -> Bigstringaf.t -> off:int -> len:int -> int
   (** [read t bigstring ~off ~len] reads bytes of input from the provided range
       of [bigstring] and returns the number of bytes consumed by the
-      connection.  {!read} should be called after {!next_read_operation}
-      returns a [`Read] value and additional input is available for the
-      connection to consume. *)
+      connection. {!read} should be called after {!next_read_operation} returns
+      a [`Read] value and additional input is available for the connection to
+      consume. *)
 
   val read_eof : t -> Bigstringaf.t -> off:int -> len:int -> int
   (** [read t bigstring ~off ~len] reads bytes of input from the provided range
       of [bigstring] and returns the number of bytes consumed by the
-      connection.  {!read} should be called after {!next_read_operation}
-      returns a [`Read] and an EOF has been received from the communication
-      channel. The connection will attempt to consume any buffered input and
-      then shutdown the HTTP parser for the connection. *)
+      connection. {!read} should be called after {!next_read_operation} returns
+      a [`Read] and an EOF has been received from the communication channel.
+      The connection will attempt to consume any buffered input and then
+      shutdown the HTTP parser for the connection. *)
 
-  val next_write_operation : t -> [
-    | `Write of Bigstringaf.t IOVec.t list
-    | `Yield
-    | `Close of int ]
+  val next_write_operation
+    :  t
+    -> [ `Write of Bigstringaf.t IOVec.t list | `Yield | `Close of int ]
   (** [next_write_operation t] returns a value describing the next operation
       that the caller should conduct on behalf of the connection. *)
 
-  val report_write_result : t -> [`Ok of int | `Closed] -> unit
+  val report_write_result : t -> [ `Ok of int | `Closed ] -> unit
   (** [report_write_result t result] reports the result of the latest write
       attempt to the connection. {!report_write_result} should be called after
       a call to {!next_write_operation} that returns a [`Write buffer] value.
 
-        {ul
-        {- [`Ok n] indicates that the caller successfully wrote [n] bytes of
-        output from the buffer that the caller was provided by
-        {!next_write_operation}. }
-        {- [`Closed] indicates that the output destination will no longer
-        accept bytes from the write processor. }} *)
+      {ul {- [`Ok n] indicates that the caller successfully wrote [n] bytes of
+      output from the buffer that the caller was provided by
+      {!next_write_operation}. } {- [`Closed] indicates that the output
+      destination will no longer accept bytes from the write processor. }} *)
 
   val yield_writer : t -> (unit -> unit) -> unit
   (** [yield_writer t continue] registers with the connection to call
@@ -604,10 +612,10 @@ module Server_connection : sig
       after {!next_write_operation} returns a [`Yield] value. *)
 
   val report_exn : t -> exn -> unit
-  (** [report_exn t exn] reports that an error [exn] has been caught and
-      that it has been attributed to [t]. Calling this function will switch [t]
-      into an error state. Depending on the state [t] is transitioning from, it
-      may call its error handler before terminating the connection. *)
+  (** [report_exn t exn] reports that an error [exn] has been caught and that
+      it has been attributed to [t]. Calling this function will switch [t] into
+      an error state. Depending on the state [t] is transitioning from, it may
+      call its error handler before terminating the connection. *)
 
   val is_closed : t -> bool
   (** [is_closed t] is [true] if both the read and write processors have been
@@ -620,7 +628,9 @@ module Server_connection : sig
       close, if one exists. *)
 
   (**/**)
+
   val shutdown : t -> unit
+
   (**/**)
 end
 
@@ -632,19 +642,17 @@ module Client_connection : sig
   type error =
     [ `Malformed_response of string
     | `Invalid_response_body_length of Response.t
-    | `Exn of exn ]
+    | `Exn of exn
+    ]
 
-  type response_handler = Response.t -> [`read] Body.t  -> unit
+  type response_handler = Response.t -> [ `read ] Body.t -> unit
 
   type error_handler = error -> unit
 
-  val create
-    :  ?config:Config.t
-    -> error_handler:error_handler
-    -> t
-  (** [create ?config ~error_handler] creates a connection that can be used
-      to interact with servers over the HTTP/2 protocol. [error_handler] will
-      be called for {e connection level} errors.
+  val create : ?config:Config.t -> error_handler:error_handler -> t
+  (** [create ?config ~error_handler] creates a connection that can be used to
+      interact with servers over the HTTP/2 protocol. [error_handler] will be
+      called for {e connection level} errors.
 
       HTTP/2 is multiplexed over a single TCP connection and distinguishes
       connection-level errors from stream-level errors. See See
@@ -656,7 +664,7 @@ module Client_connection : sig
     -> Request.t
     -> error_handler:error_handler
     -> response_handler:response_handler
-    -> [`write] Body.t
+    -> [ `write ] Body.t
   (** [request connection req ~error_handler ~response_handler] opens a new
       HTTP/2 stream with [req] and returns a request body that can be written
       to. Once a response arrives, [response_handler] will be called with its
@@ -668,12 +676,7 @@ module Client_connection : sig
       {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for more
       details. *)
 
-  val ping
-    :  t
-    -> ?payload : Bigstringaf.t
-    -> ?off : int
-    -> (unit -> unit)
-    -> unit
+  val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
   (** [ping connection ?payload ?off f] sends an HTTP/2 PING frame and
       registers [f] to be called when the server has sent an acknowledgement
       for it. A custom [payload] (and offset into that payload) for the PING
@@ -682,10 +685,10 @@ module Client_connection : sig
       length.
 
       In HTTP/2, the PING frame is a mechanism for measuring a minimal
-      round-trip time from the sender, as well as determining whether an
-      idle connection is still functional. See
-      {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for
-      more details. *)
+      round-trip time from the sender, as well as determining whether an idle
+      connection is still functional. See
+      {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for more
+      details. *)
 
   val next_read_operation : t -> [ `Read | `Close ]
   (** [next_read_operation t] returns a value describing the next operation
@@ -694,36 +697,33 @@ module Client_connection : sig
   val read : t -> Bigstringaf.t -> off:int -> len:int -> int
   (** [read t bigstring ~off ~len] reads bytes of input from the provided range
       of [bigstring] and returns the number of bytes consumed by the
-      connection.  {!read} should be called after {!next_read_operation}
-      returns a [`Read] value and additional input is available for the
-      connection to consume. *)
+      connection. {!read} should be called after {!next_read_operation} returns
+      a [`Read] value and additional input is available for the connection to
+      consume. *)
 
   val read_eof : t -> Bigstringaf.t -> off:int -> len:int -> int
   (** [read t bigstring ~off ~len] reads bytes of input from the provided range
       of [bigstring] and returns the number of bytes consumed by the
-      connection.  {!read} should be called after {!next_read_operation}
-      returns a [`Read] and an EOF has been received from the communication
-      channel. The connection will attempt to consume any buffered input and
-      then shutdown the HTTP parser for the connection. *)
+      connection. {!read} should be called after {!next_read_operation} returns
+      a [`Read] and an EOF has been received from the communication channel.
+      The connection will attempt to consume any buffered input and then
+      shutdown the HTTP parser for the connection. *)
 
-  val next_write_operation : t -> [
-    | `Write of Bigstringaf.t IOVec.t list
-    | `Yield
-    | `Close of int ]
+  val next_write_operation
+    :  t
+    -> [ `Write of Bigstringaf.t IOVec.t list | `Yield | `Close of int ]
   (** [next_write_operation t] returns a value describing the next operation
       that the caller should conduct on behalf of the connection. *)
 
-  val report_write_result : t -> [`Ok of int | `Closed] -> unit
+  val report_write_result : t -> [ `Ok of int | `Closed ] -> unit
   (** [report_write_result t result] reports the result of the latest write
-      attempt to the connection. {!report_write_result} should be called after a
-      call to {!next_write_operation} that returns a [`Write buffer] value.
+      attempt to the connection. {!report_write_result} should be called after
+      a call to {!next_write_operation} that returns a [`Write buffer] value.
 
-        {ul
-        {- [`Ok n] indicates that the caller successfully wrote [n] bytes of
-        output from the buffer that the caller was provided by
-        {next_write_operation}. }
-        {- [`Closed] indicates that the output destination will no longer
-        accept bytes from the write processor. }} *)
+      {ul {- [`Ok n] indicates that the caller successfully wrote [n] bytes of
+      output from the buffer that the caller was provided by
+      {next_write_operation}. } {- [`Closed] indicates that the output
+      destination will no longer accept bytes from the write processor. }} *)
 
   val yield_writer : t -> (unit -> unit) -> unit
   (** [yield_writer t continue] registers with the connection to call
@@ -731,16 +731,17 @@ module Client_connection : sig
       after {!next_write_operation} returns a [`Yield] value. *)
 
   val report_exn : t -> exn -> unit
-  (** [report_exn t exn] reports that an error [exn] has been caught and
-      that it has been attributed to [t]. Calling this function will switch [t]
-      into an error state. Depending on the state [t] is transitioning from, it
-      may call its (connection-level) error handler before terminating the
+  (** [report_exn t exn] reports that an error [exn] has been caught and that
+      it has been attributed to [t]. Calling this function will switch [t] into
+      an error state. Depending on the state [t] is transitioning from, it may
+      call its (connection-level) error handler before terminating the
       connection. *)
 
   val is_closed : t -> bool
 
   (**/**)
+
   val shutdown : t -> unit
+
   (**/**)
 end
-

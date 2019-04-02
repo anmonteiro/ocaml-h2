@@ -33,15 +33,23 @@
  *---------------------------------------------------------------------------*)
 
 type t =
-  { meth    : Httpaf.Method.t
-  ; target  : string
-  ; scheme  : string
-  ; headers : Headers.t }
+  { meth : Httpaf.Method.t
+  ; target : string
+  ; scheme : string
+  ; headers : Headers.t
+  }
 
 (* TODO: `:authority` pseudo-header? *)
-let create ?(headers=Headers.empty) ~scheme meth target =
+let create ?(headers = Headers.empty) ~scheme meth target =
   { meth; target; scheme; headers }
 
 let pp_hum fmt { meth; target; scheme; headers } =
-  Format.fprintf fmt "((method \"%a\") (target %S) (scheme %S) (headers %a))"
-    Httpaf.Method.pp_hum meth target scheme Headers.pp_hum headers
+  Format.fprintf
+    fmt
+    "((method \"%a\") (target %S) (scheme %S) (headers %a))"
+    Httpaf.Method.pp_hum
+    meth
+    target
+    scheme
+    Headers.pp_hum
+    headers
