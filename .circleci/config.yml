@@ -143,7 +143,6 @@ jobs:
           paths:
             - ~/.npm-global
             - ~/.esy
-            - node_modules
             - _esy
       - run:
           name: 'esy build'
@@ -170,7 +169,6 @@ jobs:
           paths:
             - ~/.esy
             - node_modules
-            - _esy
 
 workflows:
   version: 2
