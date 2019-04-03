@@ -516,25 +516,25 @@ module Make (Streamd : StreamDescriptor) = struct
 end
 
 module Client_scheduler = Make (struct
-  include Respd
+  include Stream
 
-  let id t = t.id
+  type t = Respd.t
 
-  let flush_write_body = flush_request_body
+  let flush_write_body = Respd.flush_request_body
 
-  let is_idle t = match t.state with Idle -> true | _ -> false
+  let requires_output = Respd.requires_output
 
-  let closed t = match t.state with Closed c -> Some c | _ -> None
+  let on_more_output_available = Respd.on_more_output_available
 end)
 
 module Server_scheduler = Make (struct
-  include Reqd
+  include Stream
 
-  let id t = t.id
+  type t = Reqd.t
 
-  let flush_write_body = flush_response_body
+  let flush_write_body = Reqd.flush_response_body
 
-  let is_idle t = match t.state with Idle -> true | _ -> false
+  let requires_output = Reqd.requires_output
 
-  let closed t = match t.state with Closed c -> Some c | _ -> None
+  let on_more_output_available = Reqd.on_more_output_available
 end)

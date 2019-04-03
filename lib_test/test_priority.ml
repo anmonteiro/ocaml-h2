@@ -33,7 +33,7 @@ let new_p w =
   { Priority.exclusive = false; stream_dependency = 0l; weight = w }
 
 let test_reqd stream_id =
-  Reqd.create
+  Stream.create
     ~max_frame_size:Config.default.read_buffer_size
     stream_id
     Serialize.Writer.(create 0x400)

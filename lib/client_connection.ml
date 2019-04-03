@@ -164,7 +164,7 @@ let handle_error t = function
      * handler, and additionally deliver EOF to the response body *)
     (match Scheduler.find t.streams stream_id with
     | Some reqd ->
-      Respd.reset_stream reqd error
+      Stream.reset_stream reqd error
     | None ->
       (* Possible if the stream was going to enter the Idle state (first time
        * we saw e.g. a PRIORITY frame for it) but had e.g. a
@@ -200,7 +200,7 @@ let handle_headers t ~end_stream respd active_state headers =
      *   indicate that the stream is being closed prior to any processing
      *   having occurred. Any request that was sent on the reset stream can be
      *   safely retried. *)
-    report_stream_error t respd.Respd.id Error.RefusedStream
+    report_stream_error t respd.Stream.id Error.RefusedStream
   else (
     (* From RFC7540§5.1.2:
      *   Scheduler that are in the "open" state or in either of the "half-closed"
@@ -246,7 +246,7 @@ let handle_headers t ~end_stream respd active_state headers =
           Respd.create_active_response response response_body
         in
         active_state.response_state <- new_response_state;
-        respd.response_handler response response_body;
+        active_state.response_handler response response_body;
         if end_stream then (
           (* Deliver EOF to the response body, as the handler might be waiting
            * on it to act. *)
@@ -411,7 +411,8 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
          *   HEADERS frames can be sent on a stream in the "idle", "reserved
          *   (local)", "open", or "half-closed (remote)" state. *)
         report_connection_error t Error.ProtocolError
-      | Active ({ response_state = Awaiting_response; _ } as active_state) ->
+      | Active (_, ({ response_state = Awaiting_response; _ } as active_state))
+        ->
         handle_first_response_bytes
           t
           respd
@@ -419,13 +420,14 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
           frame_header
           ?priority
           headers_block
-      | Active { response_state = FullHeaders | PartialHeaders _; _ } ->
+      | Active (_, { response_state = FullHeaders | PartialHeaders _; _ }) ->
         assert false
       (* if we're getting a HEADERS frame at this point, they must be
        * trailers, and the END_STREAM flag needs to be set. *)
       | Active
-          ({ response_state = ActiveResponse active_response; _ } as
-          active_state) ->
+          ( _
+          , ({ response_state = ActiveResponse active_response; _ } as
+            active_state) ) ->
         process_trailer_headers
           t
           respd
@@ -485,8 +487,8 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
   Scheduler.deduct_inflow t.streams payload_length;
   match Scheduler.get_node t.streams stream_id with
   | Some (Stream { descriptor; _ } as stream) ->
-    (match descriptor.Respd.state with
-    | Active { response_state = ActiveResponse response_info; _ } ->
+    (match descriptor.Stream.state with
+    | Active (_, { response_state = ActiveResponse response_info; _ }) ->
       let { Respd.response; response_body; response_body_bytes; _ } =
         response_info
       in
@@ -549,7 +551,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
              *
              * Transition to the "closed" state if this is the last DATA frame
              * that the server will send and we're done sending. *)
-            Respd.finish_stream descriptor Finished)
+            Stream.finish_stream descriptor Finished)
     | Idle ->
       (* From RFC7540§5.1:
        *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
@@ -653,7 +655,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *   prepared to receive and process additional frames sent on the
        *   stream that might have been sent by the peer prior to the arrival
        *   of the RST_STREAM. *)
-      Respd.finish_stream respd (ResetByThem error_code))
+      Stream.finish_stream respd (ResetByThem error_code))
   | None ->
     (* We might have removed the stream from the hash table. If its stream
      * id is strictly smaller than the max client stream id we've seen, then
@@ -880,10 +882,11 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
   match Scheduler.find t.streams stream_id with
   | Some stream ->
-    (match stream.Respd.state with
+    (match stream.Stream.state with
     | Active
-        ({ response_state = PartialHeaders partial_headers; _ } as
-        active_request) ->
+        ( _
+        , ({ response_state = PartialHeaders partial_headers; _ } as
+          active_request) ) ->
       handle_headers_block
         t
         stream
@@ -892,10 +895,11 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
         flags
         headers_block
     | Active
-        ({ response_state =
-             ActiveResponse { trailers_parser = Some partial_headers; _ }
-         ; _
-         } as active_request) ->
+        ( _
+        , ({ response_state =
+               ActiveResponse { trailers_parser = Some partial_headers; _ }
+           ; _
+           } as active_request) ) ->
       handle_trailer_headers
         t
         stream
@@ -1048,12 +1052,11 @@ let request t request ~error_handler ~response_handler =
   t.current_stream_id <- Int32.add t.current_stream_id 2l;
   let stream_id = t.current_stream_id in
   let respd =
-    Respd.create
+    Stream.create
       stream_id
       ~max_frame_size
       t.writer
       error_handler
-      response_handler
       (on_stream_closed t)
   in
   (* TODO: priority *)
@@ -1068,11 +1071,12 @@ let request t request ~error_handler ~response_handler =
   Writer.flush t.writer (fun () ->
       respd.state
       <- Active
-           { response_state = Awaiting_response
-           ; stream_state = Open
-           ; request
-           ; request_body
-           });
+           ( Open ()
+           , { response_state = Awaiting_response
+             ; request
+             ; request_body
+             ; response_handler
+             } ));
   wakeup_writer t;
   (* TODO: closing the request body puts the stream on half-closed (local)
    * state *)

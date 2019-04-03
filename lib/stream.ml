@@ -31,6 +31,7 @@
  *---------------------------------------------------------------------------*)
 
 module AB = Angstrom.Buffered
+module Writer = Serialize.Writer
 
 type partial_headers =
   { mutable parse_state : (Headers.t, Hpack.error) result AB.state
@@ -63,4 +64,53 @@ type closed =
   ; mutable ttl : int
   }
 
+type ('opn, 'half_closed) active_state =
+  | Open of 'opn
+  | HalfClosed of 'half_closed
+
+type ('active_state, 'active, 'reserved) state =
+  | Idle
+  | Reserved of 'reserved
+  | Active of 'active_state * 'active
+  | Closed of closed
+  constraint (_, _) active_state = 'active_state
+
+type ('state, 'error_code, 'error_handler) stream =
+  { id : Stream_identifier.t
+  ; writer : Serialize.Writer.t
+  ; error_handler : 'error_handler
+  ; mutable error_code : 'error_code * Error.error_code option
+  ; mutable state : 'state
+        (* The largest frame payload we're allowed to write. *)
+  ; mutable max_frame_size : int
+  ; on_stream_closed : unit -> unit
+  }
+
 let initial_ttl = 10
+
+let create id ~max_frame_size writer error_handler on_stream_closed =
+  { id
+  ; writer
+  ; error_handler
+      (* From RFC7540§5.1:
+       *   idle: All streams start in the "idle" state. *)
+  ; state = Idle
+  ; error_code = `Ok, None
+  ; max_frame_size
+  ; on_stream_closed
+  }
+
+let id t = t.id
+
+let is_idle t = match t.state with Idle -> true | _ -> false
+
+let closed t = match t.state with Closed c -> Some c | _ -> None
+
+let finish_stream t reason =
+  t.state <- Closed { reason; ttl = initial_ttl };
+  t.on_stream_closed ()
+
+let reset_stream t error_code =
+  let frame_info = Writer.make_frame_info t.id in
+  Writer.write_rst_stream t.writer frame_info error_code;
+  Writer.flush t.writer (fun () -> finish_stream t (ResetByUs error_code))
