@@ -91,7 +91,9 @@ let test_reprioritize () =
   add_stream root (test_reqd 5l);
   (* change the weight of stream 1 *)
   let new_priority = { Priority.default_priority with weight = 100 } in
-  let (Stream stream1 as stream1_node) = Scheduler.get_node root 1l |> opt_exn in
+  let (Stream stream1 as stream1_node) =
+    Scheduler.get_node root 1l |> opt_exn
+  in
   Scheduler.reprioritize_stream root ~priority:new_priority stream1_node;
   Alcotest.check
     priority
@@ -149,7 +151,9 @@ let test_reprioritize_exclusive () =
     { Priority.default_priority with stream_dependency = 0l; exclusive = true }
   in
   add_stream root ~priority:stream7_priority stream7;
-  let (Stream stream7 as stream7_node) = Scheduler.get_node root 7l |> opt_exn in
+  let (Stream stream7 as stream7_node) =
+    Scheduler.get_node root 7l |> opt_exn
+  in
   Alcotest.check
     priority
     "Stream 7 depends on stream 0"
@@ -212,9 +216,13 @@ let test_reprioritize_to_dependency () =
   let open Scheduler in
   let root = Scheduler.make_root ~capacity:6 () in
   set_up_dep_tree root;
-  let (Stream stream1 as stream1_node) = Scheduler.get_node root 1l |> opt_exn in
+  let (Stream stream1 as stream1_node) =
+    Scheduler.get_node root 1l |> opt_exn
+  in
   let stream5_node = Scheduler.get_node root 5l |> opt_exn in
-  let (Stream stream7 as stream7_node) = Scheduler.get_node root 7l |> opt_exn in
+  let (Stream stream7 as stream7_node) =
+    Scheduler.get_node root 7l |> opt_exn
+  in
   Alcotest.check
     node
     "Stream 7 depends on stream 5"
@@ -272,7 +280,9 @@ let test_reprioritize_to_dependency_exclusive () =
   let root = Scheduler.make_root ~capacity:6 () in
   set_up_dep_tree root;
   let stream5_node = Scheduler.get_node root 5l |> opt_exn in
-  let (Stream stream7 as stream7_node) = Scheduler.get_node root 7l |> opt_exn in
+  let (Stream stream7 as stream7_node) =
+    Scheduler.get_node root 7l |> opt_exn
+  in
   Alcotest.check
     node
     "Stream 7 depends on stream 5"
@@ -289,7 +299,9 @@ let test_reprioritize_to_dependency_exclusive () =
     1
     (List.length root_children);
   (* reprioritize stream 1 to have 7 as the new parent with exclusive priority *)
-  let (Stream stream1 as stream1_node) = Scheduler.get_node root 1l |> opt_exn in
+  let (Stream stream1 as stream1_node) =
+    Scheduler.get_node root 1l |> opt_exn
+  in
   reprioritize_stream
     root
     ~priority:
