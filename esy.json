@@ -8,7 +8,7 @@
   "dependencies": {
     "ocaml": " >= 4.4.0",
     "@opam/dune": "*",
-    "@opam/lwt": "4.1.0",
+    "@opam/lwt": "*",
     "@opam/bigstringaf": "*",
     "@opam/angstrom": "*",
     "@opam/faraday": "*",
@@ -22,7 +22,8 @@
   "devDependencies": {
     "@opam/alcotest": "*",
     "@opam/hex": "*",
-    "@opam/merlin": "*"
+    "@opam/merlin": "*",
+    "@opam/ocamlformat": "*"
   },
   "resolutions": {
     "@opam/conf-libev": "esy-packages/libev:package.json#86d244e",

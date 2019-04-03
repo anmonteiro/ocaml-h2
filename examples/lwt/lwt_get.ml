@@ -10,53 +10,52 @@ let response_handler notify_response_received response response_body =
       ~on_read:(fun response_fragment ~off ~len ->
         let response_fragment_string = Bytes.create len in
         Lwt_bytes.blit_to_bytes
-          response_fragment off
-          response_fragment_string 0
+          response_fragment
+          off
+          response_fragment_string
+          0
           len;
         print_string (Bytes.unsafe_to_string response_fragment_string);
-
         read_response ())
   in
   read_response ()
 
-let error_handler _ =
-  assert false
+let error_handler _ = assert false
 
 open Lwt.Infix
 
 let () =
   let host = ref None in
   let port = ref 80 in
-
   Arg.parse
-    ["-p", Set_int port, " Port number (80 by default)"]
+    [ "-p", Set_int port, " Port number (80 by default)" ]
     (fun host_argument -> host := Some host_argument)
     "lwt_get.exe [-p N] HOST";
-
   let host =
     match !host with
-    | None -> failwith "No hostname provided"
-    | Some host -> host
+    | None ->
+      failwith "No hostname provided"
+    | Some host ->
+      host
   in
-
-  Lwt_main.run begin
-    Lwt_unix.getaddrinfo host (string_of_int !port) [Unix.(AI_FAMILY PF_INET)]
+  Lwt_main.run
+    ( Lwt_unix.getaddrinfo
+        host
+        (string_of_int !port)
+        [ Unix.(AI_FAMILY PF_INET) ]
     >>= fun addresses ->
-
-    let socket = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
-    Lwt_unix.connect socket (List.hd addresses).Unix.ai_addr
-    >>= fun () ->
-
-    let request_headers =
-      Request.create `GET "/"
-        ~scheme:"https"
-        ~headers:Headers.(add_list empty [":authority", host])
-    in
-
-    let response_received, notify_response_received = Lwt.wait () in
-    let response_handler = response_handler notify_response_received in
-
-    Client.TLS.create_connection ~error_handler socket >>= fun connection ->
+      let socket = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
+      Lwt_unix.connect socket (List.hd addresses).Unix.ai_addr >>= fun () ->
+      let request_headers =
+        Request.create
+          `GET
+          "/"
+          ~scheme:"https"
+          ~headers:Headers.(add_list empty [ ":authority", host ])
+      in
+      let response_received, notify_response_received = Lwt.wait () in
+      let response_handler = response_handler notify_response_received in
+      Client.TLS.create_connection ~error_handler socket >>= fun connection ->
       let request_body =
         Client.TLS.request
           connection
@@ -65,6 +64,4 @@ let () =
           ~response_handler
       in
       Body.close_writer request_body;
-
-      response_received
-  end
+      response_received )

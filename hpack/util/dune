@@ -1,3 +1,3 @@
 (executables
-  (names gen_huffman gen_static)
-  (libraries compiler-libs.common))
+ (names gen_huffman gen_static)
+ (libraries compiler-libs.common))

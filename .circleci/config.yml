@@ -33,6 +33,7 @@ opam-steps: &opam-steps
           sudo apt-get install -y pkg-config libgmp-dev autotools-dev autoconf lsof
           opam update
           opam install -y dune
+          opam install -y ocamlformat
           opam install -t --deps-only .
     - run:
         name: 'Clean'
@@ -69,6 +70,15 @@ opam-steps: &opam-steps
           ./h2spec --strict -p 8080 --timeout 3
           kill $(lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
     - run:
+        name: 'Check code is formatted with ocamlformat'
+        command: |
+          eval `opam config env`
+          # https://github.com/ocaml-ppx/ocamlformat/issues/754
+          dune build @fmt --auto-promote || true
+          # https://github.com/ocaml/dune/issues/2012
+          git checkout lwt-unix/dune
+          git diff --exit-code
+    - run:
         name: 'Check git is clean'
         command: git diff --exit-code
 
@@ -79,6 +89,7 @@ jobs:
     environment:
       - TERM: dumb
       - OCAML_VERSION: "4.04.2"
+      - OPAMSOLVERTIMEOUT: "120"
     <<: *opam-steps
   4.05.0:
     docker:
@@ -132,7 +143,6 @@ jobs:
           paths:
             - ~/.npm-global
             - ~/.esy
-            - node_modules
             - _esy
       - run:
           name: 'esy build'
@@ -143,6 +153,14 @@ jobs:
       - run:
           name: 'esy slow-test'
           command: ~/.npm-global/bin/esy b dune build @slowtests --no-buffer
+      - run:
+          name: 'Check code is formatted with ocamlformat'
+          command: |
+            # https://github.com/ocaml-ppx/ocamlformat/issues/754
+            ~/.npm-global/bin/esy dune build @fmt --auto-promote || true
+            # https://github.com/ocaml/dune/issues/2012
+            git checkout lwt-unix/dune
+            git diff --exit-code
       # Use both pre and post build caches so that we're more likely
       # to have dependencies cached. `esy build` is more likely to fail,
       # so this will make the push that fixes the build faster
@@ -151,7 +169,6 @@ jobs:
           paths:
             - ~/.esy
             - node_modules
-            - _esy
 
 workflows:
   version: 2

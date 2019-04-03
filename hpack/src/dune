@@ -1,10 +1,11 @@
 (library
-  (public_name hpack)
-  (libraries angstrom faraday))
+ (public_name hpack)
+ (libraries angstrom faraday))
 
 (rule
-  (targets huffman_table.ml)
-  (deps ../util/huffman_table.txt)
-  (action
-    (with-stdout-to %{targets} (run ../util/gen_huffman.exe %{deps}))))
-
+ (targets huffman_table.ml)
+ (deps ../util/huffman_table.txt)
+ (action
+  (with-stdout-to
+   %{targets}
+   (run ../util/gen_huffman.exe %{deps}))))
