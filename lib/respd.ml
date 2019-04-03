@@ -35,7 +35,6 @@
  * reference to the Respd *)
 
 module Writer = Serialize.Writer
-module AB = Angstrom.Buffered
 
 type error =
   [ `Malformed_response of string
@@ -99,10 +98,6 @@ type t =
   ; on_stream_closed : unit -> unit
   }
 
-let default_waiting = Sys.opaque_identity (fun () -> ())
-
-let initial_ttl = 10
-
 let create_active_response response response_body =
   ActiveResponse
     { response
@@ -124,11 +119,6 @@ let create
   ; max_frame_size
   ; on_stream_closed
   }
-
-let done_waiting when_done_waiting =
-  let f = !when_done_waiting in
-  when_done_waiting := default_waiting;
-  f ()
 
 let request t =
   match t.state with
@@ -192,7 +182,7 @@ let response_body_exn t =
     assert false
 
 let finish_stream t reason =
-  t.state <- Closed { reason; ttl = initial_ttl };
+  t.state <- Closed { reason; ttl = Stream.initial_ttl };
   t.on_stream_closed ()
 
 let reset_stream t error_code =
@@ -200,17 +190,25 @@ let reset_stream t error_code =
   Writer.write_rst_stream t.writer frame_info error_code;
   Writer.flush t.writer (fun () -> finish_stream t (ResetByUs error_code))
 
-(* let close_stream t = match t.error_code with | _, Some error_code ->
-   reset_stream t error_code | _, None -> match t.state with | HalfClosedLocal
-   (ActiveRequest _) -> (* From RFC7540§8.1: A server can send a complete
-   response prior to the client sending an entire request if the response does
-   not depend on any portion of the request that has not been sent and
-   received. When this is true, a server MAY request that the client abort
-   transmission of a request without error by sending a RST_STREAM with an
-   error code of NO_ERROR after sending a complete response (i.e., a frame with
-   the END_STREAM flag). *) reset_stream t Error.NoError | Open (ActiveRequest
-   _) -> Writer.flush t.writer (fun () -> finish_stream t Finished) | _ ->
-   assert false *)
+(* let close_stream t =
+ *match t.error_code with
+ *| _, Some error_code ->
+ *  reset_stream t error_code
+ *| _, None ->
+ *  (match t.state with
+ *  | HalfClosedLocal (ActiveRequest _) ->
+ *    (* From RFC7540§8.1: A server can send a complete response prior to the
+ *       client sending an entire request if the response does not depend on
+ *       any portion of the request that has not been sent and received. When
+ *       this is true, a server MAY request that the client abort transmission
+ *       of a request without error by sending a RST_STREAM with an error code
+ *       of NO_ERROR after sending a complete response (i.e., a frame with the
+ *       END_STREAM flag). *)
+ *    reset_stream t Error.NoError
+ *  | Open (ActiveRequest _) ->
+ *    Writer.flush t.writer (fun () -> finish_stream t Finished)
+ *  | _ ->
+ *    assert false) *)
 
 let close_stream t =
   match t.state with
@@ -301,10 +299,6 @@ let write_buffer_data writer ~off ~len frame_info buffer =
     Writer.write_data writer ~off ~len frame_info str
   | `Bigstring bstr ->
     Writer.schedule_data writer ~off ~len frame_info bstr
-
-(* let flush_request_body t s = if Body.has_pending_output s.request_body then
-   Body.transfer_to_writer s.request_body t.writer
-   ~max_frame_size:t.max_frame_size *)
 
 let flush_request_body t ~max_bytes =
   match t.state with

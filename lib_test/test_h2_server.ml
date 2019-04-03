@@ -484,14 +484,16 @@ module Server_connection_tests = struct
       }
     in
     write_frames t [ priority ];
-    let open Streams in
+    let open Scheduler in
     let (Connection root) = t.streams in
     let root_children = root.children |> PriorityQueue.to_list in
     Alcotest.(check (list int32))
       "Stream has been added to the priority tree"
       [ 1l ]
       (List.map fst root_children);
-    let (Stream { streamd = old_reqd; _ }) = root_children |> List.hd |> snd in
+    let (Stream { descriptor = old_reqd; _ }) =
+      root_children |> List.hd |> snd
+    in
     let headers, _ = header_and_continuation_frames in
     let headers =
       { headers with
@@ -502,14 +504,14 @@ module Server_connection_tests = struct
       }
     in
     write_frames t [ headers ];
-    let open Streams in
+    let open Scheduler in
     let new_root_children = root.children |> PriorityQueue.to_list in
-    let (Stream { streamd; _ }) = new_root_children |> List.hd |> snd in
+    let (Stream { descriptor; _ }) = new_root_children |> List.hd |> snd in
     Alcotest.(check (list int32))
       "Priority tree still only contains one stream"
       [ 1l ]
       (new_root_children |> List.map fst);
-    Alcotest.(check bool) "Reqd is the same" true (old_reqd == streamd)
+    Alcotest.(check bool) "Reqd is the same" true (old_reqd == descriptor)
 
   let data_request_handler reqd =
     Reqd.respond_with_string reqd (Response.create `OK) "Some data"
@@ -548,8 +550,8 @@ module Server_connection_tests = struct
       }
     in
     write_frames t [ headers; second_headers ];
-    let open Streams in
-    let (Stream first_stream) = Streams.get_node t.streams 1l |> opt_exn in
+    let open Scheduler in
+    let (Stream first_stream) = Scheduler.get_node t.streams 1l |> opt_exn in
     let first_stream_children =
       first_stream.children |> PriorityQueue.to_list
     in
@@ -597,7 +599,13 @@ module Server_connection_tests = struct
 
   let server_push_request_handler reqd =
     let request = Request.create `GET ~scheme:"http" "/main.css" in
-    let pushed_reqd = Reqd.push reqd request in
+    let pushed_reqd =
+      match Reqd.push reqd request with
+      | Ok reqd ->
+        reqd
+      | Error _ ->
+        Alcotest.fail "Expected `push` to succeed"
+    in
     let response = Response.create `OK in
     (* Send the response for / *)
     Reqd.respond_with_string reqd response "Hello";

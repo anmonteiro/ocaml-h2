@@ -73,14 +73,14 @@ module Make (Streamd : StreamDescriptor) = struct
     and _ node =
       (* From RFC7540§5.3.1:
        *   A stream that is not dependent on any other stream is given a stream
-       *   dependency of 0x0. In other words, the non-existent stream 0 forms the
-       *   root of the tree.
+       *   dependency of 0x0. In other words, the non-existent stream 0 forms
+       *   the root of the tree.
        *
        * Note:
-       *   We use a GADT because the root of the tree doesn't have an associated
-       *   request descriptor. It has the added advantage of allowing us to
-       *   enforce that all (other) streams in the tree are associated with a
-       *   request descriptor. *)
+       *   We use a GADT because the root of the tree doesn't have an
+       *   associated request descriptor. It has the added advantage of
+       *   allowing us to enforce that all (other) streams in the tree are
+       *   associated with a request descriptor. *)
       | Connection :
           { all_streams : stream StreamsTbl.t
           ; mutable t_last : int
@@ -89,15 +89,16 @@ module Make (Streamd : StreamDescriptor) = struct
                  * outbound flow control, what we're allowed to send.
                  *
                  * From RFC7540§6.9.1:
-                 *   Two flow-control windows are applicable: the stream flow-control
-                 *   window and the connection flow-control window. *)
+                 *   Two flow-control windows are applicable: the stream
+                 *   flow-control window and the connection flow-control
+                 *   window. *)
           ; mutable flow : Settings.WindowSize.t
                 (* inbound flow control, what the client is allowed to send. *)
           ; mutable inflow : Settings.WindowSize.t
           }
           -> root node
       | Stream :
-          { streamd : Streamd.t
+          { descriptor : Streamd.t
           ; mutable t_last : int
           ; mutable t : int
           ; mutable priority : Priority.t
@@ -142,9 +143,9 @@ module Make (Streamd : StreamDescriptor) = struct
       ; inflow = Settings.WindowSize.default_initial_window_size
       }
 
-  let create ~parent ~initial_window_size streamd =
+  let create ~parent ~initial_window_size descriptor =
     Stream
-      { streamd
+      { descriptor
       ; t_last = 0
       ; t =
           0
@@ -182,13 +183,13 @@ module Make (Streamd : StreamDescriptor) = struct
   let stream_id : type a. a node -> int32 = function
     | Connection _ ->
       Stream_identifier.connection
-    | Stream { streamd; _ } ->
-      Streamd.id streamd
+    | Stream { descriptor; _ } ->
+      Streamd.id descriptor
 
   let set_parent stream_node ~exclusive new_parent =
-    let (Stream ({ streamd; _ } as stream)) = stream_node in
+    let (Stream ({ descriptor; _ } as stream)) = stream_node in
     let (Parent new_parent_node) = new_parent in
-    let stream_id = Streamd.id streamd in
+    let stream_id = Streamd.id descriptor in
     remove_from_parent stream.parent stream_id;
     stream.parent <- new_parent;
     let new_children =
@@ -221,12 +222,12 @@ module Make (Streamd : StreamDescriptor) = struct
     | Connection root ->
       root.children <- new_children
 
-  let would_create_cycle ~new_parent (Stream { streamd; _ }) =
+  let would_create_cycle ~new_parent (Stream { descriptor; _ }) =
     let rec inner : type a. a node -> bool = function
       | Connection _ ->
         false
       | Stream { parent = Parent parent; _ }
-        when Stream_identifier.(stream_id parent === Streamd.id streamd) ->
+        when Stream_identifier.(stream_id parent === Streamd.id descriptor) ->
         true
       | Stream { parent = Parent parent; _ } ->
         inner parent
@@ -288,9 +289,9 @@ module Make (Streamd : StreamDescriptor) = struct
         set_parent stream_node ~exclusive new_parent);
       stream.priority <- priority)
 
-  let add (Connection root as t) ?priority ~initial_window_size streamd =
-    let stream = create ~parent:(Parent t) ~initial_window_size streamd in
-    let stream_id = Streamd.id streamd in
+  let add (Connection root as t) ?priority ~initial_window_size descriptor =
+    let stream = create ~parent:(Parent t) ~initial_window_size descriptor in
+    let stream_id = Streamd.id descriptor in
     StreamsTbl.add root.all_streams stream_id stream;
     root.children <- pq_add stream_id stream root.children;
     match priority with
@@ -304,8 +305,8 @@ module Make (Streamd : StreamDescriptor) = struct
 
   let find t stream_id =
     match get_node t stream_id with
-    | Some (Stream { streamd; _ }) ->
-      Some streamd
+    | Some (Stream { descriptor; _ }) ->
+      Some descriptor
     | None ->
       None
 
@@ -319,11 +320,11 @@ module Make (Streamd : StreamDescriptor) = struct
     size < root.inflow && size < stream.inflow
 
   let requires_output t stream =
-    let (Stream { streamd; _ }) = stream in
-    allowed_to_transmit t stream && Streamd.requires_output streamd
+    let (Stream { descriptor; _ }) = stream in
+    allowed_to_transmit t stream && Streamd.requires_output descriptor
 
   let write (Connection root as t) stream_node =
-    let (Stream ({ streamd; _ } as stream)) = stream_node in
+    let (Stream ({ descriptor; _ } as stream)) = stream_node in
     (* From RFC7540§6.9.1:
      *   Two flow-control windows are applicable: the stream flow-control
      *   window and the connection flow-control window. The sender MUST NOT
@@ -333,7 +334,7 @@ module Make (Streamd : StreamDescriptor) = struct
     if allowed_to_transmit t stream_node then (
       let allowed_bytes = min root.flow stream.flow in
       let written =
-        Streamd.flush_write_body ~max_bytes:allowed_bytes streamd
+        Streamd.flush_write_body ~max_bytes:allowed_bytes descriptor
       in
       (* From RFC7540§6.9.1:
        *   After sending a flow-controlled frame, the sender reduces the space
@@ -390,8 +391,8 @@ module Make (Streamd : StreamDescriptor) = struct
         | None ->
           (* Queue is empty, see line 6 above. *)
           0, false)
-      | Stream ({ streamd; _ } as p) as p_node ->
-        if Streamd.requires_output streamd then
+      | Stream ({ descriptor; _ } as p) as p_node ->
+        if Streamd.requires_output descriptor then
           (* In this branch, flow-control has no bearing on activity, otherwise
            * a flow-controlled stream would be considered inactive (because it
            * can't make progress at the moment) and removed from the priority
@@ -399,7 +400,7 @@ module Make (Streamd : StreamDescriptor) = struct
           let written = write t p_node in
           (* We check for activity again, because the stream may have gone
            * inactive after the call to `write` above. *)
-          written, Streamd.requires_output streamd
+          written, Streamd.requires_output descriptor
         else (
           match PriorityQueue.pop p.children with
           | Some ((id, (Stream i as i_node)), children') ->
@@ -462,15 +463,15 @@ module Make (Streamd : StreamDescriptor) = struct
   let on_more_output_available t (max_client_stream_id, max_pushed_stream_id) k
     =
     let (Connection root) = t in
-    let implicitly_close_stream streamd =
-      if Streamd.is_idle streamd then
+    let implicitly_close_stream descriptor =
+      if Streamd.is_idle descriptor then
         (* From RFC7540§5.1.1:
          *   The first use of a new stream identifier implicitly closes all
          *   streams in the "idle" state that might have been initiated by
          *   that peer with a lower-valued stream identifier. *)
-        Streamd.finish_stream streamd Finished
+        Streamd.finish_stream descriptor Finished
       else
-        match Streamd.closed streamd with
+        match Streamd.closed descriptor with
         | Some c ->
           (* When a stream completes, i.e. doesn't require more output and enters
            * the `Closed` state, we set a TTL value which represents the number
@@ -479,7 +480,7 @@ module Make (Streamd : StreamDescriptor) = struct
            * potentially useful information regarding the stream's state at the
            * cost of keeping it around for a little while longer. *)
           if c.ttl = 0 then
-            StreamsTbl.remove root.all_streams (Streamd.id streamd)
+            StreamsTbl.remove root.all_streams (Streamd.id descriptor)
           else
             c.ttl <- c.ttl - 1
         | None ->
@@ -487,14 +488,14 @@ module Make (Streamd : StreamDescriptor) = struct
     in
     StreamsTbl.iter
       (fun id stream_node ->
-        let (Stream { streamd; _ }) = stream_node in
+        let (Stream { descriptor; _ }) = stream_node in
         if Stream_identifier.is_request id then (
           if id < max_client_stream_id then
-            implicitly_close_stream streamd)
+            implicitly_close_stream descriptor)
         else if id < max_pushed_stream_id then
-          implicitly_close_stream streamd;
+          implicitly_close_stream descriptor;
         if requires_output t stream_node then
-          Streamd.on_more_output_available streamd k)
+          Streamd.on_more_output_available descriptor k)
       root.all_streams
 
   let pp_hum fmt t =
@@ -514,7 +515,7 @@ module Make (Streamd : StreamDescriptor) = struct
     pp_hum_inner 0 fmt t
 end
 
-module Client_streams = Make (struct
+module Client_scheduler = Make (struct
   include Respd
 
   let id t = t.id
@@ -526,7 +527,7 @@ module Client_streams = Make (struct
   let closed t = match t.state with Closed c -> Some c | _ -> None
 end)
 
-module Server_streams = Make (struct
+module Server_scheduler = Make (struct
   include Reqd
 
   let id t = t.id

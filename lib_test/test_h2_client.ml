@@ -205,6 +205,8 @@ module Client_connection_tests = struct
   (* TODO: test continuation frames on a different streams (error case) *)
   (* TODO: test data larger than content length *)
   (* TODO: test ping, including multiple pings and their order (FIFO) *)
+  (* TODO: test stream-level error handler is called *)
+  (* TODO: test connection-level error handler is called *)
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
