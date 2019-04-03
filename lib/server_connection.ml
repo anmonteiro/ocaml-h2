@@ -35,7 +35,7 @@
 module AB = Angstrom.Buffered
 module Reader = Parse.Reader
 module Writer = Serialize.Writer
-module Streams = Streams.Server_streams
+module Scheduler = Scheduler.Server_scheduler
 
 type request_handler = Reqd.t -> unit
 
@@ -59,7 +59,7 @@ type t =
   ; config : Config.t
   ; request_handler : request_handler
   ; error_handler : error_handler
-  ; streams : Streams.t
+  ; streams : Scheduler.t
         (* Number of currently open client streams. Used for MAX_CONCURRENT_STREAMS
          * bookkeeping *)
   ; mutable current_client_streams : int
@@ -150,7 +150,7 @@ let handle_error t = function
       t.did_send_go_away <- true;
       wakeup_writer t)
   | StreamError (stream_id, error) ->
-    (match Streams.find t.streams stream_id with
+    (match Scheduler.find t.streams stream_id with
     | Some reqd ->
       Reqd.reset_stream reqd error
     | None ->
@@ -186,7 +186,7 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
     (* From RFC7540§6.6:
      *   PUSH_PROMISE MUST NOT be sent if the SETTINGS_ENABLE_PUSH setting of
      *   the peer endpoint is set to 0. *)
-    Error "PUSH not enabled"
+    Error `Push_disabled
   else if
     Stream_identifier.(Int32.(add t.max_pushed_stream_id 2l) > max_stream_id)
   then (
@@ -197,7 +197,7 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
      *   send a GOAWAY frame so that the client is forced to open a new
      *   connection for new streams. *)
     report_connection_error t Error.NoError;
-    Error "Stream identifiers exhausted")
+    Error `Stream_ids_exhausted)
   else
     let pushed_stream_id = Int32.add max_pushed_stream_id 2l in
     t.max_pushed_stream_id <- pushed_stream_id;
@@ -209,7 +209,7 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
         t.error_handler
         (on_stream_closed t)
     in
-    Streams.add
+    Scheduler.add
       t.streams (* TODO: *)
                 (* ?priority *)
       ~initial_window_size:t.settings.initial_window_size
@@ -257,7 +257,7 @@ let handle_headers t ~end_stream reqd headers =
     report_stream_error t reqd.Reqd.id Error.RefusedStream
   else
     (* From RFC7540§5.1.2:
-     *   Streams that are in the "open" state or in either of the "half-closed"
+     *   Scheduler that are in the "open" state or in either of the "half-closed"
      *   states count toward the maximum number of streams that an endpoint is
      *   permitted to open. *)
     let active_stream =
@@ -375,7 +375,7 @@ let handle_headers_block
 let handle_trailer_headers = handle_headers_block ~is_trailers:true
 
 let open_stream t frame_header ?priority headers_block =
-  let open Streams in
+  let open Scheduler in
   let { Frame.flags; stream_id; _ } = frame_header in
   if not (Int32.(compare stream_id t.max_client_stream_id) > 0) then
     (* From RFC7540§5.1.1:
@@ -392,7 +392,7 @@ let open_stream t frame_header ?priority headers_block =
      *   be sent on a stream in the "idle", "reserved (local)", "open", or
      *   "half-closed (remote)" state. *)
     let reqd =
-      match Streams.get_node t.streams stream_id with
+      match Scheduler.get_node t.streams stream_id with
       | None ->
         let reqd =
           Reqd.create
@@ -402,7 +402,7 @@ let open_stream t frame_header ?priority headers_block =
             t.error_handler
             (on_stream_closed t)
         in
-        Streams.add
+        Scheduler.add
           t.streams
           ?priority
           ~initial_window_size:t.settings.initial_window_size
@@ -418,7 +418,7 @@ let open_stream t frame_header ?priority headers_block =
          * initial window size for new streams could have changed between adding
          * the (idle) stream and opening it. *)
         stream.flow <- t.settings.initial_window_size;
-        stream.streamd
+        stream.descriptor
     in
     let end_headers = Flags.test_end_header flags in
     let headers_block_length = Bigstringaf.length headers_block in
@@ -472,7 +472,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
   let { Frame.stream_id; _ } = frame_header in
   if not Stream_identifier.(is_request stream_id) then
     (* From RFC7540§5.1.1:
-     *   Streams initiated by a client MUST use odd-numbered stream
+     *   Scheduler initiated by a client MUST use odd-numbered stream
      *   identifiers. [...] An endpoint that receives an unexpected
      *   stream identifier MUST respond with a connection error
      *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
@@ -486,7 +486,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
        *   stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
       report_stream_error t stream_id Error.ProtocolError
     | _ ->
-      (match Streams.find t.streams stream_id with
+      (match Scheduler.find t.streams stream_id with
       | None ->
         open_stream t frame_header ?priority headers_block
       | Some reqd ->
@@ -531,18 +531,18 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
           report_connection_error t Error.StreamClosed))
 
 let send_window_update : type a.
-    t -> a Streams.PriorityTreeNode.node -> int -> unit
+    t -> a Scheduler.PriorityTreeNode.node -> int -> unit
   =
  fun t stream n ->
   let send_window_update_frame stream_id n =
-    let valid_inflow = Streams.add_inflow stream n in
+    let valid_inflow = Scheduler.add_inflow stream n in
     assert valid_inflow;
     let frame_info = Writer.make_frame_info stream_id in
     Writer.write_window_update t.writer frame_info n
   in
   if n > 0 then (
     let max_window_size = Settings.WindowSize.max_window_size in
-    let stream_id = Streams.stream_id stream in
+    let stream_id = Scheduler.stream_id stream in
     let rec loop n =
       if n > max_window_size then (
         send_window_update_frame stream_id max_window_size;
@@ -554,11 +554,11 @@ let send_window_update : type a.
     wakeup_writer t)
 
 let process_data_frame t { Frame.frame_header; _ } bstr =
-  let open Streams in
+  let open Scheduler in
   let { Frame.flags; stream_id; payload_length; _ } = frame_header in
   if not (Stream_identifier.is_request stream_id) then
     (* From RFC7540§5.1.1:
-     *   Streams initiated by a client MUST use odd-numbered stream
+     *   Scheduler initiated by a client MUST use odd-numbered stream
      *   identifiers. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
@@ -569,19 +569,19 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
      *   for its contribution against the connection flow-control window,
      *   unless the receiver treats this as a connection error (Section 5.4.1).
      *   This is necessary even if the frame is in error. *)
-    Streams.deduct_inflow t.streams payload_length;
-    match Streams.get_node t.streams stream_id with
-    | Some (Stream { streamd; _ } as stream) ->
-      (match streamd.Reqd.state with
+    Scheduler.deduct_inflow t.streams payload_length;
+    match Scheduler.get_node t.streams stream_id with
+    | Some (Stream { descriptor; _ } as stream) ->
+      (match descriptor.Reqd.state with
       | Open (ActiveRequest ({ request_info; _ } as stream_state)) ->
-        let request_body = Reqd.request_body streamd in
+        let request_body = Reqd.request_body descriptor in
         request_info.request_body_bytes
         <- Int64.(
              add
                request_info.request_body_bytes
                (of_int (Bigstringaf.length bstr)));
         let request = request_info.request in
-        if not Streams.(allowed_to_receive t.streams stream payload_length)
+        if not Scheduler.(allowed_to_receive t.streams stream payload_length)
         then
           (* From RFC7540§6.9:
            *  A receiver MAY respond with a stream error (Section 5.4.2) or
@@ -589,7 +589,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
            *  is unable to accept a frame. *)
           report_stream_error t stream_id Error.FlowControlError
         else (
-          Streams.deduct_inflow stream payload_length;
+          Scheduler.deduct_inflow stream payload_length;
           match Message.unique_content_length_values request.headers with
           | [ content_length ]
             when (* we're getting more than the client declared? *)
@@ -605,7 +605,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
              *   A request or response is also malformed if the value of a
              *   content-length header field does not equal the sum of the
              *   DATA frame payload lengths that form the body. *)
-            set_error_and_handle t streamd `Bad_request ProtocolError
+            set_error_and_handle t descriptor `Bad_request ProtocolError
           | _ ->
             let end_stream = Flags.test_end_stream flags in
             (* XXX(anmonteiro): should we only give back flow control after we
@@ -620,13 +620,13 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
                  *   the endpoint will send for the identified stream. Setting
                  *   this flag causes the stream to enter one of the
                  *   "half-closed" states or the "closed" state (Section 5.1). *)
-                Reqd.requires_output streamd
+                Reqd.requires_output descriptor
               then
                 (* There's a potential race condition here if the request handler
                  * completes the response right after . *)
-                streamd.state <- HalfClosedRemote stream_state
+                descriptor.state <- HalfClosedRemote stream_state
               else
-                Reqd.finish_stream streamd Finished;
+                Reqd.finish_stream descriptor Finished;
             (* From RFC7540§6.9.1:
              *   The receiver of a frame sends a WINDOW_UPDATE frame as it
              *   consumes data and frees up space in flow-control windows.
@@ -682,7 +682,7 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
   let { Priority.stream_dependency; _ } = priority in
   if not (Stream_identifier.is_request stream_id) then
     (* From RFC7540§5.1.1:
-     *   Streams initiated by a client MUST use odd-numbered stream
+     *   Scheduler initiated by a client MUST use odd-numbered stream
      *   identifiers. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
@@ -693,9 +693,9 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
      *   error (Section 5.4.2) of type PROTOCOL_ERROR. *)
     report_stream_error t stream_id Error.ProtocolError
   else
-    match Streams.get_node t.streams stream_id with
+    match Scheduler.get_node t.streams stream_id with
     | Some stream ->
-      Streams.reprioritize_stream t.streams ~priority stream
+      Scheduler.reprioritize_stream t.streams ~priority stream
     | None ->
       (* From RFC7540§5.1.1:
        *   Endpoints SHOULD process PRIORITY frames, though they can be ignored
@@ -716,7 +716,7 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
             t.error_handler
             (on_stream_closed t)
         in
-        Streams.add
+        Scheduler.add
           t.streams
           ~priority
           ~initial_window_size:t.settings.initial_window_size
@@ -726,13 +726,13 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
   let { Frame.stream_id; _ } = frame_header in
   if not (Stream_identifier.is_request stream_id) then
     (* From RFC7540§5.1.1:
-     *   Streams initiated by a client MUST use odd-numbered stream
+     *   Scheduler initiated by a client MUST use odd-numbered stream
      *   identifiers. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
     report_connection_error t Error.ProtocolError
   else
-    match Streams.find t.streams stream_id with
+    match Scheduler.find t.streams stream_id with
     | Some reqd ->
       (match reqd.state with
       | Idle ->
@@ -775,7 +775,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
         report_connection_error t Error.ProtocolError
 
 let process_settings_frame t { Frame.frame_header; _ } settings =
-  let open Streams in
+  let open Scheduler in
   (* TODO: what to do in the case of receiving an acked SETTINGS frame for
    * settings we didn't send? *)
   let { Frame.flags; _ } = frame_header in
@@ -818,14 +818,14 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
             let growth = new_val - old_val in
             let exception Local in
             (match
-               Streams.iter
+               Scheduler.iter
                  ~f:(fun stream ->
                    (* From RFC7540§6.9.2:
                     *   An endpoint MUST treat a change to
                     *   SETTINGS_INITIAL_WINDOW_SIZE that causes any flow-control
                     *   window to exceed the maximum size as a connection error
                     *   (Section 5.4.1) of type FLOW_CONTROL_ERROR. *)
-                   if not (Streams.add_flow stream growth) then
+                   if not (Scheduler.add_flow stream growth) then
                      raise Local)
                  t.streams
              with
@@ -844,10 +844,10 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
              * MAX_FRAME_SIZE setting we'd need to reallocate the read buffer?
              * This will need support from the I/O runtimes. *)
             t.settings.max_frame_size <- x;
-            Streams.iter
-              ~f:(fun (Stream { streamd; _ }) ->
-                if Reqd.requires_output streamd then
-                  streamd.max_frame_size <- x)
+            Scheduler.iter
+              ~f:(fun (Stream { descriptor; _ }) ->
+                if Reqd.requires_output descriptor then
+                  descriptor.max_frame_size <- x)
               t.streams
           | MaxHeaderListSize, x ->
             t.settings.max_header_list_size <- Some x)
@@ -906,12 +906,12 @@ let process_goaway_frame t _frame payload =
   shutdown t
 
 let add_window_increment : type a.
-    t -> a Streams.PriorityTreeNode.node -> int -> unit
+    t -> a Scheduler.PriorityTreeNode.node -> int -> unit
   =
  fun t stream increment ->
-  let open Streams in
-  let did_add = Streams.add_flow stream increment in
-  let stream_id = Streams.stream_id stream in
+  let open Scheduler in
+  let did_add = Scheduler.add_flow stream increment in
+  let stream_id = Scheduler.stream_id stream in
   let new_flow =
     match stream with
     | Connection { flow; _ } ->
@@ -936,7 +936,7 @@ let add_window_increment : type a.
     report_stream_error t stream_id Error.FlowControlError
 
 let process_window_update_frame t { Frame.frame_header; _ } window_increment =
-  let open Streams in
+  let open Scheduler in
   let { Frame.stream_id; _ } = frame_header in
   (* From RFC7540§6.9:
    *   The WINDOW_UPDATE frame can be specific to a stream or to the entire
@@ -946,9 +946,9 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
   if Stream_identifier.is_connection stream_id then
     add_window_increment t t.streams window_increment
   else
-    match Streams.get_node t.streams stream_id with
-    | Some (Stream { streamd; _ } as stream_node) ->
-      (match streamd.state with
+    match Scheduler.get_node t.streams stream_id with
+    | Some (Stream { descriptor; _ } as stream_node) ->
+      (match descriptor.state with
       | Idle ->
         (* From RFC7540§5.1:
          *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
@@ -984,13 +984,13 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
   if not (Stream_identifier.is_request stream_id) then
     (* From RFC7540§5.1.1:
-     *   Streams initiated by a client MUST use odd-numbered stream
+     *   Scheduler initiated by a client MUST use odd-numbered stream
      *   identifiers. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
     report_connection_error t Error.ProtocolError
   else
-    match Streams.find t.streams stream_id with
+    match Scheduler.find t.streams stream_id with
     | Some stream ->
       (match stream.Reqd.state with
       | Open (PartialHeaders partial_headers) ->
@@ -1137,7 +1137,7 @@ let create
       ; config
       ; request_handler
       ; error_handler
-      ; streams = Streams.make_root ()
+      ; streams = Scheduler.make_root ()
       ; current_client_streams = 0
       ; max_client_stream_id = 0l
       ; max_pushed_stream_id = 0l
@@ -1190,7 +1190,7 @@ let read_eof t bs ~off ~len =
 
 let flush_response_body t =
   if is_active t then
-    Streams.flush t.streams
+    Scheduler.flush t.streams
 
 let next_write_operation t =
   flush_response_body t;
@@ -1201,7 +1201,7 @@ let report_write_result t result = Writer.report_result t.writer result
 let yield_writer t k =
   if is_active t then (
     let { max_client_stream_id; max_pushed_stream_id; _ } = t in
-    Streams.on_more_output_available
+    Scheduler.on_more_output_available
       t.streams
       (max_client_stream_id, max_pushed_stream_id)
       k;

@@ -72,7 +72,11 @@ type 'a active_stream =
          * headers are emitted. *)
   ; mutable trailers_parser : Stream.partial_headers option
   ; mutable trailers : Headers.t option
-  ; create_push_stream : unit -> (t * (unit -> unit), string) result
+  ; create_push_stream :
+      unit
+      -> ( t * (unit -> unit)
+         , [ `Push_disabled | `Stream_ids_exhausted ] )
+         result
   }
 
 and request_info =
@@ -104,8 +108,6 @@ and t =
   }
 
 let default_waiting = Sys.opaque_identity (fun () -> ())
-
-let initial_ttl = 10
 
 let create_active_request active_stream request request_body =
   { active_stream with
@@ -343,19 +345,14 @@ let start_push_stream t s request =
      * to be in the `Reserved` state. *)
     promised_reqd.state <- Reserved active_request;
     wakeup_writer ();
-    promised_reqd
-  | Error msg ->
-    failwith msg
+    Ok promised_reqd
+  | Error e ->
+    Error (e :> [ `Push_disabled | `Stream_cant_push | `Stream_ids_exhausted ])
 
-(* We can easily allow the priority of the PUSH request to be configurable.
- * We should allow users of this API to define the weight (maybe not strictly),
- * dependency on the current Reqd, and exclusivity *)
+(* TODO: We could easily allow the priority of the PUSH request to be
+ * configurable. We should allow users of this API to define the weight (maybe
+ * not strictly), dependency on the current Reqd, and exclusivity *)
 let unsafe_push t request =
-  (* TODO: should we validate? *)
-  (* From RFC7540§8.2:
-   *   Promised requests MUST be cacheable (see [RFC7231], Section 4.2.3), MUST
-   *   be safe (see [RFC7231], Section 4.2.1), and MUST NOT include a request
-   *   body. *)
   match t.state with
   | Idle | Open (PartialHeaders _) ->
     assert false
@@ -367,11 +364,6 @@ let unsafe_push t request =
   | Reserved _ | Closed _ ->
     assert false
 
-(* TODO: this needs a bit of documentation stating that PUSH_PROMISE frames
- * must only be sent in open or half-closed (remote) states. In practice, it's
- * dangerous to use this function in conjunction with one of the
- * `respond_with_{big,}string` functions above because their response might be
- * flushed immediately and thus close the corresponding stream. *)
 let push t request =
   if fst t.error_code <> `Ok then
     failwith "h2.Reqd.push: invalid state, currently handling error";
@@ -379,13 +371,12 @@ let push t request =
     (* From RFC7540§6.6:
      *   PUSH_PROMISE frames MUST only be sent on a peer-initiated stream that
      *   is in either the "open" or "half-closed (remote)" state. *)
-    failwith
-      "h2.Reqd.push: PUSH_PROMISE frames MUST only be sent on a \
-       peer-initiated stream";
-  unsafe_push t request
+    Error `Stream_cant_push
+  else
+    unsafe_push t request
 
 let finish_stream t reason =
-  t.state <- Closed { reason; ttl = initial_ttl };
+  t.state <- Closed { reason; ttl = Stream.initial_ttl };
   t.on_stream_closed ()
 
 let reset_stream t error_code =

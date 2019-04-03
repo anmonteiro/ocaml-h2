@@ -445,6 +445,17 @@ module Request : sig
     -> Method.t
     -> string
     -> t
+  (** [create ?headers ~scheme meth target] creates an HTTP request with the
+      given parameters. In HTTP/2, the [:scheme] pseudo-header field is
+      required and includes the scheme portion of the target URI. The [headers]
+      parameter is optional, however clients will want to include the
+      [:authority] pseudo-header field in most cases. The [:authority]
+      pseudo-header field includes the authority portion of the target URI, and
+      should be used instead of the [Host] header field in HTTP/2.
+
+      See
+      {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.3} RFC7540§8.1.2.4}
+      for more details. *)
 
   val pp_hum : Format.formatter -> t -> unit
 end
@@ -488,7 +499,7 @@ module Reqd : sig
 
   val response_exn : t -> Response.t
 
-  (** Responding
+  (** {3 Responding}
 
       The following functions will initiate a response for the corresponding
       request in [t]. When the response is fully transmitted to the wire, the
@@ -507,8 +518,7 @@ module Reqd : sig
     -> Response.t
     -> [ `write ] Body.t
 
-  val push : t -> Request.t -> t
-  (** Pushing
+  (** {3 Pushing}
 
       HTTP/2 allows a server to pre-emptively send (or "push") responses (along
       with corresponding "promised" requests) to a client in association with a
@@ -516,12 +526,43 @@ module Reqd : sig
       knows the client will need to have those responses available in order to
       fully process the response to the original request.
 
-      [push reqd request] creates a new (pushed) request descriptor that allows
-      responding to the "promised" [request]. This function raises an exception
-      if server push is not enabled for the connection.
+      {4 {b An additional note regarding server push:}}
+
+      In HTTP/2, PUSH_PROMISE frames must only be sent in the open or
+      half-closed ("remote") stream states. In practice, this means that
+      calling {!Reqd.push} must happen before the entire response body for the
+      associated client-initiated request has been written to the wire. As
+      such, it is dangerous to start a server pushed response in association
+      with either {!Reqd.respond_with_string} or
+      {!Reqd.respond_with_bigstring}, as the entire body for the response that
+      they produce is sent to the output channel immediately, causing the
+      corresponding stream to enter the closed state.
 
       See {{:https://tools.ietf.org/html/rfc7540#section-8.2} RFC7540§8.2} for
       more details. *)
+
+  val push
+    :  t
+    -> Request.t
+    -> ( t
+       , [ `Push_disabled | `Stream_cant_push | `Stream_ids_exhausted ] )
+       result
+  (** [push reqd request] creates a new ("pushed") request descriptor that
+      allows responding to the "promised" [request]. As per the HTTP/2
+      specification, [request] must be cacheable, safe, and must not include a
+      request body (see
+      {{:https://tools.ietf.org/html/rfc7540.html#section-8.2} RFC7540§8.2}
+      for more details). {b Note}: h2 will not validate [request] against these
+      assumptions.
+
+      This function returns [Error `Push_disabled] when the value of
+      [SETTINGS_ENABLE_PUSH] is set to [0] (see
+      {{:https://tools.ietf.org/html/rfc7540.html#section-6.5.2} RFC7540§8.2}
+      for more details), [Error `Stream_cant_push] when trying to initiate a
+      push stream from a stream that has been obtained from pushing, or
+      [Error `Stream_ids_exhausted] when the connection has exhausted the range
+      of identifiers available for pushed streams and cannot push on that
+      connection anymore. *)
 
   (** {3 Exception Handling} *)
 

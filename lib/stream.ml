@@ -62,3 +62,5 @@ type closed =
          * reaches 0, the stream is finally removed from the hash table. *)
   ; mutable ttl : int
   }
+
+let initial_ttl = 10
