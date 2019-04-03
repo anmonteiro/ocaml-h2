@@ -164,7 +164,7 @@ let handle_error t = function
      * handler, and additionally deliver EOF to the response body *)
     (match Scheduler.find t.streams stream_id with
     | Some reqd ->
-      Respd.reset_stream reqd error
+      Stream.reset_stream reqd error
     | None ->
       (* Possible if the stream was going to enter the Idle state (first time
        * we saw e.g. a PRIORITY frame for it) but had e.g. a
@@ -551,7 +551,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
              *
              * Transition to the "closed" state if this is the last DATA frame
              * that the server will send and we're done sending. *)
-            Respd.finish_stream descriptor Finished)
+            Stream.finish_stream descriptor Finished)
     | Idle ->
       (* From RFC7540§5.1:
        *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
@@ -655,7 +655,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *   prepared to receive and process additional frames sent on the
        *   stream that might have been sent by the peer prior to the arrival
        *   of the RST_STREAM. *)
-      Respd.finish_stream respd (ResetByThem error_code))
+      Stream.finish_stream respd (ResetByThem error_code))
   | None ->
     (* We might have removed the stream from the hash table. If its stream
      * id is strictly smaller than the max client stream id we've seen, then
@@ -1052,7 +1052,7 @@ let request t request ~error_handler ~response_handler =
   t.current_stream_id <- Int32.add t.current_stream_id 2l;
   let stream_id = t.current_stream_id in
   let respd =
-    Respd.create
+    Stream.create
       stream_id
       ~max_frame_size
       t.writer

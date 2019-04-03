@@ -63,7 +63,7 @@ type request_info =
   }
 
 type request_state =
-  | PartialHeaders of Stream.partial_headers
+  | PartialHeaders of partial_headers
   | FullHeaders
   | ActiveRequest of request_info
 
@@ -75,7 +75,7 @@ type active_stream =
         (* We're not doing anything with these yet, we could probably have a
          * `Reqd.schedule_read_trailers` function that would be called once
          * trailer headers are emitted. *)
-  ; mutable trailers_parser : Stream.partial_headers option
+  ; mutable trailers_parser : partial_headers option
   ; mutable trailers : Headers.t option
   ; create_push_stream :
       unit
@@ -89,7 +89,7 @@ and active_state = (request_state, request_info) Stream.active_state
 and state =
   (active_state, active_stream, request_info * active_stream) Stream.state
 
-and t = (state, [ `Ok | error ], error_handler) Stream.t
+and t = (state, [ `Ok | error ], error_handler) Stream.stream
 
 let default_waiting = Sys.opaque_identity (fun () -> ())
 
@@ -104,16 +104,6 @@ let create_active_stream encoder body_buffer_size create_push_stream =
   ; trailers_parser = None
   ; trailers = None
   ; create_push_stream
-  }
-
-let create id ~max_frame_size writer error_handler on_stream_closed =
-  { id
-  ; writer
-  ; error_handler
-  ; state = Idle
-  ; error_code = `Ok, None
-  ; max_frame_size
-  ; on_stream_closed
   }
 
 let done_waiting when_done_waiting =
@@ -352,15 +342,6 @@ let push t request =
   else
     unsafe_push t request
 
-let finish_stream t reason =
-  t.state <- Closed { reason; ttl = Stream.initial_ttl };
-  t.on_stream_closed ()
-
-let reset_stream t error_code =
-  let frame_info = Writer.make_frame_info t.id in
-  Writer.write_rst_stream t.writer frame_info error_code;
-  Writer.flush t.writer (fun () -> finish_stream t (ResetByUs error_code))
-
 let close_stream t =
   match t.error_code with
   | _, Some error_code ->
@@ -378,7 +359,7 @@ let close_stream t =
        *   flag). *)
       reset_stream t Error.NoError
     | Active (HalfClosed _, _) ->
-      Writer.flush t.writer (fun () -> finish_stream t Finished)
+      Writer.flush t.writer (fun () -> Stream.finish_stream t Finished)
     | _ ->
       assert false)
 

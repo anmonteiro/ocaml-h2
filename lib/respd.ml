@@ -76,7 +76,7 @@ type active_state = (unit, unit) Stream.active_state
 
 type state = (active_state, active_request, active_request) Stream.state
 
-type t = (state, [ `Ok | error ], error_handler) Stream.t
+type t = (state, [ `Ok | error ], error_handler) Stream.stream
 
 let create_active_response response response_body =
   ActiveResponse
@@ -86,16 +86,6 @@ let create_active_response response response_body =
     ; trailers_parser = None
     ; trailers = None
     }
-
-let create id ~max_frame_size writer error_handler on_stream_closed =
-  { id
-  ; writer
-  ; error_handler
-  ; state = Idle
-  ; error_code = `Ok, None
-  ; max_frame_size
-  ; on_stream_closed
-  }
 
 let request t =
   match t.state with
@@ -157,15 +147,6 @@ let response_body_exn t =
       response_body)
   | Closed _ ->
     assert false
-
-let finish_stream t reason =
-  t.state <- Closed { reason; ttl = Stream.initial_ttl };
-  t.on_stream_closed ()
-
-let reset_stream t error_code =
-  let frame_info = Writer.make_frame_info t.id in
-  Writer.write_rst_stream t.writer frame_info error_code;
-  Writer.flush t.writer (fun () -> finish_stream t (ResetByUs error_code))
 
 (* let close_stream t =
  *match t.error_code with
@@ -261,13 +242,13 @@ let requires_output t =
   (* TODO: Right now *)
   | Idle ->
     true
-  | Active (HalfClosed _, _) ->
-    false
   (* TODO: Does a reserved stream require output? *)
   | Reserved _ ->
     false
   | Active (Open _, { request_body; _ }) ->
     request_body_requires_output request_body
+  | Active (HalfClosed _, _) ->
+    false
   | Closed _ ->
     false
 

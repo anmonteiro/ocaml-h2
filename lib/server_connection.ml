@@ -152,7 +152,7 @@ let handle_error t = function
   | StreamError (stream_id, error) ->
     (match Scheduler.find t.streams stream_id with
     | Some reqd ->
-      Reqd.reset_stream reqd error
+      Stream.reset_stream reqd error
     | None ->
       (* Possible if the stream was going to enter the Idle state (first time
        * we saw e.g. a PRIORITY frame for it) but had e.g. a
@@ -202,7 +202,7 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
     let pushed_stream_id = Int32.add max_pushed_stream_id 2l in
     t.max_pushed_stream_id <- pushed_stream_id;
     let reqd =
-      Reqd.create
+      Stream.create
         pushed_stream_id
         ~max_frame_size:t.settings.max_frame_size
         t.writer
@@ -394,7 +394,7 @@ let open_stream t frame_header ?priority headers_block =
       match Scheduler.get_node t.streams stream_id with
       | None ->
         let reqd =
-          Reqd.create
+          Stream.create
             stream_id
             ~max_frame_size:t.settings.max_frame_size
             t.writer
@@ -635,7 +635,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
                 descriptor.state
                 <- Active (HalfClosed request_info, active_stream)
               else
-                Reqd.finish_stream descriptor Finished;
+                Stream.finish_stream descriptor Finished;
             (* From RFC7540§6.9.1:
              *   The receiver of a frame sends a WINDOW_UPDATE frame as it
              *   consumes data and frees up space in flow-control windows.
@@ -718,7 +718,7 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
        *   id that the client has opened), don't bother processing it. *)
       if Stream_identifier.(stream_id >= t.max_client_stream_id) then
         let reqd =
-          Reqd.create
+          Stream.create
             stream_id
             ~max_frame_size:t.settings.max_frame_size
             t.writer
@@ -767,7 +767,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
          *   prepared to receive and process additional frames sent on the
          *   stream that might have been sent by the peer prior to the arrival
          *   of the RST_STREAM. *)
-        Reqd.finish_stream reqd (ResetByThem error_code))
+        Stream.finish_stream reqd (ResetByThem error_code))
     | None ->
       (* We might have removed the stream from the hash table. If its stream
        * id is strictly smaller than the max client stream id we've seen, then
