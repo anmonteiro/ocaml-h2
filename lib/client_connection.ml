@@ -411,7 +411,8 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
          *   HEADERS frames can be sent on a stream in the "idle", "reserved
          *   (local)", "open", or "half-closed (remote)" state. *)
         report_connection_error t Error.ProtocolError
-      | Active ({ response_state = Awaiting_response; _ } as active_state) ->
+      | Active (_, ({ response_state = Awaiting_response; _ } as active_state))
+        ->
         handle_first_response_bytes
           t
           respd
@@ -419,13 +420,14 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
           frame_header
           ?priority
           headers_block
-      | Active { response_state = FullHeaders | PartialHeaders _; _ } ->
+      | Active (_, { response_state = FullHeaders | PartialHeaders _; _ }) ->
         assert false
       (* if we're getting a HEADERS frame at this point, they must be
        * trailers, and the END_STREAM flag needs to be set. *)
       | Active
-          ({ response_state = ActiveResponse active_response; _ } as
-          active_state) ->
+          ( _
+          , ({ response_state = ActiveResponse active_response; _ } as
+            active_state) ) ->
         process_trailer_headers
           t
           respd
@@ -486,7 +488,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
   match Scheduler.get_node t.streams stream_id with
   | Some (Stream { descriptor; _ } as stream) ->
     (match descriptor.Stream.state with
-    | Active { response_state = ActiveResponse response_info; _ } ->
+    | Active (_, { response_state = ActiveResponse response_info; _ }) ->
       let { Respd.response; response_body; response_body_bytes; _ } =
         response_info
       in
@@ -882,8 +884,9 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   | Some stream ->
     (match stream.Stream.state with
     | Active
-        ({ response_state = PartialHeaders partial_headers; _ } as
-        active_request) ->
+        ( _
+        , ({ response_state = PartialHeaders partial_headers; _ } as
+          active_request) ) ->
       handle_headers_block
         t
         stream
@@ -892,10 +895,11 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
         flags
         headers_block
     | Active
-        ({ response_state =
-             ActiveResponse { trailers_parser = Some partial_headers; _ }
-         ; _
-         } as active_request) ->
+        ( _
+        , ({ response_state =
+               ActiveResponse { trailers_parser = Some partial_headers; _ }
+           ; _
+           } as active_request) ) ->
       handle_trailer_headers
         t
         stream
@@ -1067,12 +1071,12 @@ let request t request ~error_handler ~response_handler =
   Writer.flush t.writer (fun () ->
       respd.state
       <- Active
-           { response_state = Awaiting_response
-           ; stream_state = Open
-           ; request
-           ; request_body
-           ; response_handler
-           });
+           ( Open ()
+           , { response_state = Awaiting_response
+             ; request
+             ; request_body
+             ; response_handler
+             } ));
   wakeup_writer t;
   (* TODO: closing the request body puts the stream on half-closed (local)
    * state *)

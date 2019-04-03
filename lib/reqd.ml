@@ -67,17 +67,9 @@ type request_state =
   | FullHeaders
   | ActiveRequest of request_info
 
-and active_state =
-  | Open of request_state
-  (* We purposely name this tag `HalfClosedRemote` to be explicit that once
-   * a stream is in this state it means that the client has stopped sending
-   * us data. The server still has data to send. *)
-  | HalfClosedRemote of request_info
-
-type 'a active_stream =
+type active_stream =
   { body_buffer_size : int
   ; encoder : Hpack.Encoder.t
-  ; mutable request_state : 'a
   ; mutable response_state : response_state
   ; mutable wait_for_first_flush : bool
         (* We're not doing anything with these yet, we could probably have a
@@ -92,13 +84,10 @@ type 'a active_stream =
          result
   }
 
+and active_state = (request_state, request_info) Stream.active_state
+
 and state =
-  (* XXX: instead of this (maybe unnecessary?) complexity, we could remove the
-   * request_state field from the active_stream type and use tuples here.
-   * e.g.:
-   *  (active_state * active_stream, request_info * active_stream) Stream.state
-   *)
-  (active_state active_stream, request_info active_stream) Stream.state
+  (active_state, active_stream, request_info * active_stream) Stream.state
 
 and t = (state, [ `Ok | error ], error_handler) Stream.t
 
@@ -107,11 +96,8 @@ let default_waiting = Sys.opaque_identity (fun () -> ())
 let create_active_request request request_body =
   { request; request_body; request_body_bytes = Int64.zero }
 
-let create_active_stream
-    request_state encoder body_buffer_size create_push_stream
-  =
-  { request_state
-  ; body_buffer_size
+let create_active_stream encoder body_buffer_size create_push_stream =
+  { body_buffer_size
   ; encoder
   ; response_state = Waiting (ref default_waiting)
   ; wait_for_first_flush = true
@@ -137,30 +123,23 @@ let done_waiting when_done_waiting =
 
 let request t =
   match t.state with
-  | Idle | Active { request_state = Open (PartialHeaders _ | FullHeaders); _ }
-    ->
+  | Idle | Active (Open (PartialHeaders _ | FullHeaders), _) ->
     assert false
   | Active
-      { request_state =
-          Open (ActiveRequest { request; _ }) | HalfClosedRemote { request; _ }
-      ; _
-      }
-  | Reserved { request_state = { request; _ }; _ } ->
+      ((Open (ActiveRequest { request; _ }) | HalfClosed { request; _ }), _)
+  | Reserved ({ request; _ }, _) ->
     request
   | Closed _ ->
     assert false
 
 let request_body t =
   match t.state with
-  | Idle | Active { request_state = Open (PartialHeaders _ | FullHeaders); _ }
-    ->
+  | Idle | Active (Open (PartialHeaders _ | FullHeaders), _) ->
     assert false
   | Active
-      { request_state =
-          ( Open (ActiveRequest { request_body; _ })
-          | HalfClosedRemote { request_body; _ } )
-      ; _
-      } ->
+      ( ( Open (ActiveRequest { request_body; _ })
+        | HalfClosed { request_body; _ } )
+      , _ ) ->
     request_body
   | Reserved _ ->
     (* From RFC7540§8.1:
@@ -172,15 +151,12 @@ let request_body t =
 
 let response t =
   match t.state with
-  | Idle | Active { request_state = Open (PartialHeaders _); _ } ->
+  | Idle | Active (Open (PartialHeaders _), _) ->
     None
   | Active
-      { request_state =
-          Open (FullHeaders | ActiveRequest _) | HalfClosedRemote _
-      ; response_state
-      ; _
-      }
-  | Reserved { response_state; _ } ->
+      ( (Open (FullHeaders | ActiveRequest _) | HalfClosed _)
+      , { response_state; _ } )
+  | Reserved (_, { response_state; _ }) ->
     (match response_state with
     | Waiting _ ->
       None
@@ -191,15 +167,12 @@ let response t =
 
 let response_exn t =
   match t.state with
-  | Idle | Active { request_state = Open (PartialHeaders _); _ } ->
+  | Idle | Active (Open (PartialHeaders _), _) ->
     failwith "h2.Reqd.response_exn: response has not started"
   | Active
-      { request_state =
-          Open (FullHeaders | ActiveRequest _) | HalfClosedRemote _
-      ; response_state
-      ; _
-      }
-  | Reserved { response_state; _ } ->
+      ( (Open (FullHeaders | ActiveRequest _) | HalfClosed _)
+      , { response_state; _ } )
+  | Reserved (_, { response_state; _ }) ->
     (match response_state with
     | Waiting _ ->
       failwith "h2.Reqd.response_exn: response has not started"
@@ -250,26 +223,18 @@ let send_fixed_response t s response data =
 
 let unsafe_respond_with_data t response data =
   match t.state with
-  | Idle | Active { request_state = Open (PartialHeaders _); _ } ->
+  | Idle | Active (Open (PartialHeaders _), _) ->
     assert false
-  | Active
-      ({ request_state =
-           Open (FullHeaders | ActiveRequest _) | HalfClosedRemote _
-       ; _
-       } as stream) ->
+  | Active ((Open (FullHeaders | ActiveRequest _) | HalfClosed _), stream) ->
     send_fixed_response t stream response data
-  | Reserved stream ->
+  | Reserved (request_info, stream) ->
     send_fixed_response t stream response data;
     (* From RFC7540§8.1:
      *   reserved (local): [...] In this state, only the following transitions
      *   are possible: The endpoint can send a HEADERS frame. This causes the
      *   stream to open in a "half-closed (remote)" state. *)
     Writer.flush t.writer (fun () ->
-        t.state
-        <- Active
-             { stream with
-               request_state = HalfClosedRemote stream.request_state
-             })
+        t.state <- Active (HalfClosed request_info, stream))
   | Closed _ ->
     assert false
 
@@ -306,15 +271,11 @@ let send_streaming_response ~flush_headers_immediately t s response =
 
 let unsafe_respond_with_streaming t ~flush_headers_immediately response =
   match t.state with
-  | Idle | Active { request_state = Open (PartialHeaders _); _ } ->
+  | Idle | Active (Open (PartialHeaders _), _) ->
     assert false
-  | Active
-      ({ request_state =
-           Open (FullHeaders | ActiveRequest _) | HalfClosedRemote _
-       ; _
-       } as stream) ->
+  | Active ((Open (FullHeaders | ActiveRequest _) | HalfClosed _), stream) ->
     send_streaming_response ~flush_headers_immediately t stream response
-  | Reserved stream ->
+  | Reserved (request_info, stream) ->
     let response_body =
       send_streaming_response ~flush_headers_immediately t stream response
     in
@@ -323,11 +284,7 @@ let unsafe_respond_with_streaming t ~flush_headers_immediately response =
      *   are possible: The endpoint can send a HEADERS frame. This causes the
      *   stream to open in a "half-closed (remote)" state. *)
     Writer.flush t.writer (fun () ->
-        t.state
-        <- Active
-             { stream with
-               request_state = HalfClosedRemote stream.request_state
-             });
+        t.state <- Active (HalfClosed request_info, stream));
     response_body
   | Closed _ ->
     assert false
@@ -353,13 +310,9 @@ let start_push_stream t s request =
     let { encoder; body_buffer_size; create_push_stream; _ } = s in
     (* From RFC7540§8.2:
      *   Promised requests [...] MUST NOT include a request body. *)
-    let active_request = create_active_request request Body.empty in
+    let request_info = create_active_request request Body.empty in
     let active_stream =
-      create_active_stream
-        active_request
-        encoder
-        body_buffer_size
-        create_push_stream
+      create_active_stream encoder body_buffer_size create_push_stream
     in
     (* From RFC7540§8.2.1:
      *   Sending a PUSH_PROMISE frame creates a new stream and puts the stream
@@ -369,7 +322,7 @@ let start_push_stream t s request =
      * Note: we do this before flushing the writer because request handlers might
      * immediately call one of the `respond_with` functions and expect the stream
      * to be in the `Reserved` state. *)
-    promised_reqd.state <- Reserved active_stream;
+    promised_reqd.state <- Reserved (request_info, active_stream);
     wakeup_writer ();
     Ok promised_reqd
   | Error e ->
@@ -380,13 +333,9 @@ let start_push_stream t s request =
  * not strictly), dependency on the current Reqd, and exclusivity *)
 let unsafe_push t request =
   match t.state with
-  | Idle | Active { request_state = Open (PartialHeaders _); _ } ->
+  | Idle | Active (Open (PartialHeaders _), _) ->
     assert false
-  | Active
-      ({ request_state =
-           Open (FullHeaders | ActiveRequest _) | HalfClosedRemote _
-       ; _
-       } as stream) ->
+  | Active ((Open (FullHeaders | ActiveRequest _) | HalfClosed _), stream) ->
     start_push_stream t stream request
   (* Already checked in `push` *)
   | Reserved _ | Closed _ ->
@@ -418,7 +367,7 @@ let close_stream t =
     reset_stream t error_code
   | _, None ->
     (match t.state with
-    | Active { request_state = Open (FullHeaders | ActiveRequest _); _ } ->
+    | Active (Open (FullHeaders | ActiveRequest _), _) ->
       (* From RFC7540§8.1:
        *   A server can send a complete response prior to the client sending an
        *   entire request if the response does not depend on any portion of the
@@ -428,7 +377,7 @@ let close_stream t =
        *   after sending a complete response (i.e., a frame with the END_STREAM
        *   flag). *)
       reset_stream t Error.NoError
-    | Active { request_state = HalfClosedRemote _; _ } ->
+    | Active (HalfClosed _, _) ->
       Writer.flush t.writer (fun () -> finish_stream t Finished)
     | _ ->
       assert false)
@@ -474,17 +423,14 @@ let _report_error ?request t s exn error_code =
 
 let report_error t exn error_code =
   match t.state with
-  | Idle | Reserved _ | Active { request_state = Open (PartialHeaders _); _ }
-    ->
+  | Idle | Reserved _ | Active (Open (PartialHeaders _), _) ->
     assert false
-  | Active ({ request_state = Open FullHeaders; _ } as stream) ->
+  | Active (Open FullHeaders, stream) ->
     _report_error t stream exn error_code
   | Active
-      ({ request_state =
-           ( Open (ActiveRequest { request; request_body; _ })
-           | HalfClosedRemote { request; request_body; _ } )
-       ; _
-       } as stream) ->
+      ( ( Open (ActiveRequest { request; request_body; _ })
+        | HalfClosed { request; request_body; _ } )
+      , stream ) ->
     Body.close_reader request_body;
     _report_error t stream ~request exn error_code
   | Closed _ ->
@@ -510,15 +456,11 @@ let error_code t =
 
 let on_more_output_available t f =
   match t.state with
-  | Idle | Reserved _ | Active { request_state = Open (PartialHeaders _); _ }
-    ->
+  | Idle | Reserved _ | Active (Open (PartialHeaders _), _) ->
     assert false
   | Active
-      { request_state =
-          Open (FullHeaders | ActiveRequest _) | HalfClosedRemote _
-      ; response_state
-      ; _
-      } ->
+      ( (Open (FullHeaders | ActiveRequest _) | HalfClosed _)
+      , { response_state; _ } ) ->
     (match response_state with
     | Waiting when_done_waiting ->
       (* Due to the flow-control window, this function might be called when
@@ -548,14 +490,11 @@ let requires_output t =
    *   A server can send a complete response prior to the client sending an
    *   entire request if the response does not depend on any portion of the
    *   request that has not been sent and received. *)
-  | Active { request_state = Open (PartialHeaders _); _ } ->
+  | Active (Open (PartialHeaders _), _) ->
     false
   | Active
-      { request_state =
-          Open (FullHeaders | ActiveRequest _) | HalfClosedRemote _
-      ; response_state
-      ; _
-      } ->
+      ( (Open (FullHeaders | ActiveRequest _) | HalfClosed _)
+      , { response_state; _ } ) ->
     (match response_state with
     | Complete _ ->
       false
@@ -582,8 +521,7 @@ let write_buffer_data writer ~off ~len frame_info buffer =
 
 let flush_response_body t ~max_bytes =
   match t.state with
-  | Active { request_state = Open _ | HalfClosedRemote _; response_state; _ }
-    ->
+  | Active ((Open _ | HalfClosed _), { response_state; _ }) ->
     (match response_state with
     | Streaming (_, response_body) ->
       let written =
@@ -624,11 +562,9 @@ let flush_response_body t ~max_bytes =
 
 let deliver_trailer_headers t headers =
   match t.state with
-  | Active { request_state = Open (PartialHeaders _ | FullHeaders); _ } ->
+  | Active (Open (PartialHeaders _ | FullHeaders), _) ->
     assert false
-  | Active
-      ({ request_state = Open (ActiveRequest _) | HalfClosedRemote _; _ } as
-      stream) ->
+  | Active ((Open (ActiveRequest _) | HalfClosed _), stream) ->
     (* TODO: call the schedule_trailers callback *)
     stream.trailers <- Some headers
   | _ ->

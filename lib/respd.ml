@@ -65,22 +65,16 @@ type response_state =
   | FullHeaders
   | ActiveResponse of response_info
 
-type pending_response =
-  (* We purposely name this tag `HalfClosedLocal` to be explicit that once
-   * a stream is in this state it means that the client has stopped sending
-   * data. The server still has data to send back. *)
-  | HalfClosedLocal
-  | Open
-
 type active_request =
   { mutable response_state : response_state
-  ; mutable stream_state : pending_response
   ; request : Request.t
   ; request_body : [ `read ] Body.t
   ; response_handler : response_handler
   }
 
-type state = (active_request, active_request) Stream.state
+type active_state = (unit, unit) Stream.active_state
+
+type state = (active_state, active_request, active_request) Stream.state
 
 type t = (state, [ `Ok | error ], error_handler) Stream.t
 
@@ -109,7 +103,7 @@ let request t =
     failwith "h2.Respd.request: request is not active"
   | Reserved { request; _ } ->
     request
-  | Active { request; _ } ->
+  | Active (_, { request; _ }) ->
     request
   | Closed _ ->
     failwith "h2.Respd.request: request has ended"
@@ -120,7 +114,7 @@ let request_body t =
     failwith "h2.Respd.request: request is not active"
   | Reserved { request_body; _ } ->
     request_body
-  | Active { request_body; _ } ->
+  | Active (_, { request_body; _ }) ->
     request_body
   | Closed _ ->
     failwith "h2.Respd.request: request has ended"
@@ -129,7 +123,7 @@ let response t =
   match t.state with
   | Idle ->
     None
-  | Reserved { response_state; _ } | Active { response_state; _ } ->
+  | Reserved { response_state; _ } | Active (_, { response_state; _ }) ->
     (match response_state with
     | Awaiting_response | FullHeaders | PartialHeaders _ ->
       None
@@ -142,7 +136,7 @@ let response_exn t =
   match t.state with
   | Idle ->
     failwith "h2.Respd.response_exn: response has not arrived"
-  | Reserved { response_state; _ } | Active { response_state; _ } ->
+  | Reserved { response_state; _ } | Active (_, { response_state; _ }) ->
     (match response_state with
     | Awaiting_response | FullHeaders | PartialHeaders _ ->
       failwith "h2.Respd.response_exn: response has not arrived"
@@ -155,7 +149,7 @@ let response_body_exn t =
   match t.state with
   | Idle ->
     failwith "h2.Respd.response_exn: response has not arrived"
-  | Reserved { response_state; _ } | Active { response_state; _ } ->
+  | Reserved { response_state; _ } | Active (_, { response_state; _ }) ->
     (match response_state with
     | Awaiting_response | FullHeaders | PartialHeaders _ ->
       failwith "h2.Respd.response_exn: response has not arrived"
@@ -195,10 +189,10 @@ let reset_stream t error_code =
 
 let close_stream t =
   match t.state with
-  | Active { stream_state = HalfClosedLocal; _ } ->
+  | Active (HalfClosed _, _) ->
     (* easy case, just transition to the closed state. *)
     finish_stream t Finished
-  | Active { stream_state = Open; _ } ->
+  | Active (Open _, _) ->
     (* Still not done sending, reset stream with no error? *)
     (* TODO: *)
     ()
@@ -232,12 +226,13 @@ let report_error t exn error_code =
           Awaiting_response | PartialHeaders _ | ActiveResponse _
       ; _
       }
-  | Active { response_state = Awaiting_response | PartialHeaders _; _ } ->
+  | Active (_, { response_state = Awaiting_response | PartialHeaders _; _ }) ->
     assert false
   | Reserved ({ response_state = FullHeaders; _ } as s)
-  | Active ({ response_state = FullHeaders; _ } as s) ->
+  | Active (_, ({ response_state = FullHeaders; _ } as s)) ->
     _report_error t s exn error_code
-  | Active ({ response_state = ActiveResponse { response_body; _ }; _ } as s)
+  | Active
+      (_, ({ response_state = ActiveResponse { response_body; _ }; _ } as s))
     ->
     _report_error t s ~response_body exn error_code
   | Closed _ ->
@@ -252,7 +247,7 @@ let on_more_output_available t f =
   match t.state with
   | Idle | Reserved _ ->
     assert false
-  | Active { request_body; _ } ->
+  | Active (_, { request_body; _ }) ->
     if not (Body.is_closed request_body) then
       Body.when_ready_to_write request_body f
   | Closed _ ->
@@ -266,12 +261,12 @@ let requires_output t =
   (* TODO: Right now *)
   | Idle ->
     true
-  | Active { stream_state = HalfClosedLocal; _ } ->
+  | Active (HalfClosed _, _) ->
     false
   (* TODO: Does a reserved stream require output? *)
   | Reserved _ ->
     false
-  | Active { stream_state = Open; request_body; _ } ->
+  | Active (Open _, { request_body; _ }) ->
     request_body_requires_output request_body
   | Closed _ ->
     false
@@ -285,7 +280,7 @@ let write_buffer_data writer ~off ~len frame_info buffer =
 
 let flush_request_body t ~max_bytes =
   match t.state with
-  | Active ({ stream_state = Open; request_body; _ } as s) ->
+  | Active (Open _, ({ request_body; _ } as s)) ->
     let written =
       Body.transfer_to_writer
         request_body
@@ -295,14 +290,14 @@ let flush_request_body t ~max_bytes =
         t.id
     in
     if not (request_body_requires_output request_body) then
-      s.stream_state <- HalfClosedLocal;
+      t.state <- Active (HalfClosed (), s);
     written
   | _ ->
     0
 
 let deliver_trailer_headers t headers =
   match t.state with
-  | Active { response_state = ActiveResponse s; _ } ->
+  | Active (_, { response_state = ActiveResponse s; _ }) ->
     (* TODO: call the schedule_trailers callback *)
     s.trailers <- Some headers
   | _ ->

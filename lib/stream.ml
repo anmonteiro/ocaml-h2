@@ -64,11 +64,16 @@ type closed =
   ; mutable ttl : int
   }
 
-type ('active, 'reserved) state =
+type ('opn, 'half_closed) active_state =
+  | Open of 'opn
+  | HalfClosed of 'half_closed
+
+type ('active_state, 'active, 'reserved) state =
   | Idle
   | Reserved of 'reserved
-  | Active of 'active
+  | Active of 'active_state * 'active
   | Closed of closed
+  constraint (_, _) active_state = 'active_state
 
 type ('state, 'error_code, 'error_handler) t =
   { id : Stream_identifier.t
