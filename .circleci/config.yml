@@ -157,7 +157,7 @@ jobs:
           name: 'Check code is formatted with ocamlformat'
           command: |
             # https://github.com/ocaml-ppx/ocamlformat/issues/754
-            esy dune build @fmt --auto-promote || true
+            ~/.npm-global/bin/esy dune build @fmt --auto-promote || true
             # https://github.com/ocaml/dune/issues/2012
             git checkout lwt-unix/dune
             git diff --exit-code
