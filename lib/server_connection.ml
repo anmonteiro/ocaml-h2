@@ -261,12 +261,14 @@ let handle_headers t ~end_stream reqd headers =
      *   states count toward the maximum number of streams that an endpoint is
      *   permitted to open. *)
     let active_stream =
-      Reqd.create_active_stream
-        t.hpack_encoder
-        t.config.response_body_buffer_size
-        (create_push_stream t)
+      Reqd.(
+        create_active_stream
+          (Open FullHeaders)
+          t.hpack_encoder
+          t.config.response_body_buffer_size
+          (create_push_stream t))
     in
-    reqd.state <- Open (FullHeaders active_stream);
+    reqd.state <- Active active_stream;
     t.current_client_streams <- t.current_client_streams + 1;
     match method_path_and_scheme_or_malformed headers with
     | None ->
@@ -300,19 +302,17 @@ let handle_headers t ~end_stream reqd headers =
              * we're gonna get data. *)
             Body.create Bigstringaf.empty
         in
-        let new_stream_state =
-          Reqd.create_active_request active_stream request request_body
-        in
+        let request_info = Reqd.create_active_request request request_body in
         if end_stream then (
           (* From RFC7540§5.1:
            *   [...] an endpoint receiving an END_STREAM flag causes the stream
            *   state to become "half-closed (remote)". *)
-          reqd.state <- HalfClosedRemote new_stream_state;
+          active_stream.request_state <- HalfClosedRemote request_info;
           (* Deliver EOF to the request body, as the handler might be waiting
            * on it to produce a response. *)
           Body.close_reader request_body)
         else
-          reqd.state <- Open (ActiveRequest new_stream_state);
+          active_stream.request_state <- Open (ActiveRequest request_info);
         t.request_handler reqd;
         wakeup_writer t)
 
@@ -438,12 +438,20 @@ let open_stream t frame_header ?priority headers_block =
       ; end_stream = Flags.test_end_stream flags
       }
     in
-    reqd.state <- Open (PartialHeaders partial_headers);
+    let active_stream =
+      Reqd.(
+        create_active_stream
+          (Open (PartialHeaders partial_headers))
+          t.hpack_encoder
+          t.config.response_body_buffer_size
+          (create_push_stream t))
+    in
+    reqd.state <- Active active_stream;
     if not end_headers then
       t.receiving_headers_for_stream <- Some stream_id;
     handle_headers_block t reqd partial_headers flags headers_block
 
-let process_trailer_headers t reqd response_state frame_header headers_block =
+let process_trailer_headers t reqd active_stream frame_header headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
   let end_stream = Flags.test_end_stream flags in
   if not end_stream then
@@ -462,7 +470,7 @@ let process_trailer_headers t reqd response_state frame_header headers_block =
       ; end_stream
       }
     in
-    response_state.Reqd.trailers_parser <- Some partial_headers;
+    active_stream.Reqd.trailers_parser <- Some partial_headers;
     if not Flags.(test_end_header flags) then
       t.receiving_headers_for_stream <- Some stream_id;
     (* trailer headers: RFC7230§4.4 *)
@@ -496,17 +504,22 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
            *   HEADERS frames can be sent on a stream in the "idle", "reserved
            *   (local)", "open", or "half-closed (remote)" state. *)
           open_stream t frame_header ?priority headers_block
-        | Open (PartialHeaders _) ->
+        | Active { request_state = Open (PartialHeaders _); _ } ->
           (* This case is unreachable because we check that partial HEADERS
            * states must be followed by CONTINUATION frames elsewhere. *)
           assert false
         (* if we're getting a HEADERS frame at this point, they must be
          * trailers, and the END_STREAM flag needs to be set. *)
-        | Open (FullHeaders rs) ->
-          process_trailer_headers t reqd rs frame_header headers_block
-        | Open (ActiveRequest rs) ->
-          process_trailer_headers t reqd rs frame_header headers_block
-        | HalfClosedRemote _
+        | Active
+            ({ request_state = Open (FullHeaders | ActiveRequest _); _ } as
+            active_stream) ->
+          process_trailer_headers
+            t
+            reqd
+            active_stream
+            frame_header
+            headers_block
+        | Active { request_state = HalfClosedRemote _; _ }
         (* From RFC7540§5.1:
          *   half-closed (remote): [...] If an endpoint receives additional
          *   frames, other than WINDOW_UPDATE, PRIORITY, or RST_STREAM, for a
@@ -573,7 +586,9 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
     match Scheduler.get_node t.streams stream_id with
     | Some (Stream { descriptor; _ } as stream) ->
       (match descriptor.Reqd.state with
-      | Open (ActiveRequest ({ request_info; _ } as stream_state)) ->
+      | Active
+          ({ request_state = Open (ActiveRequest request_info); _ } as
+          active_stream) ->
         let request_body = Reqd.request_body descriptor in
         request_info.request_body_bytes
         <- Int64.(
@@ -624,7 +639,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
               then
                 (* There's a potential race condition here if the request handler
                  * completes the response right after . *)
-                descriptor.state <- HalfClosedRemote stream_state
+                active_stream.request_state <- HalfClosedRemote request_info
               else
                 Reqd.finish_stream descriptor Finished;
             (* From RFC7540§6.9.1:
@@ -955,18 +970,17 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
          *   a stream in this state MUST be treated as a connection error
          *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
         report_connection_error t Error.ProtocolError
-      | Open _
-      (* From RFC7540§6.9:
-       *   [...] a receiver could receive a WINDOW_UPDATE frame on a
-       *   "half-closed (remote)" or "closed" stream. A receiver MUST NOT treat
-       *   this as an error (see Section 5.1). *)
-      | HalfClosedRemote _
+      | Active _
       (* From RFC7540§5.1:
        *   reserved (local): [...] A PRIORITY or WINDOW_UPDATE frame MAY be
        *   received in this state. *)
       | Reserved _ ->
         add_window_increment t stream_node window_increment
       | Closed _ ->
+        (* From RFC7540§6.9:
+         *   [...] a receiver could receive a WINDOW_UPDATE frame on a
+         *   "half-closed (remote)" or "closed" stream. A receiver MUST NOT
+         *   treat this as an error (see Section 5.1). *)
         (* From RFC7540§5.1:
          *   Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received
          *   in this state, though endpoints MAY choose to treat frames that
@@ -993,9 +1007,13 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
     match Scheduler.find t.streams stream_id with
     | Some stream ->
       (match stream.Reqd.state with
-      | Open (PartialHeaders partial_headers) ->
+      | Active { request_state = Open (PartialHeaders partial_headers); _ } ->
         handle_headers_block t stream partial_headers flags headers_block
-      | Open (ActiveRequest { trailers_parser = Some partial_headers; _ }) ->
+      | Active
+          { request_state = Open (ActiveRequest _)
+          ; trailers_parser = Some partial_headers
+          ; _
+          } ->
         handle_trailer_headers t stream partial_headers flags headers_block
       | _ ->
         (* TODO: maybe need to handle the case where the stream has been closed

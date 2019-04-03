@@ -63,4 +63,10 @@ type closed =
   ; mutable ttl : int
   }
 
+type ('active, 'reserved) state =
+  | Idle
+  | Reserved of 'reserved
+  | Active of 'active
+  | Closed of closed
+
 let initial_ttl = 10
