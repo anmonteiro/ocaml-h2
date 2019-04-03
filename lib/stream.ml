@@ -31,6 +31,7 @@
  *---------------------------------------------------------------------------*)
 
 module AB = Angstrom.Buffered
+module Writer = Serialize.Writer
 
 type partial_headers =
   { mutable parse_state : (Headers.t, Hpack.error) result AB.state
@@ -68,5 +69,16 @@ type ('active, 'reserved) state =
   | Reserved of 'reserved
   | Active of 'active
   | Closed of closed
+
+type ('state, 'error_code, 'error_handler) t =
+  { id : Stream_identifier.t
+  ; writer : Writer.t
+  ; error_handler : 'error_handler
+  ; mutable error_code : 'error_code * Error.error_code option
+  ; mutable state : 'state
+        (* The largest frame payload we're allowed to write. *)
+  ; mutable max_frame_size : int
+  ; on_stream_closed : unit -> unit
+  }
 
 let initial_ttl = 10

@@ -200,7 +200,7 @@ let handle_headers t ~end_stream respd active_state headers =
      *   indicate that the stream is being closed prior to any processing
      *   having occurred. Any request that was sent on the reset stream can be
      *   safely retried. *)
-    report_stream_error t respd.Respd.id Error.RefusedStream
+    report_stream_error t respd.Stream.id Error.RefusedStream
   else (
     (* From RFC7540§5.1.2:
      *   Scheduler that are in the "open" state or in either of the "half-closed"
@@ -246,7 +246,7 @@ let handle_headers t ~end_stream respd active_state headers =
           Respd.create_active_response response response_body
         in
         active_state.response_state <- new_response_state;
-        respd.response_handler response response_body;
+        active_state.response_handler response response_body;
         if end_stream then (
           (* Deliver EOF to the response body, as the handler might be waiting
            * on it to act. *)
@@ -485,7 +485,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
   Scheduler.deduct_inflow t.streams payload_length;
   match Scheduler.get_node t.streams stream_id with
   | Some (Stream { descriptor; _ } as stream) ->
-    (match descriptor.Respd.state with
+    (match descriptor.Stream.state with
     | Active { response_state = ActiveResponse response_info; _ } ->
       let { Respd.response; response_body; response_body_bytes; _ } =
         response_info
@@ -880,7 +880,7 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
   match Scheduler.find t.streams stream_id with
   | Some stream ->
-    (match stream.Respd.state with
+    (match stream.Stream.state with
     | Active
         ({ response_state = PartialHeaders partial_headers; _ } as
         active_request) ->
@@ -1053,7 +1053,6 @@ let request t request ~error_handler ~response_handler =
       ~max_frame_size
       t.writer
       error_handler
-      response_handler
       (on_stream_closed t)
   in
   (* TODO: priority *)
@@ -1072,6 +1071,7 @@ let request t request ~error_handler ~response_handler =
            ; stream_state = Open
            ; request
            ; request_body
+           ; response_handler
            });
   wakeup_writer t;
   (* TODO: closing the request body puts the stream on half-closed (local)

@@ -35,6 +35,7 @@
  * reference to the Respd *)
 
 module Writer = Serialize.Writer
+open Stream
 
 type error =
   [ `Malformed_response of string
@@ -51,8 +52,8 @@ type response_info =
   ; response_body : [ `read ] Body.t
   ; mutable response_body_bytes : int64
         (* We're not doing anything with these yet, we could probably have a
-         * `Reqd.schedule_read_trailers` function that would be called once trailer
-         * headers are emitted. *)
+         * `Reqd.schedule_read_trailers` function that would be called once
+         * trailer headers are emitted. *)
   ; mutable trailers_parser : Stream.partial_headers option
   ; mutable trailers : Headers.t option
   }
@@ -76,27 +77,12 @@ type active_request =
   ; mutable stream_state : pending_response
   ; request : Request.t
   ; request_body : [ `read ] Body.t
-  }
-
-type state =
-  | Idle
-  | Active of active_request
-  (* TODO: make the `request{,_exn}` / `response{,_exn}` functions work
-   * in this state. *)
-  | Closed of Stream.closed
-  | Reserved of active_request
-
-type t =
-  { id : Stream_identifier.t
-  ; writer : Writer.t
-  ; error_handler : error_handler
   ; response_handler : response_handler
-  ; mutable error_code : [ `Ok | error ] * Error.error_code option
-  ; mutable state : state
-        (* The largest frame payload we're allowed to write. *)
-  ; mutable max_frame_size : int
-  ; on_stream_closed : unit -> unit
   }
+
+type state = (active_request, active_request) Stream.state
+
+type t = (state, [ `Ok | error ], error_handler) Stream.t
 
 let create_active_response response response_body =
   ActiveResponse
@@ -107,13 +93,10 @@ let create_active_response response response_body =
     ; trailers = None
     }
 
-let create
-    id ~max_frame_size writer error_handler response_handler on_stream_closed
-  =
+let create id ~max_frame_size writer error_handler on_stream_closed =
   { id
   ; writer
   ; error_handler
-  ; response_handler
   ; state = Idle
   ; error_code = `Ok, None
   ; max_frame_size

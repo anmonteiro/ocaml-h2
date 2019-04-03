@@ -517,6 +517,7 @@ end
 
 module Client_scheduler = Make (struct
   include Respd
+  open Stream
 
   let id t = t.id
 
@@ -529,6 +530,7 @@ end)
 
 module Server_scheduler = Make (struct
   include Reqd
+  open Stream
 
   let id t = t.id
 

@@ -254,7 +254,7 @@ let handle_headers t ~end_stream reqd headers =
      *   indicate that the stream is being closed prior to any processing
      *   having occurred. Any request that was sent on the reset stream can be
      *   safely retried. *)
-    report_stream_error t reqd.Reqd.id Error.RefusedStream
+    report_stream_error t reqd.Stream.id Error.RefusedStream
   else
     (* From RFC7540§5.1.2:
      *   Scheduler that are in the "open" state or in either of the "half-closed"
@@ -268,7 +268,7 @@ let handle_headers t ~end_stream reqd headers =
           t.config.response_body_buffer_size
           (create_push_stream t))
     in
-    reqd.state <- Active active_stream;
+    reqd.state <- Stream.Active active_stream;
     t.current_client_streams <- t.current_client_streams + 1;
     match method_path_and_scheme_or_malformed headers with
     | None ->
@@ -346,7 +346,7 @@ let handle_headers_block
          *   GOAWAY frame might have taken some action on or might yet take
          *   action on. All streams up to and including the identified stream
          *   might have been processed in some way. *)
-        t.max_client_stream_id <- reqd.Reqd.id;
+        t.max_client_stream_id <- reqd.Stream.id;
         (* `handle_headers` will take care of transitioning the stream state *)
         handle_headers t ~end_stream:partial_headers.end_stream reqd headers)
       else if Headers.trailers_valid headers then (
@@ -585,7 +585,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
     Scheduler.deduct_inflow t.streams payload_length;
     match Scheduler.get_node t.streams stream_id with
     | Some (Stream { descriptor; _ } as stream) ->
-      (match descriptor.Reqd.state with
+      (match descriptor.Stream.state with
       | Active
           ({ request_state = Open (ActiveRequest request_info); _ } as
           active_stream) ->
@@ -1006,7 +1006,7 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   else
     match Scheduler.find t.streams stream_id with
     | Some stream ->
-      (match stream.Reqd.state with
+      (match stream.Stream.state with
       | Active { request_state = Open (PartialHeaders partial_headers); _ } ->
         handle_headers_block t stream partial_headers flags headers_block
       | Active

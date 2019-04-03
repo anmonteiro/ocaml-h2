@@ -33,6 +33,7 @@
  *---------------------------------------------------------------------------*)
 
 module Writer = Serialize.Writer
+open Stream
 
 type error =
   [ `Bad_request
@@ -99,16 +100,7 @@ and state =
    *)
   (active_state active_stream, request_info active_stream) Stream.state
 
-and t =
-  { id : Stream_identifier.t
-  ; writer : Writer.t
-  ; error_handler : error_handler
-  ; mutable error_code : [ `Ok | error ] * Error.error_code option
-  ; mutable state : state
-        (* The largest frame payload we're allowed to write. *)
-  ; mutable max_frame_size : int
-  ; on_stream_closed : unit -> unit
-  }
+and t = (state, [ `Ok | error ], error_handler) Stream.t
 
 let default_waiting = Sys.opaque_identity (fun () -> ())
 
