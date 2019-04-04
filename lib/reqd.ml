@@ -62,11 +62,6 @@ type request_info =
   ; mutable request_body_bytes : int64
   }
 
-type request_state =
-  | PartialHeaders of partial_headers
-  | FullHeaders
-  | ActiveRequest of request_info
-
 type active_stream =
   { body_buffer_size : int
   ; encoder : Hpack.Encoder.t
@@ -84,7 +79,7 @@ type active_stream =
          result
   }
 
-and active_state = (request_state, request_info) Stream.active_state
+and active_state = (request_info, request_info) Stream.active_state
 
 and state =
   (active_state, active_stream, request_info * active_stream) Stream.state
@@ -113,10 +108,11 @@ let done_waiting when_done_waiting =
 
 let request t =
   match t.state with
-  | Idle | Active (Open (PartialHeaders _ | FullHeaders), _) ->
+  | Idle | Active (Open (WaitingForPeer | PartialHeaders _ | FullHeaders), _)
+    ->
     assert false
   | Active
-      ((Open (ActiveRequest { request; _ }) | HalfClosed { request; _ }), _)
+      ((Open (ActiveMessage { request; _ }) | HalfClosed { request; _ }), _)
   | Reserved ({ request; _ }, _) ->
     request
   | Closed _ ->
@@ -124,10 +120,11 @@ let request t =
 
 let request_body t =
   match t.state with
-  | Idle | Active (Open (PartialHeaders _ | FullHeaders), _) ->
+  | Idle | Active (Open (WaitingForPeer | PartialHeaders _ | FullHeaders), _)
+    ->
     assert false
   | Active
-      ( ( Open (ActiveRequest { request_body; _ })
+      ( ( Open (ActiveMessage { request_body; _ })
         | HalfClosed { request_body; _ } )
       , _ ) ->
     request_body
@@ -141,10 +138,10 @@ let request_body t =
 
 let response t =
   match t.state with
-  | Idle | Active (Open (PartialHeaders _), _) ->
+  | Idle | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
     None
   | Active
-      ( (Open (FullHeaders | ActiveRequest _) | HalfClosed _)
+      ( (Open (FullHeaders | ActiveMessage _) | HalfClosed _)
       , { response_state; _ } )
   | Reserved (_, { response_state; _ }) ->
     (match response_state with
@@ -157,10 +154,10 @@ let response t =
 
 let response_exn t =
   match t.state with
-  | Idle | Active (Open (PartialHeaders _), _) ->
+  | Idle | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
     failwith "h2.Reqd.response_exn: response has not started"
   | Active
-      ( (Open (FullHeaders | ActiveRequest _) | HalfClosed _)
+      ( (Open (FullHeaders | ActiveMessage _) | HalfClosed _)
       , { response_state; _ } )
   | Reserved (_, { response_state; _ }) ->
     (match response_state with
@@ -213,9 +210,9 @@ let send_fixed_response t s response data =
 
 let unsafe_respond_with_data t response data =
   match t.state with
-  | Idle | Active (Open (PartialHeaders _), _) ->
+  | Idle | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
     assert false
-  | Active ((Open (FullHeaders | ActiveRequest _) | HalfClosed _), stream) ->
+  | Active ((Open (FullHeaders | ActiveMessage _) | HalfClosed _), stream) ->
     send_fixed_response t stream response data
   | Reserved (request_info, stream) ->
     send_fixed_response t stream response data;
@@ -261,9 +258,9 @@ let send_streaming_response ~flush_headers_immediately t s response =
 
 let unsafe_respond_with_streaming t ~flush_headers_immediately response =
   match t.state with
-  | Idle | Active (Open (PartialHeaders _), _) ->
+  | Idle | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
     assert false
-  | Active ((Open (FullHeaders | ActiveRequest _) | HalfClosed _), stream) ->
+  | Active ((Open (FullHeaders | ActiveMessage _) | HalfClosed _), stream) ->
     send_streaming_response ~flush_headers_immediately t stream response
   | Reserved (request_info, stream) ->
     let response_body =
@@ -323,9 +320,9 @@ let start_push_stream t s request =
  * not strictly), dependency on the current Reqd, and exclusivity *)
 let unsafe_push t request =
   match t.state with
-  | Idle | Active (Open (PartialHeaders _), _) ->
+  | Idle | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
     assert false
-  | Active ((Open (FullHeaders | ActiveRequest _) | HalfClosed _), stream) ->
+  | Active ((Open (FullHeaders | ActiveMessage _) | HalfClosed _), stream) ->
     start_push_stream t stream request
   (* Already checked in `push` *)
   | Reserved _ | Closed _ ->
@@ -348,7 +345,7 @@ let close_stream t =
     reset_stream t error_code
   | _, None ->
     (match t.state with
-    | Active (Open (FullHeaders | ActiveRequest _), _) ->
+    | Active (Open (FullHeaders | ActiveMessage _), _) ->
       (* From RFC7540§8.1:
        *   A server can send a complete response prior to the client sending an
        *   entire request if the response does not depend on any portion of the
@@ -404,12 +401,12 @@ let _report_error ?request t s exn error_code =
 
 let report_error t exn error_code =
   match t.state with
-  | Idle | Reserved _ | Active (Open (PartialHeaders _), _) ->
+  | Idle | Reserved _ | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
     assert false
   | Active (Open FullHeaders, stream) ->
     _report_error t stream exn error_code
   | Active
-      ( ( Open (ActiveRequest { request; request_body; _ })
+      ( ( Open (ActiveMessage { request; request_body; _ })
         | HalfClosed { request; request_body; _ } )
       , stream ) ->
     Body.close_reader request_body;
@@ -437,10 +434,10 @@ let error_code t =
 
 let on_more_output_available t f =
   match t.state with
-  | Idle | Reserved _ | Active (Open (PartialHeaders _), _) ->
+  | Idle | Reserved _ | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
     assert false
   | Active
-      ( (Open (FullHeaders | ActiveRequest _) | HalfClosed _)
+      ( (Open (FullHeaders | ActiveMessage _) | HalfClosed _)
       , { response_state; _ } ) ->
     (match response_state with
     | Waiting when_done_waiting ->
@@ -471,10 +468,10 @@ let requires_output t =
    *   A server can send a complete response prior to the client sending an
    *   entire request if the response does not depend on any portion of the
    *   request that has not been sent and received. *)
-  | Active (Open (PartialHeaders _), _) ->
+  | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
     false
   | Active
-      ( (Open (FullHeaders | ActiveRequest _) | HalfClosed _)
+      ( (Open (FullHeaders | ActiveMessage _) | HalfClosed _)
       , { response_state; _ } ) ->
     (match response_state with
     | Complete _ ->
@@ -545,7 +542,7 @@ let deliver_trailer_headers t headers =
   match t.state with
   | Active (Open (PartialHeaders _ | FullHeaders), _) ->
     assert false
-  | Active ((Open (ActiveRequest _) | HalfClosed _), stream) ->
+  | Active ((Open (ActiveMessage _) | HalfClosed _), stream) ->
     (* TODO: call the schedule_trailers callback *)
     stream.trailers <- Some headers
   | _ ->

@@ -38,6 +38,27 @@ type partial_headers =
   ; end_stream : bool
   }
 
+type 'active_peer remote_state =
+  (* A stream is in this state when it's waiting for the peer to initiate a
+   * response. In practice, it only matters for the client implementation, when
+   * a client has opened a stream but is still waiting on the server to send
+   * the first bytes of the response. *)
+  | WaitingForPeer
+  (* A PartialHeaders state is entered when the endpoint sees the first HEADERS
+   * frame from the peer for a given stream. Its payload is an
+   * Angstrom.Buffered parse state. *)
+  | PartialHeaders of partial_headers
+  (* A stream transitions from the PartialHeaders state to the FullHeaders
+   * state when the endpoint has finished parsing all the bytes in a group of
+   * HEADER / CONTINUATION frames that the peer has sent.
+   * This state doesn't carry any payload because the stream will immediately
+   * transition to the ActiveMessage state once the message has been validated
+   * according to RFC7540§8.1.2. *)
+  | FullHeaders
+  (* The ActiveMessage state carries information about the current remote
+   * message being processed by the endpoint. *)
+  | ActiveMessage of 'active_peer
+
 type closed_reason =
   | Finished
   (* TODO: we could abide by the following by either 1) having I/O runtime
@@ -65,7 +86,7 @@ type closed =
   }
 
 type ('opn, 'half_closed) active_state =
-  | Open of 'opn
+  | Open of 'opn remote_state
   | HalfClosed of 'half_closed
 
 type ('active_state, 'active, 'reserved) state =
@@ -73,7 +94,7 @@ type ('active_state, 'active, 'reserved) state =
   | Reserved of 'reserved
   | Active of 'active_state * 'active
   | Closed of closed
-  constraint (_, _) active_state = 'active_state
+  constraint 'active_state = (_, _) active_state
 
 type ('state, 'error_code, 'error_handler) stream =
   { id : Stream_identifier.t
@@ -85,6 +106,7 @@ type ('state, 'error_code, 'error_handler) stream =
   ; mutable max_frame_size : int
   ; on_stream_closed : unit -> unit
   }
+  constraint 'state = (_, _, _) state
 
 let initial_ttl = 10
 
@@ -103,6 +125,8 @@ let create id ~max_frame_size writer error_handler on_stream_closed =
 let id t = t.id
 
 let is_idle t = match t.state with Idle -> true | _ -> false
+
+let is_open t = match t.state with Active (Open _, _) -> true | _ -> false
 
 let closed t = match t.state with Closed c -> Some c | _ -> None
 
