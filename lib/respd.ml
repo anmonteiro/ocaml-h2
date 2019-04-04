@@ -58,28 +58,21 @@ type response_info =
   ; mutable trailers : Headers.t option
   }
 
-(* TODO: document, esp. that FullHeaders is only for error handling *)
-type response_state =
-  | Awaiting_response
-  | PartialHeaders of Stream.partial_headers
-  | FullHeaders
-  | ActiveResponse of response_info
-
 type active_request =
-  { mutable response_state : response_state
-  ; request : Request.t
+  { request : Request.t
   ; request_body : [ `read ] Body.t
   ; response_handler : response_handler
   }
 
-type active_state = (unit, unit) Stream.active_state
+type active_state =
+  (response_info, response_info remote_state) Stream.active_state
 
 type state = (active_state, active_request, active_request) Stream.state
 
 type t = (state, [ `Ok | error ], error_handler) Stream.stream
 
 let create_active_response response response_body =
-  ActiveResponse
+  ActiveMessage
     { response
     ; response_body
     ; response_body_bytes = Int64.zero
@@ -113,38 +106,43 @@ let response t =
   match t.state with
   | Idle ->
     None
-  | Reserved { response_state; _ } | Active (_, { response_state; _ }) ->
-    (match response_state with
-    | Awaiting_response | FullHeaders | PartialHeaders _ ->
-      None
-    | ActiveResponse { response; _ } ->
-      Some response)
+  | Reserved _ ->
+    None
+  | Active
+      ( ( Open (ActiveMessage { response; _ })
+        | HalfClosed (ActiveMessage { response; _ }) )
+      , _ ) ->
+    Some response
+  | Active ((Open _ | HalfClosed _), _) ->
+    None
   | Closed _ ->
     None
 
 let response_exn t =
   match t.state with
-  | Idle ->
+  | Idle | Reserved _ ->
     failwith "h2.Respd.response_exn: response has not arrived"
-  | Reserved { response_state; _ } | Active (_, { response_state; _ }) ->
-    (match response_state with
-    | Awaiting_response | FullHeaders | PartialHeaders _ ->
-      failwith "h2.Respd.response_exn: response has not arrived"
-    | ActiveResponse { response; _ } ->
-      response)
+  | Active
+      ( ( Open (ActiveMessage { response; _ })
+        | HalfClosed (ActiveMessage { response; _ }) )
+      , _ ) ->
+    response
+  | Active ((Open _ | HalfClosed _), _) ->
+    failwith "h2.Respd.response_exn: response has not arrived"
   | Closed _ ->
     assert false
 
 let response_body_exn t =
   match t.state with
-  | Idle ->
+  | Idle | Reserved _ ->
     failwith "h2.Respd.response_exn: response has not arrived"
-  | Reserved { response_state; _ } | Active (_, { response_state; _ }) ->
-    (match response_state with
-    | Awaiting_response | FullHeaders | PartialHeaders _ ->
-      failwith "h2.Respd.response_exn: response has not arrived"
-    | ActiveResponse { response_body; _ } ->
-      response_body)
+  | Active
+      ( ( Open (ActiveMessage { response_body; _ })
+        | HalfClosed (ActiveMessage { response_body; _ }) )
+      , _ ) ->
+    response_body
+  | Active ((Open _ | HalfClosed _), _) ->
+    failwith "h2.Respd.response_exn: response has not arrived"
   | Closed _ ->
     assert false
 
@@ -154,7 +152,7 @@ let response_body_exn t =
  *  reset_stream t error_code
  *| _, None ->
  *  (match t.state with
- *  | HalfClosedLocal (ActiveRequest _) ->
+ *  | HalfClosedLocal (ActiveMessage _) ->
  *    (* From RFC7540§8.1: A server can send a complete response prior to the
  *       client sending an entire request if the response does not depend on
  *       any portion of the request that has not been sent and received. When
@@ -163,7 +161,7 @@ let response_body_exn t =
  *       of NO_ERROR after sending a complete response (i.e., a frame with the
  *       END_STREAM flag). *)
  *    reset_stream t Error.NoError
- *  | Open (ActiveRequest _) ->
+ *  | Open (ActiveMessage _) ->
  *    Writer.flush t.writer (fun () -> finish_stream t Finished)
  *  | _ ->
  *    assert false) *)
@@ -202,19 +200,18 @@ let _report_error t s ?response_body exn error_code =
 let report_error t exn error_code =
   match t.state with
   | Idle
-  | Reserved
-      { response_state =
-          Awaiting_response | PartialHeaders _ | ActiveResponse _
-      ; _
-      }
-  | Active (_, { response_state = Awaiting_response | PartialHeaders _; _ }) ->
+  | Reserved _
+  | Active
+      ( ( Open (WaitingForPeer | PartialHeaders _)
+        | HalfClosed (WaitingForPeer | PartialHeaders _) )
+      , _ ) ->
     assert false
-  | Reserved ({ response_state = FullHeaders; _ } as s)
-  | Active (_, ({ response_state = FullHeaders; _ } as s)) ->
+  | Active ((Open FullHeaders | HalfClosed FullHeaders), s) ->
     _report_error t s exn error_code
   | Active
-      (_, ({ response_state = ActiveResponse { response_body; _ }; _ } as s))
-    ->
+      ( ( Open (ActiveMessage { response_body; _ })
+        | HalfClosed (ActiveMessage { response_body; _ }) )
+      , s ) ->
     _report_error t s ~response_body exn error_code
   | Closed _ ->
     ()
@@ -239,10 +236,8 @@ let request_body_requires_output response_body =
 
 let requires_output t =
   match t.state with
-  (* TODO: Right now *)
   | Idle ->
     true
-  (* TODO: Does a reserved stream require output? *)
   | Reserved _ ->
     false
   | Active (Open _, { request_body; _ }) ->
@@ -261,7 +256,7 @@ let write_buffer_data writer ~off ~len frame_info buffer =
 
 let flush_request_body t ~max_bytes =
   match t.state with
-  | Active (Open _, ({ request_body; _ } as s)) ->
+  | Active (Open active_state, ({ request_body; _ } as s)) ->
     let written =
       Body.transfer_to_writer
         request_body
@@ -271,14 +266,14 @@ let flush_request_body t ~max_bytes =
         t.id
     in
     if not (request_body_requires_output request_body) then
-      t.state <- Active (HalfClosed (), s);
+      t.state <- Active (HalfClosed active_state, s);
     written
   | _ ->
     0
 
 let deliver_trailer_headers t headers =
   match t.state with
-  | Active (_, { response_state = ActiveResponse s; _ }) ->
+  | Active ((Open (ActiveMessage s) | HalfClosed (ActiveMessage s)), _) ->
     (* TODO: call the schedule_trailers callback *)
     s.trailers <- Some headers
   | _ ->

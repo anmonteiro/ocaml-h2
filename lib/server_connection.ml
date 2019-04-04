@@ -266,7 +266,7 @@ let handle_headers t ~end_stream reqd headers =
         t.config.response_body_buffer_size
         (create_push_stream t)
     in
-    reqd.state <- Stream.(Active (Open Reqd.FullHeaders, active_stream));
+    reqd.state <- Stream.(Active (Open FullHeaders, active_stream));
     t.current_client_streams <- t.current_client_streams + 1;
     match method_path_and_scheme_or_malformed headers with
     | None ->
@@ -311,7 +311,7 @@ let handle_headers t ~end_stream reqd headers =
           Body.close_reader request_body)
         else
           reqd.state
-          <- Active (Open (ActiveRequest request_info), active_stream);
+          <- Active (Open (ActiveMessage request_info), active_stream);
         t.request_handler reqd;
         wakeup_writer t)
 
@@ -501,13 +501,13 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
            *   HEADERS frames can be sent on a stream in the "idle", "reserved
            *   (local)", "open", or "half-closed (remote)" state. *)
           open_stream t frame_header ?priority headers_block
-        | Active (Open (PartialHeaders _), _) ->
+        | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
           (* This case is unreachable because we check that partial HEADERS
            * states must be followed by CONTINUATION frames elsewhere. *)
           assert false
         (* if we're getting a HEADERS frame at this point, they must be
          * trailers, and the END_STREAM flag needs to be set. *)
-        | Active (Open (FullHeaders | ActiveRequest _), active_stream) ->
+        | Active (Open (FullHeaders | ActiveMessage _), active_stream) ->
           process_trailer_headers
             t
             reqd
@@ -581,7 +581,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
     match Scheduler.get_node t.streams stream_id with
     | Some (Stream { descriptor; _ } as stream) ->
       (match descriptor.Stream.state with
-      | Active (Open (ActiveRequest request_info), active_stream) ->
+      | Active (Open (ActiveMessage request_info), active_stream) ->
         let request_body = Reqd.request_body descriptor in
         request_info.request_body_bytes
         <- Int64.(
@@ -1004,7 +1004,7 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
       | Active (Open (PartialHeaders partial_headers), _) ->
         handle_headers_block t stream partial_headers flags headers_block
       | Active
-          ( Open (ActiveRequest _)
+          ( Open (ActiveMessage _)
           , { trailers_parser = Some partial_headers; _ } ) ->
         handle_trailer_headers t stream partial_headers flags headers_block
       | _ ->
