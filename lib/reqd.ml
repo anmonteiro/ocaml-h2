@@ -60,6 +60,8 @@ type request_info =
   ; mutable request_body_bytes : int64
   }
 
+type active_state = (request_info, request_info) Stream.active_state
+
 type active_stream =
   { body_buffer_size : int
   ; encoder : Hpack.Encoder.t
@@ -76,8 +78,6 @@ type active_stream =
          , [ `Push_disabled | `Stream_ids_exhausted ] )
          result
   }
-
-and active_state = (request_info, request_info) Stream.active_state
 
 and state =
   (active_state, active_stream, request_info * active_stream) Stream.state
