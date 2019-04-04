@@ -236,10 +236,8 @@ let request_body_requires_output response_body =
 
 let requires_output t =
   match t.state with
-  (* TODO: Right now *)
   | Idle ->
     true
-  (* TODO: Does a reserved stream require output? *)
   | Reserved _ ->
     false
   | Active (Open _, { request_body; _ }) ->

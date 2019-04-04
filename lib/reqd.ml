@@ -44,15 +44,13 @@ type error =
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [ `write ] Body.t) -> unit
 
-type fixed_response =
-  { response : Response.t
-  ; mutable iovec :
-      [ `String of string | `Bigstring of Bigstringaf.t ] Httpaf.IOVec.t
-  }
-
 type response_state =
   | Waiting of (unit -> unit) ref
-  | Fixed of fixed_response
+  | Fixed of
+      { response : Response.t
+      ; mutable iovec :
+          [ `String of string | `Bigstring of Bigstringaf.t ] Httpaf.IOVec.t
+      }
   | Streaming of Response.t * [ `write ] Body.t
   | Complete of Response.t
 
