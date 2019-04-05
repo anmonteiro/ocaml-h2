@@ -89,7 +89,7 @@ jobs:
     environment:
       - TERM: dumb
       - OCAML_VERSION: "4.04.2"
-      - OPAMSOLVERTIMEOUT: "120"
+      - OPAMSOLVERTIMEOUT: "240"
     <<: *opam-steps
   4.05.0:
     docker:
@@ -143,7 +143,6 @@ jobs:
           paths:
             - ~/.npm-global
             - ~/.esy
-            - _esy
       - run:
           name: 'esy build'
           command: ~/.npm-global/bin/esy b dune build @all
