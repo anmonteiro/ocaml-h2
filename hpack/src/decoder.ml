@@ -155,9 +155,9 @@ let decode_headers ({ table; _ } as t) =
       any_uint8 >>= fun b ->
       if b land 0b1000_0000 != 0 then
         (* From RFC7541§6.1: Indexed Header Field Representation
-         *   An indexed header field starts with the '1' 1-bit pattern, followed
-         *   by the index of the matching header field, represented as an integer
-         *   with a 7-bit prefix (see Section 5.1). *)
+         *   An indexed header field starts with the '1' 1-bit pattern,
+         *   followed by the index of the matching header field, represented as
+         *   an integer with a 7-bit prefix (see Section 5.1). *)
         decode_int b 7 >>= fun index ->
         match get_indexed_field table index with
         | Ok (name, value) ->
@@ -168,14 +168,14 @@ let decode_headers ({ table; _ } as t) =
         (* From RFC7541§6.2.1: Literal Header Field with Incremental Indexing
          *   A literal header field with incremental indexing representation
          *   starts with the '01' 2-bit pattern. In this case, the index of the
-         *   entry is represented as an integer with a 6-bit prefix (see Section
-         *   5.1). *)
+         *   entry is represented as an integer with a 6-bit prefix (see
+         *   Section 5.1). *)
         decode_header_field table b 6 >>= function
         | Ok (name, value) ->
           (* From RFC7541§6.2.1: Literal Header Field with Incremental Indexing
            *   A literal header field with incremental indexing representation
-           *   results in appending a header field to the decoded header list and
-           *   inserting it as a new entry into the dynamic table. *)
+           *   results in appending a header field to the decoded header list
+           *   and inserting it as a new entry into the dynamic table. *)
           Dynamic_table.add table (name, value);
           loop ({ name; value; sensitive = false } :: acc) true
         | Error e ->
@@ -184,7 +184,8 @@ let decode_headers ({ table; _ } as t) =
         (* From RFC7541§6.2.2: Literal Header Field without Indexing
          *   A literal header field without indexing representation starts with
          *   the '0000' 4-bit pattern. In this case, the index of the entry is
-         *   represented as an integer with a 4-bit prefix (see Section 5.1). *)
+         *   represented as an integer with a 4-bit prefix (see Section
+         *   5.1). *)
         decode_header_field table b 4 >>= function
         | Ok (name, value) ->
           loop ({ name; value; sensitive = false } :: acc) true
@@ -194,8 +195,8 @@ let decode_headers ({ table; _ } as t) =
         (* From RFC7541§6.2.3: Literal Header Field Never Indexed
          *   A literal header field without indexing representation starts with
          *   the '0001' 4-bit pattern.
-         *  The encoding of the representation is identical to the literal header
-         *  field without indexing (see Section 6.2.2). *)
+         *  The encoding of the representation is identical to the literal
+         *  header field without indexing (see Section 6.2.2). *)
         decode_header_field table b 4 >>= function
         | Ok (name, value) ->
           loop ({ name; value; sensitive = true } :: acc) true
@@ -206,14 +207,15 @@ let decode_headers ({ table; _ } as t) =
           (* From RFC7541§6.3: Dynamic Table Size Update
            *   A dynamic table size update signals a change to the size of the
            *   dynamic table.
-           *   A dynamic table size update starts with the '001' 3-bit pattern *)
+           *   A dynamic table size update starts with the '001' 3-bit
+           *   pattern *)
           saw_first_header
         then
           (* From RFC7541§4.2: Maximum Table Size
-           *   A change in the maximum size of the dynamic table is signaled via
-           *   a dynamic table size update (see Section 6.3). This dynamic table
-           *   size update MUST occur at the beginning of the first header block
-           *   following the change to the dynamic table size. *)
+           *   A change in the maximum size of the dynamic table is signaled
+           *   via a dynamic table size update (see Section 6.3). This dynamic
+           *   table size update MUST occur at the beginning of the first
+           *   header block following the change to the dynamic table size. *)
           error Decoding_error
         else
           decode_int b 5 >>= fun capacity ->

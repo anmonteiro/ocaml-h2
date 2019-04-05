@@ -107,8 +107,9 @@ module Make (Streamd : StreamDescriptor) = struct
                 (* Stream-level flow control window. See connection-level above.
                  *
                  * From RFC7540§6.9.1:
-                 *   Two flow-control windows are applicable: the stream flow-control
-                 *   window and the connection flow-control window. *)
+                 *   Two flow-control windows are applicable: the stream
+                 *   flow-control window and the connection flow-control
+                 *   window. *)
           ; mutable flow : Settings.WindowSize.t
           ; mutable inflow : Settings.WindowSize.t
           }
@@ -151,9 +152,9 @@ module Make (Streamd : StreamDescriptor) = struct
           0
           (* From RFC7540§5.3.5:
            *   All streams are initially assigned a non-exclusive dependency on
-           *   stream 0x0. Pushed streams (Section 8.2) initially depend on their
-           *   associated stream. In both cases, streams are assigned a default
-           *   weight of 16. *)
+           *   stream 0x0. Pushed streams (Section 8.2) initially depend on
+           *   their associated stream. In both cases, streams are assigned a
+           *   default weight of 16. *)
       ; priority = Priority.default_priority
       ; parent
       ; children = PriorityQueue.empty
@@ -210,8 +211,8 @@ module Make (Streamd : StreamDescriptor) = struct
         (* From RFC7540§5.3.1:
          *   An exclusive flag allows for the insertion of a new level of
          *   dependencies. The exclusive flag causes the stream to become the
-         *   sole dependency of its parent stream, causing other dependencies to
-         *   become dependent on the exclusive stream. *)
+         *   sole dependency of its parent stream, causing other dependencies
+         *   to become dependent on the exclusive stream. *)
         PriorityQueue.sg stream_id stream_node)
       else
         pq_add stream_id stream_node new_children
@@ -249,9 +250,9 @@ module Make (Streamd : StreamDescriptor) = struct
           Parent parent_stream, priority
         | None ->
           (* From RFC7540§5.3.1:
-           *   A dependency on a stream that is not currently in the tree — such
-           *   as a stream in the "idle" state — results in that stream being
-           *   given a default priority (Section 5.3.5). *)
+           *   A dependency on a stream that is not currently in the tree —
+           *   such as a stream in the "idle" state — results in that stream
+           *   being given a default priority (Section 5.3.5). *)
           Parent t, Priority.default_priority
     in
     (* bail early if trying to set the same priority *)
@@ -270,18 +271,18 @@ module Make (Streamd : StreamDescriptor) = struct
         | Stream new_parent_stream ->
           if would_create_cycle ~new_parent stream_node then (
             (* From RFC7540§5.3.3:
-             *   If a stream is made dependent on one of its own dependencies, the
-             *   formerly dependent stream is first moved to be dependent on the
-             *   reprioritized stream's previous parent. The moved dependency
-             *   retains its weight. *)
+             *   If a stream is made dependent on one of its own dependencies,
+             *   the formerly dependent stream is first moved to be dependent
+             *   on the reprioritized stream's previous parent. The moved
+             *   dependency retains its weight. *)
             set_parent new_parent_node ~exclusive:false stream.parent;
             new_parent_stream.priority
             <- { new_parent_stream.priority with
                  stream_dependency = current_parent_id
                })
         | Connection _ ->
-          (* The root node cannot be dependent on any other streams, so we don't
-           * need to worry about it creating cycles. *)
+          (* The root node cannot be dependent on any other streams, so we
+           * don't need to worry about it creating cycles. *)
           ());
         (* From RFC7540§5.3.1:
          *   When assigning a dependency on another stream, the stream is added
@@ -473,10 +474,10 @@ module Make (Streamd : StreamDescriptor) = struct
       else
         match Streamd.closed descriptor with
         | Some c ->
-          (* When a stream completes, i.e. doesn't require more output and enters
-           * the `Closed` state, we set a TTL value which represents the number
-           * of writer yields that the stream has before it is removed from the
-           * connection Hash Table. By doing this we avoid losing some
+          (* When a stream completes, i.e. doesn't require more output and
+           * enters the `Closed` state, we set a TTL value which represents the
+           * number of writer yields that the stream has before it is removed
+           * from the connection Hash Table. By doing this we avoid losing some
            * potentially useful information regarding the stream's state at the
            * cost of keeping it around for a little while longer. *)
           if c.ttl = 0 then

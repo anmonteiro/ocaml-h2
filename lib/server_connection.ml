@@ -60,8 +60,8 @@ type t =
   ; request_handler : request_handler
   ; error_handler : error_handler
   ; streams : Scheduler.t
-        (* Number of currently open client streams. Used for MAX_CONCURRENT_STREAMS
-         * bookkeeping *)
+        (* Number of currently open client streams. Used for
+         * MAX_CONCURRENT_STREAMS bookkeeping *)
   ; mutable current_client_streams : int
   ; mutable max_client_stream_id : Stream_identifier.t
   ; mutable max_pushed_stream_id : Stream_identifier.t
@@ -104,15 +104,10 @@ let wakeup_writer t = _wakeup_writer t.wakeup_writer
 
 let shutdown_reader t = Reader.force_close (reader t)
 
-(* if is_active t then Reqd.close_request_body (current_reqd_exn t) else
-   wakeup_reader t *)
-
 let shutdown_writer t =
   Writer.close t.writer;
-  ()
-
-(* if is_active t then Reqd.close_request_body (current_reqd_exn t) else
-   wakeup_writer t *)
+  if not (is_active t) then
+    wakeup_writer t
 
 (* let error_code t = if is_active t then Reqd.error_code (current_reqd_exn t)
    else None *)
@@ -228,10 +223,10 @@ let handle_headers t ~end_stream reqd headers =
   if t.current_client_streams + 1 > t.settings.max_concurrent_streams then
     if t.unacked_settings > 0 then
       (* From RFC7540§8.1.4:
-       *   The REFUSED_STREAM error code can be included in a RST_STREAM frame to
-       *   indicate that the stream is being closed prior to any processing
-       *   having occurred. Any request that was sent on the reset stream can be
-       *   safely retried.
+       *   The REFUSED_STREAM error code can be included in a RST_STREAM frame
+       *   to indicate that the stream is being closed prior to any processing
+       *   having occurred. Any request that was sent on the reset stream can
+       *   be safely retried.
        *
        * Note: if there are pending SETTINGS to acknowledge, assume there was a
        * race condition and let the client retry. *)
@@ -258,16 +253,16 @@ let handle_headers t ~end_stream reqd headers =
        *   closing or resetting the stream. *)
       set_error_and_handle t reqd `Bad_request ProtocolError
     | Some (meth, path, scheme) ->
-      (match end_stream, Message.unique_content_length_values headers with
-      | true, [ content_length ]
-        when Int64.compare (Message.content_length_of_string content_length) 0L
-             != 0 ->
+      (match end_stream, Message.body_length headers with
+      | true, `Fixed len when Int64.compare len 0L != 0 ->
         (* From RFC7540§8.1.2.6:
          *   A request or response is also malformed if the value of a
          *   content-length header field does not equal the sum of the DATA
          *   frame payload lengths that form the body. *)
         set_error_and_handle t reqd `Bad_request ProtocolError
-      | _ ->
+      | _, `Error e ->
+        set_error_and_handle t reqd e ProtocolError
+      | _, body_length ->
         let request =
           Request.create ~scheme ~headers (Httpaf.Method.of_string meth) path
         in
@@ -275,13 +270,13 @@ let handle_headers t ~end_stream reqd headers =
           if end_stream then
             Body.empty
           else
-            (* TODO: Initializing the request body with an empty bigstring trades
-             * an allocation here vs. when the first data frame arrives. This
-             * would probably make sense if this were HTTP/1 because we wouldn't
-             * know whether the request had a body or not, but in HTTP/2 we
-             * clearly do. It's probably fine to just allocate here if we know
-             * we're gonna get data. *)
-            Body.create Bigstringaf.empty
+            match body_length with
+            | `Fixed n ->
+              Body.create (Bigstringaf.create (Int64.to_int n))
+            | `Error _ | `Unknown ->
+              (* Not sure how much data we're gonna get. Delay the allocation
+               * until we get a data frame. *)
+              Body.create Bigstringaf.empty
         in
         let request_info = Reqd.create_active_request request request_body in
         if end_stream then (
@@ -392,13 +387,13 @@ let open_stream t frame_header ?priority headers_block =
         reqd
       | Some (Stream stream) ->
         (* From RFC7540§6.9.2:
-         *   Both endpoints can adjust the initial window size for new streams by
-         *   including a value for SETTINGS_INITIAL_WINDOW_SIZE in the SETTINGS
-         *   frame.
+         *   Both endpoints can adjust the initial window size for new streams
+         *   by including a value for SETTINGS_INITIAL_WINDOW_SIZE in the
+         *   SETTINGS frame.
          *
-         * Note: we already have the stream in the priority tree, and the default
-         * initial window size for new streams could have changed between adding
-         * the (idle) stream and opening it. *)
+         * Note: we already have the stream in the priority tree, and the
+         * defaultnitial window size for new streams could have changed between
+         * addinghe (idle) stream and opening it. *)
         stream.flow <- t.settings.initial_window_size;
         stream.descriptor
     in
@@ -581,13 +576,10 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
           report_stream_error t stream_id Error.FlowControlError
         else (
           Scheduler.deduct_inflow stream payload_length;
-          match Message.unique_content_length_values request.headers with
-          | [ content_length ]
-            when (* we're getting more than the client declared? *)
-                 Int64.compare
-                   request_info.request_body_bytes
-                   (Message.content_length_of_string content_length)
-                 > 0 ->
+          match Message.body_length request.headers with
+          | `Fixed len
+          (* Getting more than the client declared *)
+            when Int64.compare request_info.request_body_bytes len > 0 ->
             (* Give back connection-level flow-controlled bytes (we use payload
              * length to include any padding bytes that the frame might have
              * included - which were ignored at parse time). *)
@@ -610,11 +602,12 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
                  *   When set, bit 0 indicates that this frame is the last that
                  *   the endpoint will send for the identified stream. Setting
                  *   this flag causes the stream to enter one of the
-                 *   "half-closed" states or the "closed" state (Section 5.1). *)
+                 *   "half-closed" states or the "closed" state
+                 *   (Section 5.1). *)
                 Reqd.requires_output descriptor
               then
-                (* There's a potential race condition here if the request handler
-                 * completes the response right after . *)
+                (* There's a potential race condition here if the request
+                 * handler completes the response right after . *)
                 descriptor.state
                 <- Active (HalfClosed request_info, active_stream)
               else
@@ -681,8 +674,8 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
     report_connection_error t Error.ProtocolError
   else if Stream_identifier.(stream_id === stream_dependency) then
     (* From RFC7540§5.3.1:
-     *   A stream cannot depend on itself. An endpoint MUST treat this as a stream
-     *   error (Section 5.4.2) of type PROTOCOL_ERROR. *)
+     *   A stream cannot depend on itself. An endpoint MUST treat this as a
+     *   stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
     report_stream_error t stream_id Error.ProtocolError
   else
     match Scheduler.get_node t.streams stream_id with
@@ -763,7 +756,8 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
          *   (Section 5.4.1) of type PROTOCOL_ERROR.
          *
          * Note:
-         *   If we didn't find the stream in the hash table it must be "idle". *)
+         *   If we didn't find the stream in the hash table it must be
+         *   "idle". *)
         report_connection_error t Error.ProtocolError
 
 let process_settings_frame t { Frame.frame_header; _ } settings =
@@ -783,10 +777,10 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
     match Settings.check_settings_list settings with
     | None ->
       (* From RFC7540§6.5:
-       *   Each parameter in a SETTINGS frame replaces any existing value for that
-       *   parameter. Parameters are processed in the order in which they appear,
-       *   and a receiver of a SETTINGS frame does not need to maintain any state
-       *   other than the current value of its parameters. *)
+       *   Each parameter in a SETTINGS frame replaces any existing value for
+       *   that parameter. Parameters are processed in the order in which they
+       *   appear, and a receiver of a SETTINGS frame does not need to maintain
+       *   any state other than the current value of its parameters. *)
       List.iter
         (function
           | Settings.HeaderTableSize, x ->
@@ -804,13 +798,13 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
             t.settings.max_concurrent_streams <- x
           | InitialWindowSize, new_val ->
             (* From RFC7540§6.9.2:
-             *   [...] a SETTINGS frame can alter the initial flow-control window
-             *   size for streams with active flow-control windows (that is,
-             *   streams in the "open" or "half-closed (remote)" state). When the
-             *   value of SETTINGS_INITIAL_WINDOW_SIZE changes, a receiver MUST
-             *   adjust the size of all stream flow-control windows that it
-             *   maintains by the difference between the new value and the old
-             *   value. *)
+             *   [...] a SETTINGS frame can alter the initial flow-control
+             *   window size for streams with active flow-control windows (that
+             *   is, streams in the "open" or "half-closed (remote)" state).
+             *   When the value of SETTINGS_INITIAL_WINDOW_SIZE changes, a
+             *   receiver MUST adjust the size of all stream flow-control
+             *   windows that it maintains by the difference between the new
+             *   value and the old value. *)
             let old_val = t.settings.initial_window_size in
             t.settings.initial_window_size <- new_val;
             let growth = new_val - old_val in
@@ -820,9 +814,10 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
                  ~f:(fun stream ->
                    (* From RFC7540§6.9.2:
                     *   An endpoint MUST treat a change to
-                    *   SETTINGS_INITIAL_WINDOW_SIZE that causes any flow-control
-                    *   window to exceed the maximum size as a connection error
-                    *   (Section 5.4.1) of type FLOW_CONTROL_ERROR. *)
+                    *   SETTINGS_INITIAL_WINDOW_SIZE that causes any
+                    *   flow-control window to exceed the maximum size as a
+                    *   connection error (Section 5.4.1) of type
+                    *   FLOW_CONTROL_ERROR. *)
                    if not (Scheduler.add_flow stream growth) then
                      raise Local)
                  t.streams
@@ -1011,9 +1006,9 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
     | None ->
       (* From RFC7540§6.10:
        *   A CONTINUATION frame MUST be preceded by a HEADERS, PUSH_PROMISE or
-       *   CONTINUATION frame without the END_HEADERS flag set. A recipient that
-       *   observes violation of this rule MUST respond with a connection error
-       *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
+       *   CONTINUATION frame without the END_HEADERS flag set. A recipient
+       *   that observes violation of this rule MUST respond with a connection
+       *   error (Section 5.4.1) of type PROTOCOL_ERROR. *)
       report_connection_error t Error.ProtocolError
 
 let default_error_handler ?request:_ error handle =

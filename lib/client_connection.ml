@@ -109,13 +109,7 @@ let _wakeup_writer wakeup_ref =
 
 let wakeup_writer t = _wakeup_writer t.wakeup_writer
 
-let shutdown_reader t =
-  Reader.force_close (reader t);
-  ()
-
-(* begin match !(t.state) with | Awaiting_response | Closed -> () |
-   Received_response(_, response_body) -> Body.close_reader response_body;
-   Body.execute_read response_body; end *)
+let shutdown_reader t = Reader.force_close (reader t)
 
 let flush_request_body t =
   if is_active t then
@@ -166,7 +160,9 @@ let handle_error t = function
       wakeup_writer t)
   | StreamError (stream_id, error) ->
     (* TODO: This branch probably needs to report the error to the stream error
-     * handler, and additionally deliver EOF to the response body *)
+     * handler, and additionally deliver EOF to the response body. Should not
+     * forget to handle streams in the Reserved state (for which there is no
+     * error handler). *)
     (match Scheduler.find t.streams stream_id with
     | Some reqd ->
       Stream.reset_stream reqd error
@@ -216,14 +212,11 @@ let handle_push_promise_headers t respd headers =
           *   authoritative as a stream error (Section 5.4.2) of type
           *   PROTOCOL_ERROR. *)
        , Headers.get_pseudo headers "authority"
-       , Message.unique_content_length_values headers )
+       , Message.body_length headers )
      with
-    | (#Httpaf.Method.standard as meth), None, [ content_length ]
+    | (#Httpaf.Method.standard as meth), None, `Fixed len
       when (not Httpaf.Method.(is_cacheable meth && is_safe meth))
-           || Int64.compare
-                (Message.content_length_of_string content_length)
-                0L
-              != 0 ->
+           || Int64.compare len 0L != 0 ->
       (* From RFC7540§8.2:
        *   Clients that receive a promised request that is not cacheable,
        *   that is not known to be safe or that indicates the presence of a
@@ -240,6 +233,8 @@ let handle_push_promise_headers t respd headers =
        *
        * Note: the intersection of safe and cacheable are the GET and HEAD
        * methods. *)
+      report_stream_error t respd.id Error.ProtocolError
+    | _, _, `Error _ ->
       report_stream_error t respd.id Error.ProtocolError
     | _ ->
       let request = Request.create ~scheme ~headers meth path in
@@ -271,10 +266,8 @@ let handle_response_headers t respd ~end_stream active_request headers =
   match Headers.get_multi_pseudo headers "status" with
   | [ status ] ->
     let response = Response.create ~headers (Status.of_string status) in
-    (match end_stream, Message.unique_content_length_values headers with
-    | true, [ content_length ]
-      when Int64.compare (Message.content_length_of_string content_length) 0L
-           != 0 ->
+    (match end_stream, Message.body_length headers with
+    | true, `Fixed len when Int64.compare len 0L != 0 ->
       (* From RFC7540§8.1.2.6:
        *   A request or response is also malformed if the value of a
        *   content-length header field does not equal the sum of the DATA
@@ -284,18 +277,24 @@ let handle_response_headers t respd ~end_stream active_request headers =
         respd
         (`Invalid_response_body_length response)
         ProtocolError
-    | _ ->
+    | _, `Error _ ->
+      set_error_and_handle
+        t
+        respd
+        (`Invalid_response_body_length response)
+        ProtocolError
+    | _, body_length ->
       let response_body =
         if end_stream then
           Body.empty
         else
-          (* TODO: Initializing the response body with an empty bigstring
-           * trades an allocation here vs. when the first data frame arrives.
-           * This would probably make sense if this were HTTP/1 because we
-           * wouldn't know whether the response had a body or not, but in
-           * HTTP/2 we clearly do. It's probably fine to just allocate here if
-           * we know we're gonna get data. *)
-          Body.create Bigstringaf.empty
+          match body_length with
+          | `Fixed n ->
+            Body.create (Bigstringaf.create (Int64.to_int n))
+          | `Error _ | `Unknown ->
+            (* Not sure how much data we're gonna get. Delay the allocation
+             * until we get a data frame. *)
+            Body.create Bigstringaf.empty
       in
       let new_response_state =
         Respd.create_active_response response response_body
@@ -337,10 +336,10 @@ let handle_headers t ~end_stream respd headers =
   if t.current_server_streams + 1 > t.settings.max_concurrent_streams then
     if t.unacked_settings > 0 then
       (* From RFC7540§8.1.4:
-       *   The REFUSED_STREAM error code can be included in a RST_STREAM frame to
-       *   indicate that the stream is being closed prior to any processing
-       *   having occurred. Any request that was sent on the reset stream can be
-       *   safely retried.
+       *   The REFUSED_STREAM error code can be included in a RST_STREAM frame
+       *   to indicate that the stream is being closed prior to any processing
+       *   having occurred. Any request that was sent on the reset stream can
+       *   be safely retried.
        *
        * Note: if there are pending SETTINGS to acknowledge, assume there was a
        * race condition and let the client retry. *)
@@ -603,13 +602,10 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
         report_stream_error t stream_id Error.FlowControlError
       else (
         Scheduler.deduct_inflow stream payload_length;
-        match Message.unique_content_length_values response.headers with
-        | [ content_length ]
-          when (* we're getting more than the client declared? *)
-               Int64.compare
-                 response_info.response_body_bytes
-                 (Message.content_length_of_string content_length)
-               > 0 ->
+        match Message.body_length response.headers with
+        | `Fixed len
+        (* Getting more than the server declared *)
+          when Int64.compare response_info.response_body_bytes len > 0 ->
           (* Give back connection-level flow-controlled bytes (we use payload
            * length to include any padding bytes that the frame might have
            * included - which were ignored at parse time). *)
@@ -699,8 +695,8 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
   let { Priority.stream_dependency; _ } = priority in
   if Stream_identifier.(stream_id === stream_dependency) then
     (* From RFC7540§5.3.1:
-     *   A stream cannot depend on itself. An endpoint MUST treat this as a stream
-     *   error (Section 5.4.2) of type PROTOCOL_ERROR. *)
+     *   A stream cannot depend on itself. An endpoint MUST treat this as a
+     *   stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
     report_stream_error t stream_id Error.ProtocolError
   else
     match Scheduler.get_node t.streams stream_id with
@@ -788,10 +784,10 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
     match Settings.check_settings_list ~is_client:true settings with
     | None ->
       (* From RFC7540§6.5:
-       *   Each parameter in a SETTINGS frame replaces any existing value for that
-       *   parameter. Parameters are processed in the order in which they appear,
-       *   and a receiver of a SETTINGS frame does not need to maintain any state
-       *   other than the current value of its parameters. *)
+       *   Each parameter in a SETTINGS frame replaces any existing value for
+       *   that parameter. Parameters are processed in the order in which they
+       *   appear, and a receiver of a SETTINGS frame does not need to maintain
+       *   any state other than the current value of its parameters. *)
       List.iter
         (function
           | Settings.HeaderTableSize, x ->
@@ -809,13 +805,13 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
             t.settings.max_concurrent_streams <- x
           | InitialWindowSize, new_val ->
             (* From RFC7540§6.9.2:
-             *   [...] a SETTINGS frame can alter the initial flow-control window
-             *   size for streams with active flow-control windows (that is,
-             *   streams in the "open" or "half-closed (remote)" state). When the
-             *   value of SETTINGS_INITIAL_WINDOW_SIZE changes, a receiver MUST
-             *   adjust the size of all stream flow-control windows that it
-             *   maintains by the difference between the new value and the old
-             *   value. *)
+             *   [...] a SETTINGS frame can alter the initial flow-control
+             *   window size for streams with active flow-control windows (that
+             *   is, streams in the "open" or "half-closed (remote)" state).
+             *   When the value of SETTINGS_INITIAL_WINDOW_SIZE changes, a
+             *   receiver MUST adjust the size of all stream flow-control
+             *   windows that it maintains by the difference between the new
+             *   pvalue and the old value. *)
             let old_val = t.settings.initial_window_size in
             t.settings.initial_window_size <- new_val;
             let growth = new_val - old_val in
@@ -825,9 +821,10 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
                  ~f:(fun stream ->
                    (* From RFC7540§6.9.2:
                     *   An endpoint MUST treat a change to
-                    *   SETTINGS_INITIAL_WINDOW_SIZE that causes any flow-control
-                    *   window to exceed the maximum size as a connection error
-                    *   (Section 5.4.1) of type FLOW_CONTROL_ERROR. *)
+                    *   SETTINGS_INITIAL_WINDOW_SIZE that causes any
+                    *   flow-control window to exceed the maximum size as a
+                    *   connection error (Section 5.4.1) of type
+                    *   FLOW_CONTROL_ERROR. *)
                    if not (Scheduler.add_flow stream growth) then
                      raise Local)
                  t.streams

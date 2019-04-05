@@ -144,8 +144,8 @@ let parse_priority =
           e
           (* From RFC7540§6.3:
            *   An unsigned 8-bit integer representing a priority weight for the
-           *   stream (see Section 5.3). Add one to the value to obtain a weight
-           *   between 1 and 256. *)
+           *   stream (see Section 5.3). Add one to the value to obtain a
+           *   weight between 1 and 256. *)
       ; weight = weight + 1
       ; stream_dependency = parse_stream_identifier stream_dependency
       })
@@ -277,8 +277,8 @@ let parse_settings_frame { Frame.payload_length; stream_id; flags; _ } =
             filter_opt acc xs
         in
         (* From RFC7540§6.5.3:
-         *   The values in the SETTINGS frame MUST be processed in the order they
-         *   appear, with no other frame processing between values. *)
+         *   The values in the SETTINGS frame MUST be processed in the order
+         *   they appear, with no other frame processing between values. *)
         Ok (Frame.Settings (filter_opt (fun x -> x) xs)))
       (count num_settings parse_setting)
 
@@ -323,8 +323,8 @@ let parse_push_promise_frame frame_header =
         stream_identifier
         (* From RFC7540§6.6:
          *   The PUSH_PROMISE frame includes the unsigned 31-bit identifier of
-         *   the stream the endpoint plans to create along with a set of headers
-         *   that provide additional context for the stream. *)
+         *   the stream the endpoint plans to create along with a set of
+         *   headers that provide additional context for the stream. *)
         (take_bigstring (length - 4))
     in
     parse_padded_payload frame_header parse_push_promise
@@ -382,10 +382,11 @@ let parse_window_update_frame { Frame.stream_id; payload_length; _ } =
         if window_size_increment == 0 then
           if
             (* From RFC7540§6.9:
-             *   A receiver MUST treat the receipt of a WINDOW_UPDATE frame with an
-             *   flow-control window increment of 0 as a stream error (Section 5.4.2)
-             *   of type PROTOCOL_ERROR; errors on the connection flow-control window
-             *   MUST be treated as a connection error (Section 5.4.1). *)
+             *   A receiver MUST treat the receipt of a WINDOW_UPDATE frame
+             *   with an flow-control window increment of 0 as a stream error
+             *   (Section 5.4.2) of type PROTOCOL_ERROR; errors on the
+             *   connection flow-control window MUST be treated as a connection
+             *   error (Section 5.4.1). *)
             Stream_identifier.is_connection stream_id
           then
             connection_error ProtocolError "Window update must not be 0"
@@ -511,8 +512,8 @@ module Reader = struct
            * further input will be received. *)
     ; parse_context : parse_context
           (* The current stream identifier being processed, in order to discern
-           * whether the error that needs to be assembled is a stream or connection
-           * error. *)
+           * whether the error that needs to be assembled is a stream or
+           * connection error. *)
     }
 
   type client_connection_preface = parse_error t
@@ -695,10 +696,10 @@ module Reader = struct
         match marks, msg with
         | [ "frame_payload" ], "not enough input" ->
           (* From RFC7540§4.2:
-           *   An endpoint MUST send an error code of FRAME_SIZE_ERROR if a frame
-           *   exceeds the size defined in SETTINGS_MAX_FRAME_SIZE, exceeds any
-           *   limit defined for the frame type, or is too small to contain
-           *   mandatory frame data. *)
+           *   An endpoint MUST send an error code of FRAME_SIZE_ERROR if a
+           *   frame exceeds the size defined in SETTINGS_MAX_FRAME_SIZE,
+           *   exceeds any limit defined for the frame type, or is too small to
+           *   contain mandatory frame data. *)
           Error.FrameSizeError
         | _ ->
           Error.ProtocolError

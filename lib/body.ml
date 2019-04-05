@@ -32,6 +32,8 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
+module Writer = Serialize.Writer
+
 type _ t =
   { faraday : Faraday.t
   ; mutable read_scheduled : bool
@@ -168,12 +170,12 @@ let transfer_to_writer t writer ~max_frame_size ~max_bytes stream_id =
        *   empty DATA frame) MAY be sent if there is no available space in
        *   either flow-control window. *)
       let frame_info =
-        Serialize.Writer.make_frame_info
+        Writer.make_frame_info
           ~max_frame_size
           ~flags:Flags.(set_end_stream default_flags)
           stream_id
       in
-      Serialize.Writer.schedule_data writer frame_info ~len:0 Bigstringaf.empty);
+      Writer.schedule_data writer frame_info ~len:0 Bigstringaf.empty);
     0
   | `Writev iovecs ->
     let buffered = t.buffered_bytes in
@@ -181,11 +183,9 @@ let transfer_to_writer t writer ~max_frame_size ~max_bytes stream_id =
     let lengthv = Httpaf.IOVec.lengthv iovecs in
     let writev_len = if max_bytes < lengthv then max_bytes else lengthv in
     buffered := !buffered + writev_len;
-    let frame_info =
-      Serialize.Writer.make_frame_info ~max_frame_size stream_id
-    in
-    Serialize.Writer.schedule_iovecs writer frame_info ~len:writev_len iovecs;
-    Serialize.Writer.flush writer (fun () ->
+    let frame_info = Writer.make_frame_info ~max_frame_size stream_id in
+    Writer.schedule_iovecs writer frame_info ~len:writev_len iovecs;
+    Writer.flush writer (fun () ->
         Faraday.shift faraday writev_len;
         buffered := !buffered - writev_len);
     writev_len

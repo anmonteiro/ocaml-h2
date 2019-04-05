@@ -48,3 +48,14 @@ let unique_content_length_values headers =
   sort_uniq (Headers.get_multi headers "content-length")
 
 let content_length_of_string s = try Int64.of_string s with _ -> -1L
+
+let body_length headers =
+  match unique_content_length_values headers with
+  | [ len ] ->
+    let len = content_length_of_string len in
+    if Int64.compare len 0L >= 0 then
+      `Fixed len
+    else
+      `Error `Bad_request
+  | _ ->
+    `Unknown

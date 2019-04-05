@@ -304,9 +304,9 @@ let start_push_stream t s request =
      *   into the "reserved (local)" state for the server and the "reserved
      *   (remote)" state for the client.
      *
-     * Note: we do this before flushing the writer because request handlers might
-     * immediately call one of the `respond_with` functions and expect the stream
-     * to be in the `Reserved` state. *)
+     * Note: we do this before flushing the writer because request handlers
+     * might immediately call one of the `respond_with` functions and expect
+     * the stream to be in the `Reserved` state. *)
     promised_reqd.state <- Reserved (request_info, active_stream);
     wakeup_writer ();
     Ok promised_reqd

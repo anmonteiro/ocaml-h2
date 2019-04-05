@@ -196,9 +196,9 @@ let write_settings_frame t info settings =
     ; stream_id =
         info.stream_id
         (* From RFC7540§6.5.1:
-         *   The payload of a SETTINGS frame consists of zero or more parameters,
-         *   each consisting of an unsigned 16-bit setting identifier and an
-         *   unsigned 32-bit value. *)
+         *   The payload of a SETTINGS frame consists of zero or more
+         *   parameters, each consisting of an unsigned 16-bit setting
+         *   identifier and an unsigned 32-bit value. *)
     ; payload_length = List.length settings * 6
     ; frame_type = Settings
     }
@@ -255,8 +255,8 @@ let write_go_away_frame t info stream_id error_code debug_data =
     ; stream_id =
         info.stream_id
         (* See RFC7540§6.8:
-         *   Last-Stream-ID (4 octets) + Error Code (4 octets) + Additional Debug
-         *   Data (opaque) *)
+         *   Last-Stream-ID (4 octets) + Error Code (4 octets) + Additional
+         *   Debug Data (opaque) *)
     ; payload_length = 8 + debug_data_len
     ; frame_type = GoAway
     }
@@ -309,15 +309,15 @@ let write_connection_preface t =
 module Writer = struct
   type t =
     { buffer : Bigstringaf.t
-          (* The buffer that the encoder uses for buffered writes. Managed by the
-           * control module for the encoder. *)
+          (* The buffer that the encoder uses for buffered writes. Managed by
+           * the control module for the encoder. *)
     ; encoder : Faraday.t
           (* The encoder that handles encoding for writes. Uses the [buffer]
            * referenced above internally. *)
     ; mutable drained_bytes : int
           (* The number of bytes that were not written due to the output stream
-           * being closed before all buffered output could be written. Useful for
-           * detecting error cases. *)
+           * being closed before all buffered output could be written. Useful
+           * for detecting error cases. *)
     ; headers_block_buffer : Bigstringaf.t
     }
 
