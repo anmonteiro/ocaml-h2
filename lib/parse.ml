@@ -311,7 +311,10 @@ let parse_push_promise_frame frame_header =
              *   connection error (Section 5.4.1) of type PROTOCOL_ERROR.
              *
              * Note: An odd-numbered stream is an invalid stream identifier for
-             * the server, and only the server can send PUSH_PROMISE frames. *)
+             * the server, and only the server can send PUSH_PROMISE frames:
+             *
+             * From RFC7540§8.2.1:
+             *   PUSH_PROMISE frames MUST NOT be sent by the client. *)
             connection_error
               ProtocolError
               "PUSH must be associated with an even-numbered stream id"

@@ -219,32 +219,6 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
       reqd;
     Ok (reqd, fun () -> wakeup_writer t)
 
-let method_path_and_scheme_or_malformed headers =
-  match
-    Headers.(
-      ( get_multi_pseudo headers "method"
-      , get_multi_pseudo headers "scheme"
-      , get_multi_pseudo headers "path" ))
-  with
-  | _, [ ("http" | "https") ], [ path ] when String.length path == 0 ->
-    (* From RFC7540§8.1.2.6:
-     *   This pseudo-header field MUST NOT be empty for http or https URIs;
-     *   http or https URIs that do not contain a path component MUST include a
-     *   value of '/'. *)
-    None
-  (* From RFC7540§8.1.2.3:
-   *   All HTTP/2 requests MUST include exactly one valid value for the
-   *   :method, :scheme, and :path pseudo-header fields, unless it is a
-   *   CONNECT request (Section 8.3). *)
-  (* TODO: handle CONNECT requests *)
-  | [ meth ], [ scheme ], [ path ] ->
-    if Headers.valid_request_headers headers then
-      Some (meth, path, scheme)
-    else
-      None
-  | _ ->
-    None
-
 let handle_headers t ~end_stream reqd headers =
   (* From RFC7540§5.1.2:
    *   Endpoints MUST NOT exceed the limit set by their peer. An endpoint that
@@ -277,7 +251,7 @@ let handle_headers t ~end_stream reqd headers =
     in
     reqd.state <- Stream.(Active (Open FullHeaders, active_stream));
     t.current_client_streams <- t.current_client_streams + 1;
-    match method_path_and_scheme_or_malformed headers with
+    match Headers.method_path_and_scheme_or_malformed headers with
     | None ->
       (* From RFC7540§8.1.2.6:
        *   For malformed requests, a server MAY send an HTTP response prior to
@@ -385,7 +359,7 @@ let handle_trailer_headers = handle_headers_block ~is_trailers:true
 let open_stream t frame_header ?priority headers_block =
   let open Scheduler in
   let { Frame.flags; stream_id; _ } = frame_header in
-  if not (Int32.(compare stream_id t.max_client_stream_id) > 0) then
+  if not Stream_identifier.(stream_id > t.max_client_stream_id) then
     (* From RFC7540§5.1.1:
      *   [...] The identifier of a newly established stream MUST be numerically
      *   greater than all streams that the initiating endpoint has opened or

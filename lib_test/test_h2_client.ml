@@ -75,21 +75,36 @@ module Client_connection_tests = struct
   let default_error_handler _ = assert false
 
   let test_initial_reader_state () =
-    let t = create ?config:None ~error_handler:default_error_handler in
+    let t =
+      create
+        ?config:None
+        ?push_handler:None
+        ~error_handler:default_error_handler
+    in
     Alcotest.(check read_operation)
       "A new reader wants input"
       `Read
       (next_read_operation t)
 
   let test_reader_is_closed_after_eof () =
-    let t = create ?config:None ~error_handler:default_error_handler in
+    let t =
+      create
+        ?config:None
+        ?push_handler:None
+        ~error_handler:default_error_handler
+    in
     let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
     Alcotest.(check int) "read_eof with no input returns 0" 0 c;
     Alcotest.(check read_operation)
       "Shutting down a reader closes it"
       `Close
       (next_read_operation t);
-    let t = create ?config:None ~error_handler:default_error_handler in
+    let t =
+      create
+        ?config:None
+        ?push_handler:None
+        ~error_handler:default_error_handler
+    in
     let c = read t Bigstringaf.empty ~off:0 ~len:0 in
     Alcotest.(check int) "read with no input returns 0" 0 c;
     let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
@@ -128,11 +143,21 @@ module Client_connection_tests = struct
          connection preface."
 
   let test_set_up_connection () =
-    let t = create ?config:None ~error_handler:default_error_handler in
+    let t =
+      create
+        ?config:None
+        ?push_handler:None
+        ~error_handler:default_error_handler
+    in
     handle_preface t
 
   let test_simple_get_request () =
-    let t = create ?config:None ~error_handler:default_error_handler in
+    let t =
+      create
+        ?config:None
+        ?push_handler:None
+        ~error_handler:default_error_handler
+    in
     handle_preface t;
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
@@ -207,6 +232,7 @@ module Client_connection_tests = struct
   (* TODO: test ping, including multiple pings and their order (FIFO) *)
   (* TODO: test stream-level error handler is called *)
   (* TODO: test connection-level error handler is called *)
+  (* TODO: test push_handler is called upon the receipt of a push_promise frame *)
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection

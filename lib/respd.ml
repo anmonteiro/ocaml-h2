@@ -67,7 +67,11 @@ type active_request =
 type active_state =
   (response_info, response_info remote_state) Stream.active_state
 
-type state = (active_state, active_request, active_request) Stream.state
+type state =
+  ( active_state
+  , active_request
+  , active_request Stream.remote_state )
+  Stream.state
 
 type t = (state, [ `Ok | error ], error_handler) Stream.stream
 
@@ -82,9 +86,9 @@ let create_active_response response response_body =
 
 let request t =
   match t.state with
-  | Idle ->
+  | Idle | Reserved (WaitingForPeer | PartialHeaders _ | FullHeaders) ->
     failwith "h2.Respd.request: request is not active"
-  | Reserved { request; _ } ->
+  | Reserved (ActiveMessage { request; _ }) ->
     request
   | Active (_, { request; _ }) ->
     request
@@ -93,9 +97,9 @@ let request t =
 
 let request_body t =
   match t.state with
-  | Idle ->
+  | Idle | Reserved (WaitingForPeer | PartialHeaders _ | FullHeaders) ->
     failwith "h2.Respd.request: request is not active"
-  | Reserved { request_body; _ } ->
+  | Reserved (ActiveMessage { request_body; _ }) ->
     request_body
   | Active (_, { request_body; _ }) ->
     request_body
@@ -167,6 +171,7 @@ let response_body_exn t =
  *    assert false) *)
 
 let close_stream t =
+  (* TODO: reserved *)
   match t.state with
   | Active (HalfClosed _, _) ->
     (* easy case, just transition to the closed state. *)
