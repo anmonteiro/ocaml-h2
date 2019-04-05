@@ -97,9 +97,9 @@ let check_value ~is_client = function
   | EnablePush, v ->
     if v != 0 && v != 1 then
       (* From RFC7540§6.5.2
-       *   The initial value is 1, which indicates that server push is permitted.
-       *   Any value other than 0 or 1 MUST be treated as a connection error
-       *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
+       *   The initial value is 1, which indicates that server push is
+       *   permitted. Any value other than 0 or 1 MUST be treated as a
+       *   connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
       Some
         Error.(
           ConnectionError (ProtocolError, "SETTINGS_ENABLE_PUSH must be 0 or 1"))

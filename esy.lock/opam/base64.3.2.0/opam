@@ -1,7 +1,7 @@
 opam-version: "2.0"
 maintainer: "mirageos-devel@lists.xenproject.org"
 authors: [ "Thomas Gazagnaire"
-           "Anil Madhavapeddy"
+           "Anil Madhavapeddy" "Calascibetta Romain"
            "Peter Zotov" ]
 license: "ISC"
 homepage: "https://github.com/mirage/ocaml-base64"
@@ -29,6 +29,6 @@ build: [
 ]
 url {
   src:
-    "https://github.com/mirage/ocaml-base64/releases/download/v3.1.0/base64-v3.1.0.tbz"
-  checksum: "md5=9847073feb4272e513d8c832904e1af7"
+    "https://github.com/mirage/ocaml-base64/releases/download/v3.2.0/base64-v3.2.0.tbz"
+  checksum: "md5=8ac1d6145277cee57d36611d1c420f05"
 }

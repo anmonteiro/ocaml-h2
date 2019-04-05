@@ -183,9 +183,9 @@ let[@inline] is_without_indexing token =
 let[@inline] is_sensitive token value =
   token <> -1
   && (* From RFC7541§7.1.3: Never-Indexed Literals
-      *   An encoder might also choose not to index values for header fields that
-      *   are considered to be highly valuable or sensitive to recovery, such as
-      *   the Cookie or Authorization header fields. *)
+      *   An encoder might also choose not to index values for header fields
+      *   that are considered to be highly valuable or sensitive to recovery,
+      *   such as the Cookie or Authorization header fields. *)
      Static_table.TokenIndices.(
        token == authorization || (token == cookie && String.length value < 20))
 
@@ -211,8 +211,8 @@ let encode
         | None ->
           (* From RFC7541§6.2.2: Literal Header Field without Indexing
            *   Otherwise, the header field name is represented as a string
-           *   literal (see Section 5.2). A value 0 is used in place of the 4-bit
-           *   index, followed by the header field name. *)
+           *   literal (see Section 5.2). A value 0 is used in place of the
+           *   4-bit index, followed by the header field name. *)
           0
     in
     BinaryFormat.never_indexed, index
@@ -321,10 +321,10 @@ let encode_header encoder t ({ name; value; _ } as header) =
     if index == 0 then
       (* From RFC7541§6.2.2: Literal Header Field without Indexing
        *   If the header field name matches the header field name of an entry
-       *   stored in the static table or the dynamic table, the header field name
-       *   can be represented using the index of that entry. In this case, the
-       *   index of the entry is represented as an integer with a 4-bit prefix
-       *   (see Section 5.1). This value is always non-zero.
+       *   stored in the static table or the dynamic table, the header field
+       *   name can be represented using the index of that entry. In this case,
+       *   the index of the entry is represented as an integer with a 4-bit
+       *   prefix (see Section 5.1). This value is always non-zero.
        *
        *   Otherwise, the header field name is represented as a string literal
        *   (see Section 5.2). A value 0 is used in place of the 4-bit index,
@@ -332,7 +332,8 @@ let encode_header encoder t ({ name; value; _ } as header) =
       encode_string t name;
     (* From RFC7541§6.2.2: Literal Header Field without Indexing
      *   Either form of header field name representation is followed by the
-     *   header field value represented as a string literal (see Section 5.2). *)
+     *   header field value represented as a string literal (see
+     *   Section 5.2). *)
     encode_string t value)
 
 let set_capacity { table; _ } new_capacity =

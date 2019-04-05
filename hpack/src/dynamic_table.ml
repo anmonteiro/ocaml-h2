@@ -35,20 +35,21 @@ type t =
   ; mutable length : int
   ; mutable offset : int
   ; mutable capacity : int
-        (* `length` above is the number of entries in the dynamic table. We track
-         * the HPACK size in `size`.
+        (* `length` above is the number of entries in the dynamic table. We
+         * track the HPACK size in `size`.
          *
          * From RFC7541§4.1:
-         *   The size of the dynamic table is the sum of the size of its entries.
+         *   The size of the dynamic table is the sum of the size of its
+         *   entries.
          *
          *   The size of an entry is the sum of its name's length in octets (as
          *   defined in Section 5.2), its value's length in octets, and 32. *)
   ; mutable size : int
         (* From RFC7541§4.2:
-         *   Protocols that use HPACK determine the maximum size that the encoder
-         *   is permitted to use for the dynamic table. In HTTP/2, this value is
-         *   determined by the SETTINGS_HEADER_TABLE_SIZE setting (see Section
-         *   6.5.2 of [HTTP2]). *)
+         *   Protocols that use HPACK determine the maximum size that the
+         *   encoder is permitted to use for the dynamic table. In HTTP/2, this
+         *   value is determined by the SETTINGS_HEADER_TABLE_SIZE setting (see
+         *   Section 6.5.2 of [HTTP2]). *)
   ; mutable max_size : int
   ; on_evict : string * string -> unit
   }

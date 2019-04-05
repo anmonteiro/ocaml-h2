@@ -271,10 +271,11 @@ let valid_headers ?(is_request = true) t =
                      else
                        Pseudo.reserved_response)))
           || (* From RFC7540§8.1.2.1:
-              *   All pseudo-header fields MUST appear in the header block before
-              *   regular header fields. Any request or response that contains a
-              *   pseudo-header field that appears in a header block after a regular
-              *   header field MUST be treated as malformed (Section 8.1.2.6). *)
+              *   All pseudo-header fields MUST appear in the header block
+              *   before regular header fields. Any request or response that
+              *   contains a pseudo-header field that appears in a header block
+              *   after a regular header field MUST be treated as malformed
+              *   (Section 8.1.2.6). *)
              (is_pseudo && pseudo_did_end))
         (to_hpack_list t)
     in
@@ -320,9 +321,9 @@ let trailers_valid t =
          *   (Section 8.1.2.6). *)
         (not (CI.is_lowercase name))
         || (* From RFC7540§8.1.2.1:
-            *   Pseudo-header fields MUST NOT appear in trailers.  Endpoints MUST
-            *   treat a request or response that contains undefined or invalid
-            *   pseudo-header fields as malformed (Section 8.1.2.6). *)
+            *   Pseudo-header fields MUST NOT appear in trailers. Endpoints
+            *   MUST treat a request or response that contains undefined or
+            *   invalid pseudo-header fields as malformed (Section 8.1.2.6). *)
            Pseudo.is_pseudo name)
       t
   in

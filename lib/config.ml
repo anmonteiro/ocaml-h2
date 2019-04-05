@@ -65,13 +65,13 @@ let default =
   ; enable_server_push =
       true
       (* From RFC7540§6.5.2:
-       *   Indicates the maximum number of concurrent streams that the sender will
-       *   allow. This limit is directional: it applies to the number of streams
-       *   that the sender permits the receiver to create. *)
+       *   Indicates the maximum number of concurrent streams that the sender
+       *   will allow. This limit is directional: it applies to the number of
+       *   streams that the sender permits the receiver to create. *)
   ; max_concurrent_streams =
       Settings.default_settings.max_concurrent_streams
       (* From RFC7540§6.5.2:
-       *   Indicates the sender's initial window size (in octets) for stream-level
-       *   flow control. *)
+       *   Indicates the sender's initial window size (in octets) for
+       *   stream-level flow control. *)
   ; initial_window_size = Settings.WindowSize.default_initial_window_size
   }
