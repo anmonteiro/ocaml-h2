@@ -266,7 +266,7 @@ let handle_headers t ~end_stream reqd headers =
       report_stream_error t reqd.Stream.id Error.ProtocolError
   else
     (* From RFC7540§5.1.2:
-     *   Scheduler that are in the "open" state or in either of the "half-closed"
+     *   Streams that are in the "open" state or in either of the "half-closed"
      *   states count toward the maximum number of streams that an endpoint is
      *   permitted to open. *)
     let active_stream =
@@ -486,7 +486,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
   let { Frame.stream_id; _ } = frame_header in
   if not Stream_identifier.(is_request stream_id) then
     (* From RFC7540§5.1.1:
-     *   Scheduler initiated by a client MUST use odd-numbered stream
+     *   Streams initiated by a client MUST use odd-numbered stream
      *   identifiers. [...] An endpoint that receives an unexpected
      *   stream identifier MUST respond with a connection error
      *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
@@ -575,7 +575,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
   let { Frame.flags; stream_id; payload_length; _ } = frame_header in
   if not (Stream_identifier.is_request stream_id) then
     (* From RFC7540§5.1.1:
-     *   Scheduler initiated by a client MUST use odd-numbered stream
+     *   Streams initiated by a client MUST use odd-numbered stream
      *   identifiers. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
@@ -700,7 +700,7 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
   let { Priority.stream_dependency; _ } = priority in
   if not (Stream_identifier.is_request stream_id) then
     (* From RFC7540§5.1.1:
-     *   Scheduler initiated by a client MUST use odd-numbered stream
+     *   Streams initiated by a client MUST use odd-numbered stream
      *   identifiers. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
@@ -744,7 +744,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
   let { Frame.stream_id; _ } = frame_header in
   if not (Stream_identifier.is_request stream_id) then
     (* From RFC7540§5.1.1:
-     *   Scheduler initiated by a client MUST use odd-numbered stream
+     *   Streams initiated by a client MUST use odd-numbered stream
      *   identifiers. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
@@ -1008,7 +1008,7 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
   if not (Stream_identifier.is_request stream_id) then
     (* From RFC7540§5.1.1:
-     *   Scheduler initiated by a client MUST use odd-numbered stream
+     *   Streams initiated by a client MUST use odd-numbered stream
      *   identifiers. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)

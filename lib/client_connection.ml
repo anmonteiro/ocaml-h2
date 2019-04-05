@@ -210,7 +210,7 @@ let handle_headers t ~end_stream respd active_request headers =
       report_stream_error t respd.Stream.id Error.ProtocolError
   else (
     (* From RFC7540§5.1.2:
-     *   Scheduler that are in the "open" state or in either of the "half-closed"
+     *   Streams that are in the "open" state or in either of the "half-closed"
      *   states count toward the maximum number of streams that an endpoint is
      *   permitted to open. *)
     respd.state
@@ -1044,7 +1044,7 @@ let create ?(config = Config.default) ~error_handler =
       { settings
       ; config
           (* From RFC7540§5.1.1:
-           *   Scheduler initiated by a client MUST use odd-numbered stream
+           *   Streams initiated by a client MUST use odd-numbered stream
            *   identifiers *)
       ; current_stream_id = -1l
       ; current_server_streams = 0
