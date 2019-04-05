@@ -205,18 +205,13 @@ let handle_push_promise_headers t respd headers =
     let meth = Httpaf.Method.of_string meth in
     (match
        ( meth
-         (* From RFC7540§8.2:
-          *   The server MUST include a value in the :authority pseudo-header
-          *   field for which the server is authoritative (see Section 10.1). A
-          *   client MUST treat a PUSH_PROMISE for which the server is not
-          *   authoritative as a stream error (Section 5.4.2) of type
-          *   PROTOCOL_ERROR. *)
        , Headers.get_pseudo headers "authority"
        , Message.body_length headers )
      with
-    | (#Httpaf.Method.standard as meth), None, `Fixed len
-      when (not Httpaf.Method.(is_cacheable meth && is_safe meth))
-           || Int64.compare len 0L != 0 ->
+    | (#Httpaf.Method.standard as meth), _, _
+      when not Httpaf.Method.(is_cacheable meth && is_safe meth) ->
+      report_stream_error t respd.id Error.ProtocolError
+    | _, _, `Fixed len when Int64.compare len 0L != 0 ->
       (* From RFC7540§8.2:
        *   Clients that receive a promised request that is not cacheable,
        *   that is not known to be safe or that indicates the presence of a
@@ -234,7 +229,12 @@ let handle_push_promise_headers t respd headers =
        * Note: the intersection of safe and cacheable are the GET and HEAD
        * methods. *)
       report_stream_error t respd.id Error.ProtocolError
-    | _, _, `Error _ ->
+    (* From RFC7540§8.2:
+     *   The server MUST include a value in the :authority pseudo-header field
+     *   for which the server is authoritative (see Section 10.1). A client
+     *   MUST treat a PUSH_PROMISE for which the server is not authoritative as
+     *   a stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
+    | _, None, _ | _, _, `Error _ ->
       report_stream_error t respd.id Error.ProtocolError
     | _ ->
       let request = Request.create ~scheme ~headers meth path in
@@ -888,7 +888,7 @@ let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block
   handle_headers_block t respd partial_headers flags headers_block
 
 let process_push_promise_frame
-    t { Frame.frame_header; _ } promised_stream_id headers_block
+    t ({ Frame.frame_header; _ } as frame) promised_stream_id headers_block
   =
   let { Frame.stream_id; _ } = frame_header in
   (* At this point, `promised_stream_id` has already been validated by the
@@ -932,13 +932,8 @@ let process_push_promise_frame
       send_connection_error ()
     | Some respd ->
       (match respd.state with
-      | Active ((Open _ | HalfClosed _), active_request) ->
-        handle_first_response_bytes
-          t
-          respd
-          active_request
-          frame_header
-          headers_block
+      | Active ((Open _ | HalfClosed _), _) ->
+        reserve_stream t frame promised_stream_id headers_block
       | _ ->
         send_connection_error ())
 
