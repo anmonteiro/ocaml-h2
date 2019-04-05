@@ -93,15 +93,29 @@ let parse_key = function
   | _ ->
     None
 
-let check_value = function
-  | EnablePush, v when v != 0 && v != 1 ->
-    (* From RFC7540§6.5.2
-     *   The initial value is 1, which indicates that server push is permitted.
-     *   Any value other than 0 or 1 MUST be treated as a connection error
-     *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-    Some
-      Error.(
-        ConnectionError (ProtocolError, "SETTINGS_ENABLE_PUSH must be 0 or 1"))
+let check_value ~is_client = function
+  | EnablePush, v ->
+    if v != 0 && v != 1 then
+      (* From RFC7540§6.5.2
+       *   The initial value is 1, which indicates that server push is permitted.
+       *   Any value other than 0 or 1 MUST be treated as a connection error
+       *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
+      Some
+        Error.(
+          ConnectionError (ProtocolError, "SETTINGS_ENABLE_PUSH must be 0 or 1"))
+    else if is_client && v == 1 then
+      (* From RFC7540§8.2:
+       *   Clients MUST reject any attempt to change the
+       *   SETTINGS_ENABLE_PUSH setting to a value other than 0 by
+       *   treating the message as a connection error (Section 5.4.1) of
+       *   type PROTOCOL_ERROR. *)
+      Some
+        Error.(
+          ConnectionError
+            ( ProtocolError
+            , "Server must not try to enable SETTINGS_ENABLE_PUSH" ))
+    else
+      None
   | InitialWindowSize, v when WindowSize.is_window_overflow v ->
     (* From RFC7540§6.5.2
      *   Values above the maximum flow-control window size of 2^31-1 MUST be
@@ -130,15 +144,18 @@ let check_value = function
     None
 
 (* Check incoming settings and report an error if any. *)
-let rec check_settings_list = function
-  | [] ->
-    None
-  | x :: xs ->
-    (match check_value x with
-    | None ->
-      check_settings_list xs
-    | Some _ as err ->
-      err)
+let check_settings_list ?(is_client = false) settings =
+  let rec loop = function
+    | [] ->
+      None
+    | x :: xs ->
+      (match check_value ~is_client x with
+      | None ->
+        loop xs
+      | Some _ as err ->
+        err)
+  in
+  loop settings
 
 type t =
   { mutable header_table_size : int

@@ -199,8 +199,8 @@ module Client (Io: IO) = struct
   module Client_connection = H2.Client_connection
   type t = Client_connection.t
 
-  let create_connection ?(config=Config.default) ~error_handler socket =
-    let connection = Client_connection.create ~config ~error_handler in
+  let create_connection ?(config=Config.default) ?push_handler ~error_handler socket =
+    let connection = Client_connection.create ~config ?push_handler ~error_handler in
 
     let read_buffer = Buffer.create config.Config.read_buffer_size in
     let read_loop_exited, notify_read_loop_exited = Lwt.wait () in

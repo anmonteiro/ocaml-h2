@@ -67,12 +67,14 @@ type t =
   ; config : Config.t
   ; streams : Scheduler.t
   ; mutable current_stream_id : Stream_identifier.t
+  ; mutable max_pushed_stream_id : Stream_identifier.t
   ; mutable current_server_streams : int
   ; mutable receiving_headers_for_stream : Stream_identifier.t option
   ; mutable did_send_go_away : bool
   ; mutable unacked_settings : int
   ; pending_pings : (unit -> unit) Queue.t
   ; error_handler : error -> unit
+  ; push_handler : Request.t -> (response_handler, unit) result
   ; wakeup_writer : (unit -> unit) ref
         (* From RFC7540§4.3:
          *   Header compression is stateful. One compression context and one
@@ -80,6 +82,8 @@ type t =
   ; hpack_encoder : Hpack.Encoder.t
   ; hpack_decoder : Hpack.Decoder.t
   }
+
+let default_push_handler = Sys.opaque_identity (fun _ -> Ok (fun _ _ -> ()))
 
 let is_active t = match t.reader with Active _ -> true | New _ -> false
 
@@ -189,7 +193,142 @@ let report_exn t exn =
     let additional_debug_data = Printexc.to_string exn in
     report_connection_error t ~additional_debug_data Error.InternalError
 
-let handle_headers t ~end_stream respd active_request headers =
+let handle_push_promise_headers t respd headers =
+  (* From RFC7540§8.2.2:
+   *   The header fields in PUSH_PROMISE and any subsequent CONTINUATION frames
+   *   MUST be a valid and complete set of request header fields (Section
+   *   8.1.2.3). *)
+  match Headers.method_path_and_scheme_or_malformed headers with
+  | None ->
+    (* From RFC7540§8.2.2:
+     *   If a client receives a PUSH_PROMISE that does not include a complete
+     *   and valid set of header fields [...] it MUST respond with a stream
+     *   error (Section 5.4.2) of type PROTOCOL_ERROR. *)
+    report_stream_error t respd.Stream.id Error.ProtocolError
+  | Some (meth, path, scheme) ->
+    let meth = Httpaf.Method.of_string meth in
+    (match
+       ( meth
+         (* From RFC7540§8.2:
+          *   The server MUST include a value in the :authority pseudo-header
+          *   field for which the server is authoritative (see Section 10.1). A
+          *   client MUST treat a PUSH_PROMISE for which the server is not
+          *   authoritative as a stream error (Section 5.4.2) of type
+          *   PROTOCOL_ERROR. *)
+       , Headers.get_pseudo headers "authority"
+       , Message.unique_content_length_values headers )
+     with
+    | (#Httpaf.Method.standard as meth), None, [ content_length ]
+      when (not Httpaf.Method.(is_cacheable meth && is_safe meth))
+           || Int64.compare
+                (Message.content_length_of_string content_length)
+                0L
+              != 0 ->
+      (* From RFC7540§8.2:
+       *   Clients that receive a promised request that is not cacheable,
+       *   that is not known to be safe or that indicates the presence of a
+       *   request body MUST reset the promised stream with a stream error
+       *   (Section 5.4.2) of type PROTOCOL_ERROR.
+       *
+       * From RFC7231§4.2.3 (Cacheable Methods):
+       *   [...] this specification defines GET, HEAD, and POST as cacheable
+       *   [...].
+       *
+       * From RFC7231§4.2.1 (Safe Methods):
+       *   Of the request methods defined by this specification, the GET, HEAD,
+       *   OPTIONS, and TRACE methods are defined to be safe.
+       *
+       * Note: the intersection of safe and cacheable are the GET and HEAD
+       * methods. *)
+      report_stream_error t respd.id Error.ProtocolError
+    | _ ->
+      let request = Request.create ~scheme ~headers meth path in
+      (match t.push_handler request with
+      | Ok response_handler ->
+        (* From RFC7540§8.2:
+         *   Promised requests [...] MUST NOT include a request body. *)
+        let request_body = Body.empty in
+        (* From RFC7540§5.1:
+         *   reserved (remote): [...] Receiving a HEADERS frame causes the
+         *   stream to transition to "half-closed (local)". *)
+        respd.state
+        <- Active
+             ( HalfClosed Stream.WaitingForPeer
+             , { Respd.request; request_body; response_handler } )
+      | Error _ ->
+        (* From RFC7540§6.6:
+         *   Recipients of PUSH_PROMISE frames can choose to reject promised
+         *   streams by returning a RST_STREAM referencing the promised stream
+         *   identifier back to the sender of the PUSH_PROMISE. *)
+        Stream.reset_stream respd Error.Cancel))
+
+let handle_response_headers t respd ~end_stream active_request headers =
+  (* From RFC7540§8.1.2.6:
+   *   Clients MUST NOT accept a malformed response.
+   *
+   * Note: in the branches where a malformed response is detected, the response
+   * handler is not called. *)
+  match Headers.get_multi_pseudo headers "status" with
+  | [ status ] ->
+    let response = Response.create ~headers (Status.of_string status) in
+    (match end_stream, Message.unique_content_length_values headers with
+    | true, [ content_length ]
+      when Int64.compare (Message.content_length_of_string content_length) 0L
+           != 0 ->
+      (* From RFC7540§8.1.2.6:
+       *   A request or response is also malformed if the value of a
+       *   content-length header field does not equal the sum of the DATA
+       *   frame payload lengths that form the body. *)
+      set_error_and_handle
+        t
+        respd
+        (`Invalid_response_body_length response)
+        ProtocolError
+    | _ ->
+      let response_body =
+        if end_stream then
+          Body.empty
+        else
+          (* TODO: Initializing the response body with an empty bigstring
+           * trades an allocation here vs. when the first data frame arrives.
+           * This would probably make sense if this were HTTP/1 because we
+           * wouldn't know whether the response had a body or not, but in
+           * HTTP/2 we clearly do. It's probably fine to just allocate here if
+           * we know we're gonna get data. *)
+          Body.create Bigstringaf.empty
+      in
+      let new_response_state =
+        Respd.create_active_response response response_body
+      in
+      respd.state
+      <- Stream.(
+           Active
+             ( (if is_open respd then
+                  Open new_response_state
+               else
+                 HalfClosed new_response_state)
+             , active_request ));
+      active_request.response_handler response response_body;
+      if end_stream then (
+        (* Deliver EOF to the response body, as the handler might be waiting
+         * on it to act. *)
+        Body.close_reader response_body;
+        (* From RFC7540§5.1:
+         *   [...] an endpoint receiving an END_STREAM flag causes the stream
+         *   state to become "half-closed (remote)". *)
+        Respd.close_stream respd))
+  | _ ->
+    (* From RFC7540§8.1.2.4:
+     *   For HTTP/2 responses, a single :status pseudo-header field is defined
+     *   that carries the HTTP status code field (see [RFC7231], Section 6).
+     *   This pseudo-header field MUST be included in all responses; otherwise,
+     *   the response is malformed (Section 8.1.2.6). *)
+    let message =
+      "HTTP/2 responses must include a single `:status` pseudo-header"
+    in
+    set_error_and_handle t respd (`Malformed_response message) ProtocolError
+
+let handle_headers t ~end_stream respd headers =
   (* From RFC7540§5.1.2:
    *   Endpoints MUST NOT exceed the limit set by their peer. An endpoint that
    *   receives a HEADERS frame that causes its advertised concurrent stream
@@ -213,88 +352,24 @@ let handle_headers t ~end_stream respd active_request headers =
      *   Streams that are in the "open" state or in either of the "half-closed"
      *   states count toward the maximum number of streams that an endpoint is
      *   permitted to open. *)
-    respd.state
-    <- Stream.(
-         Active
-           ( (if is_open respd then
-                Open FullHeaders
-             else
-               HalfClosed FullHeaders)
-           , active_request ));
     t.current_server_streams <- t.current_server_streams + 1;
-    (* From RFC7540§8.1.2.6:
-     *   Clients MUST NOT accept a malformed response.
-     *
-     * Note: in the branches where a malformed response is detected, the
-     * response handler is not called. *)
-    match Headers.get_multi_pseudo headers "status" with
-    | [ status ] ->
-      let response = Response.create ~headers (Status.of_string status) in
-      (match end_stream, Message.unique_content_length_values headers with
-      | true, [ content_length ]
-        when Int64.compare (Message.content_length_of_string content_length) 0L
-             != 0 ->
-        (* From RFC7540§8.1.2.6:
-         *   A request or response is also malformed if the value of a
-         *   content-length header field does not equal the sum of the DATA
-         *   frame payload lengths that form the body. *)
-        set_error_and_handle
-          t
-          respd
-          (`Invalid_response_body_length response)
-          ProtocolError
-      | _ ->
-        let response_body =
-          if end_stream then
-            Body.empty
-          else
-            (* TODO: Initializing the response body with an empty bigstring trades
-             * an allocation here vs. when the first data frame arrives. This
-             * would probably make sense if this were HTTP/1 because we wouldn't
-             * know whether the response had a body or not, but in HTTP/2 we
-             * clearly do. It's probably fine to just allocate here if we know
-             * we're gonna get data. *)
-            Body.create Bigstringaf.empty
-        in
-        let new_response_state =
-          Respd.create_active_response response response_body
-        in
-        respd.state
-        <- Stream.(
-             Active
-               ( (if is_open respd then
-                    Open new_response_state
-                 else
-                   HalfClosed new_response_state)
-               , active_request ));
-        active_request.response_handler response response_body;
-        if end_stream then (
-          (* Deliver EOF to the response body, as the handler might be waiting
-           * on it to act. *)
-          Body.close_reader response_body;
-          (* From RFC7540§5.1:
-           *   [...] an endpoint receiving an END_STREAM flag causes the stream
-           *   state to become "half-closed (remote)". *)
-          Respd.close_stream respd))
+    match respd.state with
+    | Reserved _ ->
+      respd.state <- Reserved Stream.FullHeaders;
+      handle_push_promise_headers t respd headers
+    | Active (active_state, active_request) ->
+      (match active_state with
+      | Open _ ->
+        respd.state <- Active (Open FullHeaders, active_request)
+      | HalfClosed _ ->
+        respd.state <- Active (Stream.(HalfClosed FullHeaders), active_request));
+      handle_response_headers t respd ~end_stream active_request headers
     | _ ->
-      (* From RFC7540§8.1.2.4:
-       *   For HTTP/2 responses, a single :status pseudo-header field is defined
-       *   that carries the HTTP status code field (see [RFC7231], Section 6).
-       *   This pseudo-header field MUST be included in all responses; otherwise,
-       *   the response is malformed (Section 8.1.2.6). *)
-      let message =
-        "HTTP/2 responses must include a single `:status` pseudo-header"
-      in
-      set_error_and_handle t respd (`Malformed_response message) ProtocolError)
+      (* Unreachable. This function is only invoked if the stream is active. *)
+      assert false)
 
 let handle_headers_block
-    t
-    ?(is_trailers = false)
-    respd
-    active_request
-    partial_headers
-    flags
-    headers_block
+    t ?(is_trailers = false) respd partial_headers flags headers_block
   =
   let open AB in
   let end_headers = Flags.test_end_header flags in
@@ -313,7 +388,7 @@ let handle_headers_block
       if not is_trailers then
         (* `handle_headers` will take care of transitioning the stream state *)
         let end_stream = partial_headers.end_stream in
-        handle_headers t ~end_stream respd active_request headers
+        handle_headers t ~end_stream respd headers
       else if Headers.trailers_valid headers then (
         Respd.deliver_trailer_headers respd headers;
         let response_body = Respd.response_body_exn respd in
@@ -344,11 +419,7 @@ let handle_headers_block
 
 let handle_trailer_headers = handle_headers_block ~is_trailers:true
 
-(* TODO: reprioritize stream? *)
-let handle_first_response_bytes
-    t respd active_request frame_header ?priority:_ headers_block
-  =
-  let { Frame.flags; stream_id; _ } = frame_header in
+let create_partial_headers t flags headers_block =
   let end_headers = Flags.test_end_header flags in
   let headers_block_length = Bigstringaf.length headers_block in
   let initial_buffer_size =
@@ -359,33 +430,30 @@ let handle_first_response_bytes
        * frame. *)
       2 * headers_block_length
   in
-  let partial_headers =
-    { Stream.parse_state =
-        AB.parse
-          ~initial_buffer_size
-          (Hpack.Decoder.decode_headers t.hpack_decoder)
-    ; end_stream = Flags.test_end_stream flags
-    }
-  in
+  { Stream.parse_state =
+      AB.parse
+        ~initial_buffer_size
+        (Hpack.Decoder.decode_headers t.hpack_decoder)
+  ; end_stream = Flags.test_end_stream flags
+  }
+
+(* TODO: reprioritize stream? *)
+let handle_first_response_bytes
+    t respd active_request frame_header ?priority:_ headers_block
+  =
+  let { Frame.flags; stream_id; _ } = frame_header in
+  let partial_headers = create_partial_headers t flags headers_block in
   let remote_state = Stream.PartialHeaders partial_headers in
   respd.Stream.state
   <- (if Stream.is_open respd then
         Active (Open remote_state, active_request)
      else
        Active (HalfClosed remote_state, active_request));
-  if not end_headers then
+  if not (Flags.test_end_header flags) then
     t.receiving_headers_for_stream <- Some stream_id;
-  handle_headers_block
-    t
-    respd
-    active_request
-    partial_headers
-    flags
-    headers_block
+  handle_headers_block t respd partial_headers flags headers_block
 
-let process_trailer_headers
-    t respd active_state active_response frame_header headers_block
-  =
+let process_trailer_headers t respd active_response frame_header headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
   let end_stream = Flags.test_end_stream flags in
   if not end_stream then
@@ -411,13 +479,7 @@ let process_trailer_headers
     if not Flags.(test_end_header flags) then
       t.receiving_headers_for_stream <- Some stream_id;
     (* trailer headers: RFC7230§4.4 *)
-    handle_trailer_headers
-      t
-      respd
-      active_state
-      partial_headers
-      flags
-      headers_block
+    handle_trailer_headers t respd partial_headers flags headers_block
 
 let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
   let { Frame.stream_id; _ } = frame_header in
@@ -463,11 +525,10 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
       | Active
           ( ( Open (ActiveMessage active_response)
             | HalfClosed (ActiveMessage active_response) )
-          , active_request ) ->
+          , _ ) ->
         process_trailer_headers
           t
           respd
-          active_request
           active_response
           frame_header
           headers_block
@@ -724,7 +785,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       in
       report_connection_error t ~additional_debug_data Error.ProtocolError)
   else
-    match Settings.check_settings_list settings with
+    match Settings.check_settings_list ~is_client:true settings with
     | None ->
       (* From RFC7540§6.5:
        *   Each parameter in a SETTINGS frame replaces any existing value for that
@@ -805,9 +866,84 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
     | Some error ->
       handle_error t error
 
-let process_push_promise_frame _t _frame _promised_stream_id _headers_block =
-  (* TODO: We'll need a push handler too *)
-  ()
+let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block
+  =
+  let { Frame.flags; _ } = frame_header in
+  (* From RFC7540§6.6:
+   *   The PUSH_PROMISE frame (type=0x5) is used to notify the peer endpoint in
+   *   advance of streams the sender intends to initiate. *)
+  let respd =
+    Stream.create
+      promised_stream_id
+      ~max_frame_size:t.settings.max_frame_size
+      t.writer
+      t.error_handler
+      (on_stream_closed t)
+  in
+  Scheduler.add
+    t.streams
+    ~initial_window_size:t.settings.initial_window_size
+    respd;
+  let partial_headers = create_partial_headers t flags headers_block in
+  respd.state <- Reserved (PartialHeaders partial_headers);
+  if not (Flags.test_end_header flags) then
+    t.receiving_headers_for_stream <- Some promised_stream_id;
+  handle_headers_block t respd partial_headers flags headers_block
+
+let process_push_promise_frame
+    t { Frame.frame_header; _ } promised_stream_id headers_block
+  =
+  let { Frame.stream_id; _ } = frame_header in
+  (* At this point, `promised_stream_id` has already been validated by the
+   * parser *)
+  if not t.settings.enable_push then
+    (* From RFC7540§6.6:
+     *   PUSH_PROMISE MUST NOT be sent if the SETTINGS_ENABLE_PUSH setting of
+     *   the peer endpoint is set to 0. An endpoint that has set this setting
+     *   and has received acknowledgement MUST treat the receipt of a
+     *   PUSH_PROMISE frame as a connection error (Section 5.4.1) of type
+     *   PROTOCOL_ERROR. *)
+    let additional_debug_data = "Push is not enabled for the connection" in
+    report_connection_error t ~additional_debug_data Error.ProtocolError
+  else if not Stream_identifier.(promised_stream_id > t.max_pushed_stream_id)
+  then
+    (* From RFC7540§6.6:
+     *   A receiver MUST treat the receipt of a PUSH_PROMISE that promises an
+     *   illegal stream identifier (Section 5.1.1) as a connection error
+     *   (Section 5.4.1) of type PROTOCOL_ERROR. Note that an illegal stream
+     *   identifier is an identifier for a stream that is not currently in the
+     *   "idle" state. *)
+    let additional_debug_data =
+      "Illegal stream identifier promised by PUSH_PROMISE"
+    in
+    report_connection_error t ~additional_debug_data Error.ProtocolError
+  else
+    let send_connection_error () =
+      let additional_debug_data =
+        "Received PUSH_PROMISE on a stream that is neither open nor \
+         half-closed (local)"
+      in
+      report_connection_error t ~additional_debug_data Error.ProtocolError
+    in
+    t.max_pushed_stream_id <- promised_stream_id;
+    match Scheduler.find t.streams stream_id with
+    | None ->
+      (* From RFC7540§6.6:
+       *   A receiver MUST treat the receipt of a PUSH_PROMISE on a stream that
+       *   is neither "open" nor "half-closed (local)" as a connection error
+       *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
+      send_connection_error ()
+    | Some respd ->
+      (match respd.state with
+      | Active ((Open _ | HalfClosed _), active_request) ->
+        handle_first_response_bytes
+          t
+          respd
+          active_request
+          frame_header
+          headers_block
+      | _ ->
+        send_connection_error ())
 
 let process_ping_frame t { Frame.frame_header; _ } payload =
   let { Frame.flags; _ } = frame_header in
@@ -932,26 +1068,14 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
     | Active
         ( ( Open (PartialHeaders partial_headers)
           | HalfClosed (PartialHeaders partial_headers) )
-        , active_request ) ->
-      handle_headers_block
-        t
-        stream
-        active_request
-        partial_headers
-        flags
-        headers_block
+        , _ ) ->
+      handle_headers_block t stream partial_headers flags headers_block
     | Active
         ( ( Open (ActiveMessage { trailers_parser = Some partial_headers; _ })
           | HalfClosed
               (ActiveMessage { trailers_parser = Some partial_headers; _ }) )
-        , active_request ) ->
-      handle_trailer_headers
-        t
-        stream
-        active_request
-        partial_headers
-        flags
-        headers_block
+        , _ ) ->
+      handle_trailer_headers t stream partial_headers flags headers_block
     | _ ->
       (* TODO: maybe need to handle the case where the stream has been closed
        * due to a stream error. *)
@@ -979,13 +1103,23 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
  * From RFC7540§1:
  *   HTTP/2 [...] allows interleaving of request and response messages on the
  *   same connection and uses an efficient coding for HTTP header fields. *)
-let create ?(config = Config.default) ~error_handler =
+let create ?(config = Config.default) ?push_handler ~error_handler =
+  let push_handler =
+    match push_handler with
+    | Some push_handler ->
+      push_handler
+    | None ->
+      default_push_handler
+  in
   let settings =
     { Settings.default_settings with
       max_frame_size = config.read_buffer_size
     ; max_concurrent_streams = config.max_concurrent_streams
     ; initial_window_size = config.initial_window_size
-    ; enable_push = config.enable_server_push
+    ; enable_push =
+        (* If the caller is not going to process PUSH_PROMISE frames, just
+         * disable it. *)
+        config.enable_server_push && push_handler != default_push_handler
     }
   in
   let rec preface_handler recv_frame settings_list =
@@ -1047,12 +1181,14 @@ let create ?(config = Config.default) ~error_handler =
            *   Streams initiated by a client MUST use odd-numbered stream
            *   identifiers *)
       ; current_stream_id = -1l
+      ; max_pushed_stream_id = 0l
       ; current_server_streams = 0
       ; receiving_headers_for_stream = None
       ; did_send_go_away = false
       ; unacked_settings = 0
       ; pending_pings = Queue.create ()
       ; error_handler
+      ; push_handler
       ; reader =
           New (Reader.server_connection_preface preface_handler)
           (* TODO: `response_buffer_size`?! *)

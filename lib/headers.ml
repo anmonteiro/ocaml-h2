@@ -284,6 +284,31 @@ let valid_request_headers t = valid_headers t
 
 let valid_response_headers t = valid_headers ~is_request:false t
 
+let method_path_and_scheme_or_malformed headers =
+  match
+    ( get_multi_pseudo headers "method"
+    , get_multi_pseudo headers "scheme"
+    , get_multi_pseudo headers "path" )
+  with
+  | _, [ ("http" | "https") ], [ path ] when String.length path == 0 ->
+    (* From RFC7540§8.1.2.6:
+     *   This pseudo-header field MUST NOT be empty for http or https URIs;
+     *   http or https URIs that do not contain a path component MUST include a
+     *   value of '/'. *)
+    None
+  (* From RFC7540§8.1.2.3:
+   *   All HTTP/2 requests MUST include exactly one valid value for the
+   *   :method, :scheme, and :path pseudo-header fields, unless it is a
+   *   CONNECT request (Section 8.3). *)
+  (* TODO: handle CONNECT requests *)
+  | [ meth ], [ scheme ], [ path ] ->
+    if valid_request_headers headers then
+      Some (meth, path, scheme)
+    else
+      None
+  | _ ->
+    None
+
 let trailers_valid t =
   let invalid =
     exists

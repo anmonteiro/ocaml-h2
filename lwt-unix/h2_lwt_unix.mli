@@ -75,6 +75,8 @@ module Client : sig
 
   val create_connection
     :  ?config:Config.t
+    -> ?push_handler:(Request.t
+                      -> (Client_connection.response_handler, unit) result)
     -> error_handler:Client_connection.error_handler
     -> Lwt_unix.file_descr
     -> t Lwt.t
@@ -94,6 +96,8 @@ module Client : sig
     val create_connection
       :  ?client:Tls_io.client
       -> ?config:Config.t
+      -> ?push_handler:(Request.t
+                        -> (Client_connection.response_handler, unit) result)
       -> error_handler:Client_connection.error_handler
       -> Lwt_unix.file_descr
       -> t Lwt.t
@@ -119,6 +123,8 @@ module Client : sig
     val create_connection
       :  ?client:Ssl_io.client
       -> ?config:Config.t
+      -> ?push_handler:(Request.t
+                        -> (Client_connection.response_handler, unit) result)
       -> error_handler:Client_connection.error_handler
       -> Lwt_unix.file_descr
       -> t Lwt.t

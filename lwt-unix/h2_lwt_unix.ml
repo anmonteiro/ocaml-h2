@@ -160,19 +160,23 @@ module Client = struct
     include H2_lwt.Client (Tls_io.Io)
 
     let create_connection
-        ?client ?(config = Config.default) ~error_handler socket
+        ?client ?(config = Config.default) ?push_handler ~error_handler socket
       =
       Tls_io.make_client ?client socket >>= fun tls_client ->
-      create_connection ~config ~error_handler (socket, tls_client)
+      create_connection
+        ~config
+        ?push_handler
+        ~error_handler
+        (socket, tls_client)
   end
 
   module SSL = struct
     include H2_lwt.Client (Ssl_io.Io)
 
     let create_connection
-        ?client ?(config = Config.default) ~error_handler socket
+        ?client ?(config = Config.default) ?push_handler ~error_handler socket
       =
       Ssl_io.make_client ?client socket >>= fun ssl_client ->
-      create_connection ~config ~error_handler ssl_client
+      create_connection ~config ?push_handler ~error_handler ssl_client
   end
 end

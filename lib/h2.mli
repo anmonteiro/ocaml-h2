@@ -699,15 +699,32 @@ module Client_connection : sig
 
   type error_handler = error -> unit
 
-  val create : ?config:Config.t -> error_handler:error_handler -> t
-  (** [create ?config ~error_handler] creates a connection that can be used to
-      interact with servers over the HTTP/2 protocol. [error_handler] will be
-      called for {e connection level} errors.
+  val create
+    :  ?config:Config.t
+    -> ?push_handler:(Request.t -> (response_handler, unit) result)
+    -> error_handler:error_handler
+    -> t
+  (** [create ?config ?push_handler ~error_handler] creates a connection that
+      can be used to interact with servers over the HTTP/2 protocol.
 
-      HTTP/2 is multiplexed over a single TCP connection and distinguishes
+      [error_handler] will be called for {e connection-level} errors. HTTP/2 is
+      multiplexed over a single TCP connection and distinguishes
       connection-level errors from stream-level errors. See See
       {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for
-      more details. *)
+      more details.
+
+      If present, [push_handler] will be called upon the receipt of
+      PUSH_PROMISE frames with the request promised by the server. This
+      function should return [Ok response_handler] if the client wishes to
+      accept the pushed request. In this case, [response_handler] will be
+      called once the server respondes to the pushed request. Returning
+      [Error ()] will signal to h2 that the client is choosing to reject the
+      request that the server is pushing, and its stream will be closed, as per
+      the following excerpt from the HTTP/2 specification:
+
+      From RFC7540§6.6: Recipients of PUSH_PROMISE frames can choose to reject
+      promised streams by returning a RST_STREAM referencing the promised
+      stream identifier back to the sender of the PUSH_PROMISE. *)
 
   val request
     :  t
