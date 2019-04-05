@@ -23,7 +23,8 @@
     "@opam/alcotest": "*",
     "@opam/hex": "*",
     "@opam/merlin": "*",
-    "@opam/ocamlformat": "*"
+    "@opam/ocamlformat": "*",
+    "@opam/odoc": "*"
   },
   "resolutions": {
     "@opam/conf-libev": "esy-packages/libev:package.json#86d244e",
