@@ -144,10 +144,19 @@ module Client_connection_tests = struct
     match next_write_operation t with
     | `Write iovecs ->
       let lenv = IOVec.lengthv iovecs in
+      Alcotest.(check bool) "Writev length > 0" true (lenv > 0);
       let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
       frames, lenv
     | `Yield | `Close _ ->
       Alcotest.fail "Expected client connection to issue a `Write operation"
+
+  let flush_request t =
+    let _, lenv = flush_pending_writes t in
+    report_write_result t (`Ok lenv);
+    Alcotest.(check write_operation)
+      "Writer yields"
+      `Yield
+      (next_write_operation t)
 
   let handle_preface t =
     let preface_len = String.length preface in
@@ -193,13 +202,7 @@ module Client_connection_tests = struct
         ~error_handler:default_error_handler
         ~response_handler
     in
-    let _, lenv = flush_pending_writes t in
-    Alcotest.(check bool) "Writev length > 0" true (lenv > 0);
-    report_write_result t (`Ok lenv);
-    Alcotest.(check write_operation)
-      "Writer yields"
-      `Yield
-      (next_write_operation t);
+    flush_request t;
     Body.close_writer request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
@@ -238,13 +241,7 @@ module Client_connection_tests = struct
         ~error_handler:default_error_handler
         ~response_handler
     in
-    let _, lenv = flush_pending_writes t in
-    Alcotest.(check bool) "Writev length > 0" true (lenv > 0);
-    report_write_result t (`Ok lenv);
-    Alcotest.(check write_operation)
-      "Writer yields"
-      `Yield
-      (next_write_operation t);
+    flush_request t;
     Body.close_writer request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
@@ -318,13 +315,7 @@ module Client_connection_tests = struct
         ~error_handler:default_error_handler
         ~response_handler
     in
-    let _, lenv = flush_pending_writes t in
-    Alcotest.(check bool) "Writev length > 0" true (lenv > 0);
-    report_write_result t (`Ok lenv);
-    Alcotest.(check write_operation)
-      "Writer yields"
-      `Yield
-      (next_write_operation t);
+    flush_request t;
     Body.close_writer request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
