@@ -70,6 +70,7 @@ type t =
   ; mutable current_server_streams : int
   ; mutable receiving_headers_for_stream : Stream_identifier.t option
   ; mutable did_send_go_away : bool
+  ; mutable unacked_settings : int
   ; pending_pings : (unit -> unit) Queue.t
   ; error_handler : error -> unit
   ; wakeup_writer : (unit -> unit) ref
@@ -195,12 +196,18 @@ let handle_headers t ~end_stream respd active_request headers =
    *   limit to be exceeded MUST treat this as a stream error (Section 5.4.2)
    *   of type PROTOCOL_ERROR or REFUSED_STREAM. *)
   if t.current_server_streams + 1 > t.settings.max_concurrent_streams then
-    (* From RFC7540§8.1.4:
-     *   The REFUSED_STREAM error code can be included in a RST_STREAM frame to
-     *   indicate that the stream is being closed prior to any processing
-     *   having occurred. Any request that was sent on the reset stream can be
-     *   safely retried. *)
-    report_stream_error t respd.Stream.id Error.RefusedStream
+    if t.unacked_settings > 0 then
+      (* From RFC7540§8.1.4:
+       *   The REFUSED_STREAM error code can be included in a RST_STREAM frame to
+       *   indicate that the stream is being closed prior to any processing
+       *   having occurred. Any request that was sent on the reset stream can be
+       *   safely retried.
+       *
+       * Note: if there are pending SETTINGS to acknowledge, assume there was a
+       * race condition and let the client retry. *)
+      report_stream_error t respd.Stream.id Error.RefusedStream
+    else
+      report_stream_error t respd.Stream.id Error.ProtocolError
   else (
     (* From RFC7540§5.1.2:
      *   Scheduler that are in the "open" state or in either of the "half-closed"
@@ -705,12 +712,18 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
 
 let process_settings_frame t { Frame.frame_header; _ } settings =
   let open Scheduler in
-  (* TODO: what to do in the case of receiving an acked SETTINGS frame for
-   * settings we didn't send? *)
   let { Frame.flags; _ } = frame_header in
   (* We already checked that an acked SETTINGS is empty. Don't need to do
    * anything else in that case *)
-  if not Flags.(test_ack flags) then
+  if Flags.(test_ack flags) then (
+    t.unacked_settings <- t.unacked_settings - 1;
+    if t.unacked_settings < 0 then
+      (* The server is ACKing a SETTINGS frame that we didn't send *)
+      let additional_debug_data =
+        "Received SETTINGS with ACK but no ACK was pending"
+      in
+      report_connection_error t ~additional_debug_data Error.ProtocolError)
+  else
     match Settings.check_settings_list settings with
     | None ->
       (* From RFC7540§6.5:
@@ -787,6 +800,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
        *   ACK (0x1): [...] When this bit is set, the payload of the SETTINGS
        *   frame MUST be empty. *)
       Writer.write_settings t.writer frame_info [];
+      t.unacked_settings <- t.unacked_settings + 1;
       wakeup_writer t
     | Some error ->
       handle_error t error
@@ -1036,6 +1050,7 @@ let create ?(config = Config.default) ~error_handler =
       ; current_server_streams = 0
       ; receiving_headers_for_stream = None
       ; did_send_go_away = false
+      ; unacked_settings = 0
       ; pending_pings = Queue.create ()
       ; error_handler
       ; reader =
@@ -1069,12 +1084,11 @@ let create ?(config = Config.default) ~error_handler =
    t.settings.initial_window_size
    > Settings.default_settings.initial_window_size
  then
-     let _diff =
+     let diff =
        t.settings.initial_window_size
        - Settings.default_settings.initial_window_size
      in
-     () (* FIXME: *)
-        (* send_window_update t t.streams diff *));
+     send_window_update t t.streams diff);
   t
 
 let request t request ~error_handler ~response_handler =
