@@ -40,6 +40,7 @@ open Stream
 type error =
   [ `Malformed_response of string
   | `Invalid_response_body_length of Response.t
+  | `Protocol_error
   | `Exn of exn
   ]
 
@@ -198,7 +199,10 @@ let _report_error t s ?response_body exn error_code =
     t.error_code <- (exn :> [ `Ok | error ]), Some error_code;
     t.error_handler exn;
     reset_stream t error_code
-  | `Exn _ | `Invalid_response_body_length _ | `Malformed_response _ ->
+  | `Exn _
+  | `Protocol_error
+  | `Invalid_response_body_length _
+  | `Malformed_response _ ->
     (* XXX: Is this even possible? *)
     failwith "h2.Reqd.report_exn: NYI"
 

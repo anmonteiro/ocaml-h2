@@ -692,6 +692,7 @@ module Client_connection : sig
   type error =
     [ `Malformed_response of string
     | `Invalid_response_body_length of Response.t
+    | `Protocol_error
     | `Exn of exn
     ]
 

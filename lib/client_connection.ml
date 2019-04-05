@@ -47,6 +47,7 @@ end
 type error =
   [ `Malformed_response of string
   | `Invalid_response_body_length of Response.t
+  | `Protocol_error
   | `Exn of exn
   ]
 
@@ -125,7 +126,6 @@ let shutdown t =
 
 let handle_error t = function
   | Error.ConnectionError (error, data) ->
-    (* TODO: this needs to call the connection-level error handler *)
     if not t.did_send_go_away then (
       (* From RFC7540§5.4.1:
        *   An endpoint that encounters a connection error SHOULD first send a
@@ -152,6 +152,7 @@ let handle_error t = function
           else
             t.current_stream_id)
         error;
+      t.error_handler `Protocol_error;
       Writer.flush t.writer (fun () ->
           (* XXX: We need to allow lower numbered streams to complete before
            * shutting down. *)
