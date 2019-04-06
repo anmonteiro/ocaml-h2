@@ -90,6 +90,8 @@ module Client : sig
 
   val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
 
+  val shutdown : t -> unit
+
   module TLS : sig
     type t
 
@@ -115,6 +117,8 @@ module Client : sig
       -> ?off:int
       -> (unit -> unit)
       -> unit
+
+    val shutdown : t -> unit
   end
 
   module SSL : sig
@@ -142,5 +146,7 @@ module Client : sig
       -> ?off:int
       -> (unit -> unit)
       -> unit
+
+    val shutdown : t -> unit
   end
 end

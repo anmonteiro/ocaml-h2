@@ -117,7 +117,7 @@ let shutdown t =
   shutdown_writer t;
   wakeup_writer t
 
-let handle_error t = function
+let report_error t = function
   | Error.ConnectionError (error, data) ->
     if not t.did_send_go_away then (
       (* From RFC7540§5.4.1:
@@ -160,10 +160,10 @@ let handle_error t = function
     wakeup_writer t
 
 let report_connection_error t ?(additional_debug_data = "") error =
-  handle_error t (ConnectionError (error, additional_debug_data))
+  report_error t (ConnectionError (error, additional_debug_data))
 
 let report_stream_error t stream_id error =
-  handle_error t (StreamError (stream_id, error))
+  report_error t (StreamError (stream_id, error))
 
 let set_error_and_handle ?request t stream error error_code =
   assert (is_active t);
@@ -860,7 +860,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       t.unacked_settings <- t.unacked_settings + 1;
       wakeup_writer t
     | Some error ->
-      handle_error t error
+      report_error t error
 
 let process_ping_frame t { Frame.frame_header; _ } payload =
   let { Frame.flags; _ } = frame_header in
@@ -1069,7 +1069,7 @@ let create
     process_settings_frame t recv_frame settings_list
   and frame_handler t = function
     | Error e ->
-      handle_error t e
+      report_error t e
     | Ok ({ Frame.frame_payload; frame_header } as frame) ->
       (match t.receiving_headers_for_stream with
       | Some stream_id
@@ -1165,7 +1165,7 @@ let next_read_operation t =
         Error.ProtocolError;
       `Close
     | Active _ ->
-      handle_error t e;
+      report_error t e;
       (match e with
       | ConnectionError _ ->
         (* From RFC7540§5.4.1:

@@ -120,11 +120,11 @@ let shutdown_writer t =
   flush_request_body t;
   Writer.close t.writer
 
-let shutdown t =
+let shutdown_rw t =
   shutdown_reader t;
   shutdown_writer t
 
-let handle_error t = function
+let report_error t = function
   | Error.ConnectionError (error, data) ->
     if not t.did_send_go_away then (
       (* From RFC7540§5.4.1:
@@ -152,11 +152,12 @@ let handle_error t = function
           else
             t.current_stream_id)
         error;
-      t.error_handler `Protocol_error;
+      if error <> Error.NoError then
+        t.error_handler `Protocol_error;
       Writer.flush t.writer (fun () ->
           (* XXX: We need to allow lower numbered streams to complete before
            * shutting down. *)
-          shutdown t);
+          shutdown_rw t);
       t.did_send_go_away <- true;
       wakeup_writer t)
   | StreamError (stream_id, error) ->
@@ -176,10 +177,12 @@ let handle_error t = function
     wakeup_writer t
 
 let report_connection_error t ?(additional_debug_data = "") error =
-  handle_error t (ConnectionError (error, additional_debug_data))
+  report_error t (ConnectionError (error, additional_debug_data))
 
 let report_stream_error t stream_id error =
-  handle_error t (StreamError (stream_id, error))
+  report_error t (StreamError (stream_id, error))
+
+let shutdown t = report_connection_error t Error.NoError
 
 let set_error_and_handle t stream error error_code =
   Respd.report_error stream error error_code;
@@ -862,7 +865,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       t.unacked_settings <- t.unacked_settings + 1;
       wakeup_writer t
     | Some error ->
-      handle_error t error
+      report_error t error
 
 let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block
   =
@@ -981,7 +984,7 @@ let process_goaway_frame t _frame payload =
   Bigstringaf.unsafe_blit_to_bytes debug_data ~src_off:0 bytes ~dst_off:0 ~len;
   (* TODO(anmonteiro): I think we need to allow lower numbered streams to
    * complete. *)
-  shutdown t
+  shutdown_rw t
 
 let add_window_increment : type a.
     t -> a Scheduler.PriorityTreeNode.node -> int -> unit
@@ -1122,7 +1125,7 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
     process_settings_frame t recv_frame settings_list
   and frame_handler t = function
     | Error e ->
-      handle_error t e
+      report_error t e
     | Ok ({ Frame.frame_payload; frame_header } as frame) ->
       (match t.receiving_headers_for_stream with
       | Some stream_id
@@ -1295,7 +1298,7 @@ let next_read_operation t =
         Error.ProtocolError;
       `Close
     | Active _ ->
-      handle_error t e;
+      report_error t e;
       (match e with
       | ConnectionError _ ->
         (* From RFC7540§5.4.1:
