@@ -210,11 +210,9 @@ let report_error t exn error_code =
       ( ( Open (ActiveMessage { response_body; _ })
         | HalfClosed (ActiveMessage { response_body; _ }) )
       , s ) ->
-    (* TODO: flush the request body *)
     Body.close_writer s.request_body;
     _report_error t ~response_body exn error_code
   | Reserved (ActiveMessage s) | Active (_, s) ->
-    (* TODO: flush the request body *)
     Body.close_writer s.request_body;
     _report_error t exn error_code
   | Idle | Reserved _ | Closed _ ->

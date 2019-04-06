@@ -677,7 +677,100 @@ module Client_connection_tests = struct
       true
       !error_handler_called
 
-  (* TODO: test ping, including multiple pings and their order (FIFO) *)
+  let test_stream_transitions_state () =
+    let t =
+      create
+        ?config:None
+        ?push_handler:None
+        ~error_handler:default_error_handler
+    in
+    handle_preface t;
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let handler_called = ref false in
+    let response_handler _response _response_body = handler_called := true in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~error_handler:default_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    let stream = opt_exn (Scheduler.find t.streams 1l) in
+    Alcotest.(check bool)
+      "Stream is in the open state"
+      true
+      (Stream.is_open stream);
+    Body.close_writer request_body;
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
+    let frame = List.hd frames in
+    Alcotest.(check int)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      (Frame.FrameType.serialize Data)
+      Frame.(frame.frame_header.frame_type |> FrameType.serialize);
+    Alcotest.(check bool)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      true
+      (Flags.test_end_stream frame.frame_header.flags);
+    report_write_result t (`Ok lenv);
+    Alcotest.(check bool)
+      "Stream is in the half-closed (local) state after closing the request \
+       body"
+      true
+      (not (Stream.is_open stream));
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    write_response t hpack_encoder (Response.create `OK);
+    Alcotest.(check bool) "Response handler called" true !handler_called;
+    Alcotest.(check bool)
+      "Stream transitions to the closed state once the response has been \
+       received"
+      true
+      (Stream.closed stream <> None)
+
+  let test_ping () =
+    let t =
+      create
+        ?config:None
+        ?push_handler:None
+        ~error_handler:default_error_handler
+    in
+    handle_preface t;
+    let ping_handler1_called = ref false in
+    let ping_handler2_called = ref false in
+    let ping_handler ref () = ref := true in
+    ping t (ping_handler ping_handler1_called);
+    ping t (ping_handler ping_handler2_called);
+    let writer = Writer.create 256 in
+    let frame_info =
+      Writer.make_frame_info ~flags:Flags.(set_ack default_flags) 0l
+    in
+    Writer.write_ping writer frame_info Serialize.default_ping_payload;
+    let ping_wire = Faraday.serialize_to_bigstring (Writer.faraday writer) in
+    let ping_length = Bigstringaf.length ping_wire in
+    let read_ping = read t ~off:0 ~len:ping_length ping_wire in
+    Alcotest.(check int)
+      "Read the entire ping frame of the response"
+      ping_length
+      read_ping;
+    Alcotest.(check bool)
+      "First ping handler called"
+      true
+      !ping_handler1_called;
+    Alcotest.(check bool)
+      "Only the first ping handler called"
+      false
+      !ping_handler2_called;
+    let read_ping = read t ~off:0 ~len:ping_length ping_wire in
+    Alcotest.(check int)
+      "Read the entire ping frame of the response"
+      ping_length
+      read_ping;
+    Alcotest.(check bool)
+      "Second ping handler called"
+      true
+      !ping_handler2_called
+
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
@@ -688,11 +781,15 @@ module Client_connection_tests = struct
       , test_stream_level_protocol_error )
     ; "stream error on idle stream", `Quick, test_stream_error_on_idle_stream
     ; "continuation frame (success)", `Quick, test_continuation_frame
+    ; ( "stream correctly transitions state"
+      , `Quick
+      , test_stream_transitions_state )
     ; ( "continuation frame on another stream"
       , `Quick
       , test_continuation_frame_other_stream )
     ; "push handler successful response", `Quick, test_push_handler_success
     ; "push handler cancels push", `Quick, test_push_handler_cancel
+    ; "ping", `Quick, test_ping
     ]
 end
 
