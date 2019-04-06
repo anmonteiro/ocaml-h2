@@ -1,6 +1,9 @@
 Unreleased
 --------------
 
+0.2.0 2019-04-06
+--------------
+
 - h2: Fix false negative related to receiving trailer headers with CONTINUATION
   frames ([#11](https://github.com/anmonteiro/ocaml-h2/pull/11))
 - hpack: Fix bug where trying to add an entry to an HPACK dynamic table with 0
