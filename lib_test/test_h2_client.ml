@@ -771,7 +771,6 @@ module Client_connection_tests = struct
       true
       !ping_handler2_called
 
-  (* TODO: test ping, including multiple pings and their order (FIFO) *)
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
