@@ -15,6 +15,8 @@ Unreleased
   ([#18](https://github.com/anmonteiro/ocaml-h2/pull/18))
 - h2: Track SETTINGS frames that haven't been acknowledged by the peer
   ([#22](https://github.com/anmonteiro/ocaml-h2/pull/22))
+- h2: Don't treat `CONNECT` requests as malformed
+  ([#32](https://github.com/anmonteiro/ocaml-h2/pull/32))
 
 0.1.0 2019-03-27
 --------------
