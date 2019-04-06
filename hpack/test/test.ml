@@ -269,6 +269,31 @@ let test_evicting_table_size_0 () =
     hs
     decoded_headers
 
+let test_evicting_table_size_0_followup () =
+  let hs =
+    [ { name = ":method"; value = "GET"; sensitive = false }
+    ; { name = "field_not_indexed"; value = "foo"; sensitive = false }
+    ; { name = "yet_another_field_not_indexed"
+      ; value = "baz"
+      ; sensitive = false
+      }
+    ]
+  in
+  let encoder = Encoder.create 60 in
+  let encoded_headers = encode_headers encoder hs in
+  Alcotest.(check bool)
+    "Encodes to non-zero hex"
+    true
+    (String.length encoded_headers > 0);
+  let decoder = Decoder.create 60 in
+  let decoded_headers = decode_headers decoder 60 encoded_headers in
+  List.iter2
+    (fun h1 h2 ->
+      Alcotest.(check header_testable "Decoded headers are roundtripped" h1 h2)
+      )
+    hs
+    decoded_headers
+
 let () =
   let fixtures_dir = "hpack-test-case" in
   let raw_data_dir = Filename.concat fixtures_dir "raw-data" in
@@ -287,9 +312,12 @@ let () =
   let suites = gen_suites fixtures in
   Alcotest.run
     "HPACK"
-    (( "Hand coded HPACK tests"
+    (( "Handcrafted HPACK tests"
      , [ ( "Evictions from the dynamic table with 0 capacity"
          , `Quick
          , test_evicting_table_size_0 )
+       ; ( "Evictions from the dynamic table with 0 capacity (followup test)"
+         , `Quick
+         , test_evicting_table_size_0_followup )
        ] )
     :: suites)

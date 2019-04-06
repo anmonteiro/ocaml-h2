@@ -116,10 +116,9 @@ let add ({ max_size; _ } as table) (name, value) =
    *   from the end of the dynamic table until the size of the dynamic table is
    *   less than or equal to (maximum size - new entry size) or until the table
    *   is empty. *)
-  if table.size > 0 then
-    while table.size + entry_size > max_size do
-      evict_one table
-    done;
+  while table.size > 0 && table.size + entry_size > max_size do
+    evict_one table
+  done;
   (* From RFC7541§4.4:
    *   If the size of the new entry is less than or equal to the maximum size,
    *   that entry is added to the table. *)
