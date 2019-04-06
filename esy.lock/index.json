@@ -1,5 +1,5 @@
 {
-  "checksum": "c69d579093bda32c68fcec21dd1b8157",
+  "checksum": "9ed1d7221267abe4af93178d4fa51401",
   "root": "h2@link-dev:./esy.json",
   "node": {
     "yarn-pkg-config@github:esy-ocaml/yarn-pkg-config#d488cd9321cd5036bd36ec96744ce78c5d45fc49@d41d8cd9": {
@@ -42,6 +42,7 @@
         "ocaml@4.7.1004@d41d8cd9", "@opam/psq@opam:0.1.0@39232a4d",
         "@opam/mirage-conduit@opam:3.1.0@8cff99f9",
         "@opam/lwt_ssl@opam:1.1.2@ac833920", "@opam/lwt@opam:4.2.1@c1888ec9",
+        "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#25149c6@d41d8cd9",
         "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#53042e5@d41d8cd9",
         "@opam/faraday-lwt-unix@opam:0.7.0@b0dea04f",
         "@opam/faraday@opam:0.7.0@6026a81f",
@@ -2043,6 +2044,29 @@
       ],
       "devDependencies": [
         "ocaml@4.7.1004@d41d8cd9", "@opam/cstruct@opam:4.0.0@27f747cf"
+      ]
+    },
+    "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#25149c6@d41d8cd9": {
+      "id":
+        "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#25149c6@d41d8cd9",
+      "name": "@opam/httpaf-lwt",
+      "version": "github:anmonteiro/httpaf:httpaf-lwt.opam#25149c6",
+      "source": {
+        "type": "install",
+        "source": [ "github:anmonteiro/httpaf:httpaf-lwt.opam#25149c6" ]
+      },
+      "overrides": [],
+      "dependencies": [
+        "ocaml@4.7.1004@d41d8cd9", "@opam/tls@opam:0.10.2@76ef72ee",
+        "@opam/lwt_ssl@opam:1.1.2@ac833920", "@opam/lwt@opam:4.2.1@c1888ec9",
+        "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#53042e5@d41d8cd9",
+        "@opam/faraday-lwt-unix@opam:0.7.0@b0dea04f",
+        "@opam/dune@opam:1.8.2@511996a8", "@esy-ocaml/substs@0.0.1@d41d8cd9"
+      ],
+      "devDependencies": [
+        "ocaml@4.7.1004@d41d8cd9", "@opam/lwt@opam:4.2.1@c1888ec9",
+        "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#53042e5@d41d8cd9",
+        "@opam/faraday-lwt-unix@opam:0.7.0@b0dea04f"
       ]
     },
     "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#53042e5@d41d8cd9": {

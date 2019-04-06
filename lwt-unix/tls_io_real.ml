@@ -106,7 +106,7 @@ end
 
 type client = Tls_lwt.Unix.t
 
-type server = Tls.Config.server
+type server = Tls_lwt.Unix.t
 
 let make_client ?client socket =
   match client with
@@ -121,24 +121,27 @@ let make_client ?client socket =
     Tls_lwt.Unix.client_of_fd config socket
 
 let make_server ?server ?certfile ?keyfile socket =
-  let config =
+  let server =
     match server, certfile, keyfile with
     | Some server, _, _ ->
       Lwt.return server
     | None, Some cert, Some priv_key ->
-      X509_lwt.private_of_pems ~cert ~priv_key >|= fun certificate ->
-      Tls.Config.server
-        ~alpn_protocols:[ "h2" ]
-        ~certificates:
-          (`Single certificate) (* ~version:Tls.Core.(TLS_1_2, TLS_1_2) *)
-        ~ciphers:
-          (List.filter
-             Tls.Ciphersuite.ciphersuite_tls12_only
-             Tls.Config.Ciphers.supported)
-        ()
+      X509_lwt.private_of_pems ~cert ~priv_key >>= fun certificate ->
+      let config =
+        Tls.Config.server
+          ~alpn_protocols:[ "h2" ]
+          ~certificates:
+            (`Single certificate) (* ~version:Tls.Core.(TLS_1_2, TLS_1_2) *)
+          ~ciphers:
+            (List.filter
+               Tls.Ciphersuite.ciphersuite_tls12_only
+               Tls.Config.Ciphers.supported)
+          ()
+      in
+      Tls_lwt.Unix.server_of_fd config socket
     | _ ->
       Lwt.fail
         (Invalid_argument
            "Certfile and Keyfile required when server isn't provided")
   in
-  config >>= fun config -> Tls_lwt.Unix.server_of_fd config socket
+  server
