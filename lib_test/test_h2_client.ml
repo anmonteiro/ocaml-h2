@@ -110,16 +110,31 @@ module Client_connection_tests = struct
     Writer.write_settings writer frame_info [];
     Faraday.serialize_to_string (Serialize.Writer.faraday writer)
 
+  let read_frames conn frames =
+    List.iter
+      (fun frame ->
+        let frame_wire = Test_common.serialize_frame frame in
+        let frame_length = Bigstringaf.length frame_wire in
+        let read_frame = read conn ~off:0 ~len:frame_length frame_wire in
+        Alcotest.(check int) "Read the entire frame" frame_length read_frame)
+      frames
+
   let write_response
       t
       hpack_encoder
+      ?priority
       ?(stream_id = 1l)
       ?(flags = Flags.(default_flags |> set_end_stream |> set_end_header))
       response
     =
     let writer = Writer.create 4096 in
     let frame_info = Writer.make_frame_info ~flags stream_id in
-    Writer.write_response_headers writer hpack_encoder frame_info response;
+    Writer.write_response_headers
+      ?priority
+      writer
+      hpack_encoder
+      frame_info
+      response;
     let headers_wire =
       Faraday.serialize_to_bigstring (Writer.faraday writer)
     in
@@ -129,6 +144,20 @@ module Client_connection_tests = struct
       "Read the entire HEADERS frame of the response"
       headers_length
       read_headers
+
+  let write_response_body
+      t ?(stream_id = 1l) ?(flags = Flags.(default_flags |> set_end_stream)) s
+    =
+    let writer = Writer.create 4096 in
+    let frame_info = Writer.make_frame_info ~flags stream_id in
+    Writer.write_data writer frame_info s;
+    let data_wire = Faraday.serialize_to_bigstring (Writer.faraday writer) in
+    let data_length = Bigstringaf.length data_wire in
+    let read_data = read t ~off:0 ~len:data_length data_wire in
+    Alcotest.(check int)
+      "Read the entire DATA frame of the response body"
+      data_length
+      read_data
 
   let flush_pending_writes t =
     match next_write_operation t with
@@ -147,15 +176,6 @@ module Client_connection_tests = struct
       "Writer yields"
       `Yield
       (next_write_operation t)
-
-  let read_frames conn frames =
-    List.iter
-      (fun frame ->
-        let frame_wire = Test_common.serialize_frame frame in
-        let frame_length = Bigstringaf.length frame_wire in
-        let read_frame = read conn ~off:0 ~len:frame_length frame_wire in
-        Alcotest.(check int) "Read the entire frame" frame_length read_frame)
-      frames
 
   (* Well-formed HEADERS + CONTINUATION frames. *)
   let header_and_continuation_frames =
@@ -242,6 +262,117 @@ module Client_connection_tests = struct
     let hpack_encoder = Hpack.Encoder.create 4096 in
     write_response t hpack_encoder (Response.create `OK);
     Alcotest.(check bool) "Response handler called" true !handler_called
+
+  let test_data_larger_than_reported () =
+    let t =
+      create
+        ?config:None
+        ?push_handler:None
+        ~error_handler:default_error_handler
+    in
+    handle_preface t;
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let response_handler _response _response_body = () in
+    let error_handler_called = ref false in
+    let stream_level_error_handler error =
+      error_handler_called := true;
+      match error with
+      | `Invalid_response_body_length _response ->
+        Alcotest.(check pass)
+          "Stream error handler gets an invalid response body length"
+          true
+          true
+      | _ ->
+        Alcotest.fail "Expected stream error handler to pass"
+    in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~error_handler:stream_level_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    Body.close_writer request_body;
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
+    let frame = List.hd frames in
+    Alcotest.(check int)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      (Frame.FrameType.serialize Data)
+      Frame.(frame.frame_header.frame_type |> FrameType.serialize);
+    Alcotest.(check bool)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      true
+      (Flags.test_end_stream frame.frame_header.flags);
+    report_write_result t (`Ok lenv);
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    write_response
+      t
+      hpack_encoder
+      ~flags:Flags.(default_flags |> set_end_header)
+      (Response.create `OK ~headers:(Headers.of_list [ "content-length", "2" ]));
+    write_response_body t "foo";
+    Alcotest.(check bool)
+      "Stream level error handler called"
+      true
+      !error_handler_called
+
+  let test_stream_level_protocol_error () =
+    let t =
+      create
+        ?config:None
+        ?push_handler:None
+        ~error_handler:default_error_handler
+    in
+    handle_preface t;
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let response_handler _response _response_body = () in
+    let error_handler_called = ref false in
+    let stream_level_error_handler error =
+      error_handler_called := true;
+      match error with
+      | `Protocol_error ->
+        Alcotest.(check pass)
+          "Stream error handler gets a protocol error"
+          ()
+          ()
+      | _ ->
+        Alcotest.fail "Expected stream error handler to pass"
+    in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~error_handler:stream_level_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    Body.close_writer request_body;
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
+    let frame = List.hd frames in
+    Alcotest.(check int)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      (Frame.FrameType.serialize Data)
+      Frame.(frame.frame_header.frame_type |> FrameType.serialize);
+    Alcotest.(check bool)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      true
+      (Flags.test_end_stream frame.frame_header.flags);
+    report_write_result t (`Ok lenv);
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    write_response
+      t
+      hpack_encoder
+      ~priority:
+        (* depend on itself *)
+        { Priority.default_priority with stream_dependency = 1l }
+      (Response.create `OK ~headers:(Headers.of_list [ "content-length", "2" ]));
+    Alcotest.(check bool)
+      "Stream level error handler called"
+      true
+      !error_handler_called
 
   let test_continuation_frame () =
     let t =
@@ -500,13 +631,62 @@ module Client_connection_tests = struct
       true
       (Frame.RSTStream Error.Cancel = frame.frame_payload)
 
-  (* TODO: test data larger than content length *)
+  let test_stream_error_on_idle_stream () =
+    let t =
+      create
+        ?config:None
+        ?push_handler:None
+        ~error_handler:default_error_handler
+    in
+    handle_preface t;
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let error_handler_called = ref false in
+    let stream_level_error_handler error =
+      error_handler_called := true;
+      match error with
+      | `Protocol_error ->
+        Alcotest.(check pass)
+          "Stream error handler gets a protocol error"
+          ()
+          ()
+      | _ ->
+        Alcotest.fail "Expected stream error handler to pass"
+    in
+    let response_handler _response _response_body = () in
+    let _request_body =
+      Client_connection.request
+        t
+        request
+        ~error_handler:stream_level_error_handler
+        ~response_handler
+    in
+    let frame_info = Writer.make_frame_info 1l in
+    (* depend on itself *)
+    let priority = { Priority.default_priority with stream_dependency = 1l } in
+    let writer = Writer.create 256 in
+    Writer.write_priority writer frame_info priority;
+    let wire = Faraday.serialize_to_bigstring (Writer.faraday writer) in
+    let wire_length = Bigstringaf.length wire in
+    let read_priority = read t ~off:0 ~len:wire_length wire in
+    Alcotest.(check int)
+      "Read the entire PRIORITY frame"
+      wire_length
+      read_priority;
+    Alcotest.(check bool)
+      "Stream error handler called"
+      true
+      !error_handler_called
+
   (* TODO: test ping, including multiple pings and their order (FIFO) *)
-  (* TODO: test stream-level error handler is called *)
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
     ; "simple GET request", `Quick, test_simple_get_request
+    ; "data larger than declared", `Quick, test_data_larger_than_reported
+    ; ( "stream error handler gets called on stream-level protocol errors"
+      , `Quick
+      , test_stream_level_protocol_error )
+    ; "stream error on idle stream", `Quick, test_stream_error_on_idle_stream
     ; "continuation frame (success)", `Quick, test_continuation_frame
     ; ( "continuation frame on another stream"
       , `Quick

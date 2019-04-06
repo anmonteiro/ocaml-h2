@@ -165,8 +165,8 @@ let handle_error t = function
      * forget to handle streams in the Reserved state (for which there is no
      * error handler). *)
     (match Scheduler.find t.streams stream_id with
-    | Some reqd ->
-      Stream.reset_stream reqd error
+    | Some respd ->
+      Respd.report_error respd `Protocol_error error
     | None ->
       (* Possible if the stream was going to enter the Idle state (first time
        * we saw e.g. a PRIORITY frame for it) but had e.g. a

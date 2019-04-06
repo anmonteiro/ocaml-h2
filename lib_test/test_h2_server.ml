@@ -726,7 +726,7 @@ module Server_connection_tests = struct
       (Reader.next (reader t))
 
   (* TODO: test for trailer headers. *)
-  (* TODO: test graceful shutdown, allowing lower numbered streas to complete. *)
+  (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof

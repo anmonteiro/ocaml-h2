@@ -184,7 +184,7 @@ let close_stream t =
   | _ ->
     ()
 
-let _report_error t s ?response_body exn error_code =
+let _report_error t ?response_body exn error_code =
   match fst t.error_code with
   | `Ok ->
     (match response_body with
@@ -194,8 +194,6 @@ let _report_error t s ?response_body exn error_code =
       Body.execute_read response_body
     | None ->
       ());
-    (* TODO: flush the request body *)
-    Body.close_writer s.request_body;
     t.error_code <- (exn :> [ `Ok | error ]), Some error_code;
     t.error_handler exn;
     reset_stream t error_code
@@ -208,22 +206,19 @@ let _report_error t s ?response_body exn error_code =
 
 let report_error t exn error_code =
   match t.state with
-  | Idle
-  | Reserved _
-  | Active
-      ( ( Open (WaitingForPeer | PartialHeaders _)
-        | HalfClosed (WaitingForPeer | PartialHeaders _) )
-      , _ ) ->
-    assert false
-  | Active ((Open FullHeaders | HalfClosed FullHeaders), s) ->
-    _report_error t s exn error_code
   | Active
       ( ( Open (ActiveMessage { response_body; _ })
         | HalfClosed (ActiveMessage { response_body; _ }) )
       , s ) ->
-    _report_error t s ~response_body exn error_code
-  | Closed _ ->
-    ()
+    (* TODO: flush the request body *)
+    Body.close_writer s.request_body;
+    _report_error t ~response_body exn error_code
+  | Reserved (ActiveMessage s) | Active (_, s) ->
+    (* TODO: flush the request body *)
+    Body.close_writer s.request_body;
+    _report_error t exn error_code
+  | Idle | Reserved _ | Closed _ ->
+    _report_error t exn error_code
 
 let close_request_body { request_body; _ } = Body.close_reader request_body
 
