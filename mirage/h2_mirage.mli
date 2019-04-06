@@ -72,4 +72,6 @@ module Client : sig
     -> [ `write ] Body.t
 
   val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
+
+  val shutdown : t -> unit
 end

@@ -278,4 +278,6 @@ module Client (Io: IO) = struct
   let request = Client_connection.request
 
   let ping = Client_connection.ping
+
+  let shutdown = Client_connection.shutdown
 end

@@ -72,7 +72,6 @@ module Server (Io : IO) : sig
     -> unit Lwt.t
 end
 
-(* TODO: shutdown function? *)
 module Client (Io : IO) : sig
   type t
 
@@ -92,4 +91,6 @@ module Client (Io : IO) : sig
     -> [ `write ] Body.t
 
   val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
+
+  val shutdown : t -> unit
 end

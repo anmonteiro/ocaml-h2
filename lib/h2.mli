@@ -758,6 +758,12 @@ module Client_connection : sig
       {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for
       more details. *)
 
+  val shutdown : t -> unit
+  (** [shutdown connection] initiates the graceful shutdown of [connection],
+      and sends an HTTP/2 GOAWAY frame with NO_ERROR on the output channel (See
+      {{:https://tools.ietf.org/html/rfc7540#section-6.8} RFC7540§6.8} for
+      more details) . *)
+
   val next_read_operation : t -> [ `Read | `Close ]
   (** [next_read_operation t] returns a value describing the next operation
       that the caller should conduct on behalf of the connection. *)
@@ -807,10 +813,4 @@ module Client_connection : sig
       connection. *)
 
   val is_closed : t -> bool
-
-  (**/**)
-
-  val shutdown : t -> unit
-
-  (**/**)
 end
