@@ -196,13 +196,13 @@ let handle_push_promise_headers t respd headers =
    *   MUST be a valid and complete set of request header fields (Section
    *   8.1.2.3). *)
   match Headers.method_path_and_scheme_or_malformed headers with
-  | None ->
+  | `Malformed ->
     (* From RFC7540§8.2.2:
      *   If a client receives a PUSH_PROMISE that does not include a complete
      *   and valid set of header fields [...] it MUST respond with a stream
      *   error (Section 5.4.2) of type PROTOCOL_ERROR. *)
     report_stream_error t respd.Stream.id Error.ProtocolError
-  | Some (meth, path, scheme) ->
+  | `Valid (meth, path, scheme) ->
     let meth = Httpaf.Method.of_string meth in
     (match
        ( meth

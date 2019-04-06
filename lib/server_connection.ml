@@ -247,12 +247,12 @@ let handle_headers t ~end_stream reqd headers =
     reqd.state <- Stream.(Active (Open FullHeaders, active_stream));
     t.current_client_streams <- t.current_client_streams + 1;
     match Headers.method_path_and_scheme_or_malformed headers with
-    | None ->
+    | `Malformed ->
       (* From RFC7540§8.1.2.6:
        *   For malformed requests, a server MAY send an HTTP response prior to
        *   closing or resetting the stream. *)
       set_error_and_handle t reqd `Bad_request ProtocolError
-    | Some (meth, path, scheme) ->
+    | `Valid (meth, path, scheme) ->
       (match end_stream, Message.body_length headers with
       | true, `Fixed len when Int64.compare len 0L != 0 ->
         (* From RFC7540§8.1.2.6:
