@@ -35,7 +35,6 @@
 type t =
   { read_buffer_size : int
   ; request_body_buffer_size : int
-  ; response_buffer_size : int
   ; response_body_buffer_size : int
   ; enable_server_push : bool
   ; max_concurrent_streams : int
@@ -58,10 +57,8 @@ let default =
      *   endpoint MUST be between this initial value and the maximum allowed
      *   frame size (2^24-1 or 16,777,215 octets), inclusive. *)
     read_buffer_size = Settings.default_settings.max_frame_size
-  ; request_body_buffer_size =
-      0x1000 (* The buffer size for the response writer *)
-  ; response_buffer_size = 0x400 (* The buffer size for response bodies *)
-  ; response_body_buffer_size = 0x1000
+  ; request_body_buffer_size = 0x1000 (* Buffer size for request bodies *)
+  ; response_body_buffer_size = 0x1000 (* Buffer size for response bodies *)
   ; enable_server_push =
       true
       (* From RFC7540§6.5.2:
