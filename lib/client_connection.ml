@@ -510,7 +510,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
           stream_id >= t.current_stream_id && is_request stream_id)
       then
         report_stream_error t stream_id Error.StreamClosed
-    | Some (Stream { descriptor; _ } as stream) ->
+    | Some (Scheduler.Stream { descriptor; _ } as stream) ->
       (match descriptor.state with
       | Idle ->
         (* From RFC7540§6.2:

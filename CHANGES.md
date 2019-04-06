@@ -18,7 +18,8 @@ Unreleased
 - h2: Don't treat `CONNECT` requests as malformed
   ([#32](https://github.com/anmonteiro/ocaml-h2/pull/32),
   [#34](https://github.com/anmonteiro/ocaml-h2/pull/34))
-- h2: Fix frame writer not respecting the MAX\_FRAME\_SIZE setting
+- h2: Respect the initial MAX\_FRAME\_SIZE setting when allocating the
+  underlying buffer for the frame writer
   ([#34](https://github.com/anmonteiro/ocaml-h2/pull/34))
 
 0.1.0 2019-03-27
