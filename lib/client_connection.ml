@@ -53,8 +53,6 @@ type error =
 
 type response_handler = Response.t -> [ `read ] Body.t -> unit
 
-(* TODO: we'll need a connection-level error handler that terminates the
- * connection and one for each individual stream. *)
 type error_handler = error -> unit
 
 type reader_state =
@@ -161,10 +159,6 @@ let report_error t = function
       t.did_send_go_away <- true;
       wakeup_writer t)
   | StreamError (stream_id, error) ->
-    (* TODO: This branch probably needs to report the error to the stream error
-     * handler, and additionally deliver EOF to the response body. Should not
-     * forget to handle streams in the Reserved state (for which there is no
-     * error handler). *)
     (match Scheduler.find t.streams stream_id with
     | Some respd ->
       Respd.report_error respd `Protocol_error error
@@ -292,13 +286,16 @@ let handle_response_headers t respd ~end_stream active_request headers =
         if end_stream then
           Body.empty
         else
-          match body_length with
-          | `Fixed n ->
-            Body.create (Bigstringaf.create (Int64.to_int n))
-          | `Error _ | `Unknown ->
-            (* Not sure how much data we're gonna get. Delay the allocation
-             * until we get a data frame. *)
-            Body.create Bigstringaf.empty
+          let buffer_size =
+            match body_length with
+            | `Fixed n ->
+              Int64.to_int n
+            | `Error _ | `Unknown ->
+              (* Not sure how much data we're gonna get. Use the configured
+               * value for [response_body_buffer_size]. *)
+              t.config.response_body_buffer_size
+          in
+          Body.create (Bigstringaf.create buffer_size)
       in
       let new_response_state =
         Respd.create_active_response response response_body
@@ -440,21 +437,26 @@ let create_partial_headers t flags headers_block =
   ; end_stream = Flags.test_end_stream flags
   }
 
-(* TODO: reprioritize stream? *)
 let handle_first_response_bytes
-    t respd active_request frame_header ?priority:_ headers_block
+    t stream active_request frame_header ?priority headers_block
   =
+  let (Scheduler.Stream { descriptor; _ }) = stream in
   let { Frame.flags; stream_id; _ } = frame_header in
   let partial_headers = create_partial_headers t flags headers_block in
   let remote_state = Stream.PartialHeaders partial_headers in
-  respd.Stream.state
-  <- (if Stream.is_open respd then
+  descriptor.Stream.state
+  <- (if Stream.is_open descriptor then
         Active (Open remote_state, active_request)
      else
        Active (HalfClosed remote_state, active_request));
   if not (Flags.test_end_header flags) then
     t.receiving_headers_for_stream <- Some stream_id;
-  handle_headers_block t respd partial_headers flags headers_block
+  (match priority with
+  | None ->
+    ()
+  | Some priority ->
+    Scheduler.reprioritize_stream t.streams ~priority stream);
+  handle_headers_block t descriptor partial_headers flags headers_block
 
 let process_trailer_headers t respd active_response frame_header headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
@@ -494,15 +496,22 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
      *   stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
     report_stream_error t stream_id Error.ProtocolError
   | _ ->
-    (match Scheduler.find t.streams stream_id with
+    (match Scheduler.get_node t.streams stream_id with
     | None ->
-      (* TODO: What does it mean to receive a response for a stream that's no
-       * longer in the priority tree? Either:
-       * 1. we canceled a request and the response was already in flight.
-       * 2. we're getting a response for a request we didn't send?! *)
-      assert false
-    | Some respd ->
-      (match respd.state with
+      (* If we're receiving a response for a stream that's no longer in the
+       * priority tree, assume this is a network race - we canceled a request
+       * but a responnse was already in flight.
+       *
+       * However, if the stream identifer is greater than the largest stream
+       * identifier we have produced, they should know better. In this case,
+       * send an RST_STREAM. *)
+      if
+        Stream_identifier.(
+          stream_id >= t.current_stream_id && is_request stream_id)
+      then
+        report_stream_error t stream_id Error.StreamClosed
+    | Some (Stream { descriptor; _ } as stream) ->
+      (match descriptor.state with
       | Idle ->
         (* From RFC7540§6.2:
          *   HEADERS frames can be sent on a stream in the "idle", "reserved
@@ -513,7 +522,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
         ->
         handle_first_response_bytes
           t
-          respd
+          stream
           active_request
           frame_header
           ?priority
@@ -531,7 +540,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
           , _ ) ->
         process_trailer_headers
           t
-          respd
+          descriptor
           active_response
           frame_header
           headers_block
@@ -1185,10 +1194,8 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
       ; pending_pings = Queue.create ()
       ; error_handler
       ; push_handler
-      ; reader =
-          New (Reader.server_connection_preface preface_handler)
-          (* TODO: `response_buffer_size`?! *)
-      ; writer = Writer.create Config.default.response_buffer_size
+      ; reader = New (Reader.server_connection_preface preface_handler)
+      ; writer = Writer.create settings.max_frame_size
       ; streams = Scheduler.make_root ()
       ; wakeup_writer =
           ref default_wakeup_writer
@@ -1250,8 +1257,10 @@ let request t request ~error_handler ~response_handler =
       <- Active
            (Open WaitingForPeer, { request; request_body; response_handler }));
   wakeup_writer t;
-  (* TODO: closing the request body puts the stream on half-closed (local)
-   * state *)
+  (* Closing the request body puts the stream in the half-closed (local) state.
+   * This is handled by {!Respd.flush_request_body}, which transitions the
+   * state once it verifies that there's no more data to send for the
+   * stream. *)
   request_body
 
 (* XXX: we store PING callbacks in FIFO order. Would it ever be the case that

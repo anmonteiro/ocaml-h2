@@ -484,15 +484,17 @@ module Writer = struct
       ; value = Httpaf.Method.to_string meth
       ; sensitive = false
       };
-    Hpack.Encoder.encode_header
-      hpack_encoder
-      faraday
-      { Headers.name = ":path"; value = target; sensitive = false };
-    (* TODO: scheme not required if method is CONNECT *)
-    Hpack.Encoder.encode_header
-      hpack_encoder
-      faraday
-      { Headers.name = ":scheme"; value = scheme; sensitive = false };
+    if meth <> `CONNECT then (
+      (* From RFC7540§8.3:
+       *   The :scheme and :path pseudo-header fields MUST be omitted. *)
+      Hpack.Encoder.encode_header
+        hpack_encoder
+        faraday
+        { Headers.name = ":path"; value = target; sensitive = false };
+      Hpack.Encoder.encode_header
+        hpack_encoder
+        faraday
+        { Headers.name = ":scheme"; value = scheme; sensitive = false });
     encode_headers hpack_encoder faraday headers;
     chunk_header_block_fragments t frame_info ~write_frame faraday
 

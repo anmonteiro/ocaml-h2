@@ -579,7 +579,6 @@ module Config : sig
               payload that the sender is willing to receive, in octets.
               Defaults to [16384] *)
     ; request_body_buffer_size : int  (** Defaults to [4096] *)
-    ; response_buffer_size : int  (** Defaults to [1024] *)
     ; response_body_buffer_size : int  (** Defaults to [4096] *)
     ; enable_server_push : bool  (** Defaults to [true] *)
     ; max_concurrent_streams : int

@@ -88,7 +88,12 @@ let parse_frame_header =
     flags
     stream_identifier
   <?> "frame_header"
-  (* TODO: explain why we commit here. *)
+  (* The parser commits after parsing the frame header so that the entire
+   * underlying buffer can be used to store the payload length. This matters
+   * because the size of the buffer that gets allocated is the maximum frame
+   * payload negotiated by the HTTP/2 settings synchronization. The 9 octets
+   * that make up the frame header are, therefore, very important in order for
+   * h2 not to return a FRAME_SIZE_ERROR. *)
   <* commit
 
 let parse_padded_payload { Frame.payload_length; flags; _ } parser =

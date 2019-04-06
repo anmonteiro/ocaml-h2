@@ -215,7 +215,11 @@ let report_error t exn error_code =
   | Reserved (ActiveMessage s) | Active (_, s) ->
     Body.close_writer s.request_body;
     _report_error t exn error_code
-  | Idle | Reserved _ | Closed _ ->
+  | Reserved _ ->
+    (* Streams in the reserved state don't yet have a stream-level error
+     * handler registered with them *)
+    ()
+  | Idle | Closed _ ->
     _report_error t exn error_code
 
 let close_request_body { request_body; _ } = Body.close_reader request_body

@@ -214,7 +214,7 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
       reqd;
     Ok (reqd, fun () -> wakeup_writer t)
 
-let handle_headers t ~end_stream reqd headers =
+let handle_headers t ~end_stream reqd active_stream headers =
   (* From RFC7540§5.1.2:
    *   Endpoints MUST NOT exceed the limit set by their peer. An endpoint that
    *   receives a HEADERS frame that causes its advertised concurrent stream
@@ -233,18 +233,12 @@ let handle_headers t ~end_stream reqd headers =
       report_stream_error t reqd.Stream.id Error.RefusedStream
     else
       report_stream_error t reqd.Stream.id Error.ProtocolError
-  else
+  else (
+    reqd.state <- Stream.(Active (Open FullHeaders, active_stream));
     (* From RFC7540§5.1.2:
      *   Streams that are in the "open" state or in either of the "half-closed"
      *   states count toward the maximum number of streams that an endpoint is
      *   permitted to open. *)
-    let active_stream =
-      Reqd.create_active_stream
-        t.hpack_encoder
-        t.config.response_body_buffer_size
-        (create_push_stream t)
-    in
-    reqd.state <- Stream.(Active (Open FullHeaders, active_stream));
     t.current_client_streams <- t.current_client_streams + 1;
     match Headers.method_path_and_scheme_or_malformed headers with
     | `Malformed ->
@@ -270,13 +264,16 @@ let handle_headers t ~end_stream reqd headers =
           if end_stream then
             Body.empty
           else
-            match body_length with
-            | `Fixed n ->
-              Body.create (Bigstringaf.create (Int64.to_int n))
-            | `Error _ | `Unknown ->
-              (* Not sure how much data we're gonna get. Delay the allocation
-               * until we get a data frame. *)
-              Body.create Bigstringaf.empty
+            let buffer_size =
+              match body_length with
+              | `Fixed n ->
+                Int64.to_int n
+              | `Error _ | `Unknown ->
+                (* Not sure how much data we're gonna get. Use the configured
+                 * value for [request_body_buffer_size]. *)
+                t.config.request_body_buffer_size
+            in
+            Body.create (Bigstringaf.create buffer_size)
         in
         let request_info = Reqd.create_active_request request request_body in
         if end_stream then (
@@ -291,10 +288,16 @@ let handle_headers t ~end_stream reqd headers =
           reqd.state
           <- Active (Open (ActiveMessage request_info), active_stream);
         t.request_handler reqd;
-        wakeup_writer t)
+        wakeup_writer t))
 
 let handle_headers_block
-    t ?(is_trailers = false) reqd partial_headers flags headers_block
+    t
+    ?(is_trailers = false)
+    reqd
+    active_stream
+    partial_headers
+    flags
+    headers_block
   =
   let open AB in
   let end_headers = Flags.test_end_header flags in
@@ -325,7 +328,12 @@ let handle_headers_block
          *   might have been processed in some way. *)
         t.max_client_stream_id <- reqd.Stream.id;
         (* `handle_headers` will take care of transitioning the stream state *)
-        handle_headers t ~end_stream:partial_headers.end_stream reqd headers)
+        handle_headers
+          t
+          ~end_stream:partial_headers.end_stream
+          reqd
+          active_stream
+          headers)
       else if Headers.trailers_valid headers then (
         Reqd.deliver_trailer_headers reqd headers;
         let request_body = Reqd.request_body reqd in
@@ -424,7 +432,13 @@ let open_stream t frame_header ?priority headers_block =
     reqd.state <- Active (Open (PartialHeaders partial_headers), active_stream);
     if not end_headers then
       t.receiving_headers_for_stream <- Some stream_id;
-    handle_headers_block t reqd partial_headers flags headers_block
+    handle_headers_block
+      t
+      reqd
+      active_stream
+      partial_headers
+      flags
+      headers_block
 
 let process_trailer_headers t reqd active_stream frame_header headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
@@ -449,7 +463,13 @@ let process_trailer_headers t reqd active_stream frame_header headers_block =
     if not Flags.(test_end_header flags) then
       t.receiving_headers_for_stream <- Some stream_id;
     (* trailer headers: RFC7230§4.4 *)
-    handle_trailer_headers t reqd partial_headers flags headers_block
+    handle_trailer_headers
+      t
+      reqd
+      active_stream
+      partial_headers
+      flags
+      headers_block
 
 let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
   let { Frame.stream_id; _ } = frame_header in
@@ -984,14 +1004,27 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
     report_connection_error t Error.ProtocolError
   else
     match Scheduler.find t.streams stream_id with
-    | Some stream ->
-      (match stream.Stream.state with
-      | Active (Open (PartialHeaders partial_headers), _) ->
-        handle_headers_block t stream partial_headers flags headers_block
+    | Some respd ->
+      (match respd.Stream.state with
+      | Active (Open (PartialHeaders partial_headers), active_stream) ->
+        handle_headers_block
+          t
+          respd
+          active_stream
+          partial_headers
+          flags
+          headers_block
       | Active
           ( Open (ActiveMessage _)
-          , { trailers_parser = Some partial_headers; _ } ) ->
-        handle_trailer_headers t stream partial_headers flags headers_block
+          , ({ trailers_parser = Some partial_headers; _ } as active_stream) )
+        ->
+        handle_trailer_headers
+          t
+          respd
+          active_stream
+          partial_headers
+          flags
+          headers_block
       | _ ->
         (* TODO: maybe need to handle the case where the stream has been closed
          * due to a stream error. *)
@@ -1028,7 +1061,6 @@ let create
     ?(error_handler = default_error_handler)
     request_handler
   =
-  let { Config.response_buffer_size; _ } = config in
   let settings =
     { Settings.default_settings with
       max_frame_size = config.read_buffer_size
@@ -1037,7 +1069,7 @@ let create
     ; enable_push = config.enable_server_push
     }
   in
-  let writer = Writer.create response_buffer_size in
+  let writer = Writer.create settings.max_frame_size in
   let rec connection_preface_handler recv_frame settings_list =
     let t = Lazy.force t in
     t.reader <- Active (Reader.frame (frame_handler t));
