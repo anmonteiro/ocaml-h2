@@ -795,7 +795,7 @@ module Client_connection : sig
 
       - [`Ok n] indicates that the caller successfully wrote [n] bytes of
         output from the buffer that the caller was provided by
-        {next_write_operation}.
+        {!next_write_operation}.
       - [`Closed] indicates that the output destination will no longer accept
         bytes from the write processor. *)
 
