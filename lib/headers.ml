@@ -285,30 +285,49 @@ let valid_request_headers t = valid_headers t
 
 let valid_response_headers t = valid_headers ~is_request:false t
 
-let method_path_and_scheme_or_malformed headers =
+let method_path_and_scheme_or_malformed t =
   match
-    ( get_multi_pseudo headers "method"
-    , get_multi_pseudo headers "scheme"
-    , get_multi_pseudo headers "path" )
+    ( get_multi_pseudo t "method"
+    , get_multi_pseudo t "scheme"
+    , get_multi_pseudo t "path" )
   with
   | _, [ ("http" | "https") ], [ path ] when String.length path == 0 ->
     (* From RFC7540§8.1.2.6:
      *   This pseudo-header field MUST NOT be empty for http or https URIs;
      *   http or https URIs that do not contain a path component MUST include a
      *   value of '/'. *)
-    None
+    `Malformed
   (* From RFC7540§8.1.2.3:
    *   All HTTP/2 requests MUST include exactly one valid value for the
    *   :method, :scheme, and :path pseudo-header fields, unless it is a
    *   CONNECT request (Section 8.3). *)
-  (* TODO: handle CONNECT requests *)
-  | [ meth ], [ scheme ], [ path ] ->
-    if valid_request_headers headers then
-      Some (meth, path, scheme)
+  | [ ("CONNECT" as meth) ], [], [] ->
+    (* From RFC7540§8.3:
+     *   The HTTP header field mapping works as defined in Section 8.1.2.3
+     *   ("Request Pseudo-Header Fields"), with a few differences.
+     *   Specifically:
+     *
+     *     - The :method pseudo-header field is set to CONNECT.
+     *     - The :scheme and :path pseudo-header fields MUST be omitted.
+     *     - The :authority pseudo-header field contains the host and port to
+     *       connect to (equivalent to the authority-form of the request-target
+     *       of CONNECT requests (see [RFC7230], Section 5.3)).
+     *
+     *   A CONNECT request that does not conform to these restrictions is
+     *   malformed (Section 8.1.2.6). *)
+    if mem t ":authority" then
+      `Valid (meth, "", "")
     else
-      None
+      `Malformed
+  | [ "CONNECT" ], _, _ ->
+    `Malformed
+  | [ meth ], [ scheme ], [ path ] ->
+    if valid_request_headers t then
+      `Valid (meth, path, scheme)
+    else
+      `Malformed
   | _ ->
-    None
+    `Malformed
 
 let trailers_valid t =
   let invalid =

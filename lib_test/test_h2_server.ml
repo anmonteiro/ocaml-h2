@@ -725,6 +725,105 @@ module Server_connection_tests = struct
       (`Error Error.(StreamError (1l, FrameSizeError)))
       (Reader.next (reader t))
 
+  let test_connect () =
+    let error_handler_called = ref false in
+    let error_handler ?request:_ error handle =
+      error_handler_called := true;
+      Alcotest.(check bool) "request was malformed" true (error = `Bad_request);
+      let body = handle Headers.empty in
+      Body.write_string body "";
+      Body.close_writer body
+    in
+    let t = create ~error_handler default_request_handler in
+    handle_preface t;
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let headers =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.(default_flags |> set_end_stream |> set_end_header)
+          ; frame_type = Headers
+          }
+      ; frame_payload =
+          Frame.Headers
+            ( None
+            , encode_headers
+                hpack_encoder
+                Headers.(
+                  of_list [ ":method", "CONNECT"; ":authority", "foo.com:8080" ])
+            )
+      }
+    in
+    write_frames t [ headers ];
+    match next_write_operation t with
+    | `Write iovecs ->
+      let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
+      let frame = List.hd frames in
+      Alcotest.(check int)
+        "Next write operation is a HEADERS frame"
+        (Frame.FrameType.serialize Headers)
+        Frame.(frame.frame_header.frame_type |> FrameType.serialize);
+      let iovec_len = IOVec.lengthv iovecs in
+      report_write_result t (`Ok iovec_len);
+      Alcotest.(check bool)
+        "error handler was not called"
+        false
+        !error_handler_called
+    | _ ->
+      Alcotest.fail
+        "Expected state machine to issue a write operation after seeing \
+         headers."
+
+  let test_connect_malformed () =
+    let error_handler_called = ref false in
+    let error_handler ?request:_ error handle =
+      error_handler_called := true;
+      Alcotest.(check bool) "request was malformed" true (error = `Bad_request);
+      let body = handle Headers.empty in
+      Body.write_string body "";
+      Body.close_writer body
+    in
+    let t = create ~error_handler default_request_handler in
+    handle_preface t;
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let headers =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.(default_flags |> set_end_stream |> set_end_header)
+          ; frame_type = Headers
+          }
+      ; frame_payload =
+          Frame.Headers
+            ( None
+            , encode_headers
+                hpack_encoder
+                Headers.(
+                  of_list
+                    [ ":method", "CONNECT"; ":scheme", "https"; ":path", "/" ])
+            )
+      }
+    in
+    write_frames t [ headers ];
+    match next_write_operation t with
+    | `Write iovecs ->
+      let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
+      let frame = List.hd frames in
+      Alcotest.(check int)
+        "Next write operation is a HEADERS frame"
+        (Frame.FrameType.serialize Headers)
+        Frame.(frame.frame_header.frame_type |> FrameType.serialize);
+      let iovec_len = IOVec.lengthv iovecs in
+      report_write_result t (`Ok iovec_len);
+      Alcotest.(check bool)
+        "error handler was called"
+        true
+        !error_handler_called
+    | _ ->
+      Alcotest.fail
+        "Expected state machine to issue a write operation after seeing \
+         headers."
+
   (* TODO: test for trailer headers. *)
   (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
   let suite =
@@ -759,6 +858,8 @@ module Server_connection_tests = struct
     ; "open existing stream", `Quick, test_open_existing_stream
     ; "dependent stream", `Quick, test_dependent_stream
     ; "server push", `Quick, test_server_push
+    ; "CONNECT method", `Quick, test_connect
+    ; "CONNECT method (malformed)", `Quick, test_connect_malformed
     ]
 end
 
