@@ -36,7 +36,7 @@ opam-steps: &opam-steps
           opam install -y ocamlformat
           opam pin add -y httpaf git+https://github.com/anmonteiro/httpaf#anmonteiro/lwt-https-support
           opam pin add -y httpaf-lwt git+https://github.com/anmonteiro/httpaf#anmonteiro/lwt-https-support
-          opam pin add -y ssl git+https://github.com/anmonteiro/ocaml-ssl#alpn
+          opam pin add -y ssl git+https://github.com/anmonteiro/ocaml-ssl#9752831
           opam install -y lwt_ssl
           opam install -t --deps-only .
     - run:
