@@ -1129,6 +1129,9 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
   in
   let rec preface_handler recv_frame settings_list =
     let t = Lazy.force t in
+    (* The server has sent us a valid connection preface, we can start reading
+     * other frames now. *)
+    t.reader <- Active (Reader.frame (frame_handler t));
     (* Now process the client's SETTINGS frame. `process_settings_frame` will
      * take care of calling `wakeup_writer`. *)
     process_settings_frame t recv_frame settings_list
@@ -1213,10 +1216,6 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
   let settings = Settings.settings_for_the_connection t.settings in
   (* Send the client connection preface *)
   Writer.write_connection_preface t.writer settings;
-  (* We can start reading frames once the connection preface has been written
-   * to the wire. *)
-  Writer.flush t.writer (fun () ->
-      t.reader <- Active (Reader.frame (frame_handler t)));
   (* If a higher value for initial window size is configured, add more
    * tokens to the connection (we have no streams at this point). *)
   (if
