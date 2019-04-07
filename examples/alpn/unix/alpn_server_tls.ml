@@ -1,17 +1,40 @@
+open Alpn_lib
+
+let http1_handler tls_server =
+  Httpaf_lwt.Server.TLS.create_connection_handler
+    ~server:tls_server
+    ?certfile:None
+    ?keyfile:None
+    ?config:None
+    ~request_handler:Http1_handler.request_handler
+    ~error_handler:Http1_handler.error_handler
+
+let h2_handler tls_server =
+  H2_lwt_unix.Server.TLS.create_connection_handler
+    ~server:tls_server
+    ?certfile:None
+    ?keyfile:None
+    ?config:None
+    ~request_handler:H2_handler.request_handler
+    ~error_handler:H2_handler.error_handler
+
 let start_http_server () =
   let open Lwt.Infix in
-  let listen_address = Unix.(ADDR_INET (inet_addr_loopback, 80)) in
+  let listen_address = Unix.(ADDR_INET (inet_addr_loopback, 8080)) in
   Lwt.async (fun () ->
       Lwt_io.establish_server_with_client_socket
         listen_address
-        Http1_handler.redirect_handler
+        (Httpaf_lwt.Server.create_connection_handler
+           ?config:None
+           ~request_handler:Http1_handler.redirect_handler
+           ~error_handler:Http1_handler.redirect_error_handler)
       >>= fun _server -> Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   forever
 
 let start_https_server () =
   let open Lwt.Infix in
-  let listen_address = Unix.(ADDR_INET (inet_addr_loopback, 443)) in
+  let listen_address = Unix.(ADDR_INET (inet_addr_loopback, 9443)) in
   let cert = "./certificates/server.pem" in
   let priv_key = "./certificates/server.key" in
   Lwt.async (fun () ->
@@ -43,9 +66,9 @@ let start_https_server () =
                   (* Unable to negotiate a protocol *)
                   Lwt.return_unit
                 | Some "http/1.1" ->
-                  Http1_handler.connection_handler tls_server client_addr fd
+                  http1_handler tls_server client_addr fd
                 | Some "h2" ->
-                  H2_handler.connection_handler tls_server client_addr fd
+                  h2_handler tls_server client_addr fd
                 | _ ->
                   (* Can't really happen - would mean that TLS negotiated a
                    * protocol that we didn't specify. *)

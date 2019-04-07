@@ -1,3 +1,0 @@
-(executable
- (name alpn_server)
- (libraries h2 httpaf-lwt httpaf h2-lwt-unix lwt lwt.unix))
