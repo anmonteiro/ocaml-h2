@@ -21,18 +21,9 @@ let server =
         ~pin:"git+https://github.com/anmonteiro/httpaf#mirage"
         "httpaf-lwt"
       (* Just because 0.2.0 is not merged in opam *)
-    ; package
-        ~pin:"git+https://github.com/anmonteiro/ocaml-h2#alpn-example"
-        "hpack"
-    ; package
-        ~pin:"git+https://github.com/anmonteiro/ocaml-h2#alpn-example"
-        "h2"
-    ; package
-        ~pin:"git+https://github.com/anmonteiro/ocaml-h2#alpn-example"
-        "h2-lwt"
-    ; package
-        ~pin:"git+https://github.com/anmonteiro/ocaml-h2#alpn-example"
-        "h2-mirage"
+    ; package ~pin:"git+https://github.com/anmonteiro/ocaml-h2" "h2"
+    ; package ~pin:"git+https://github.com/anmonteiro/ocaml-h2" "h2-lwt"
+    ; package ~pin:"git+https://github.com/anmonteiro/ocaml-h2" "h2-mirage"
     ]
   in
   foreign

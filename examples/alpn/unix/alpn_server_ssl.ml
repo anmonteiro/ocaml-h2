@@ -24,7 +24,10 @@ let start_http_server () =
   Lwt.async (fun () ->
       Lwt_io.establish_server_with_client_socket
         listen_address
-        Http1_handler.redirect_handler
+        (Httpaf_lwt.Server.create_connection_handler
+           ?config:None
+           ~request_handler:Http1_handler.redirect_handler
+           ~error_handler:Http1_handler.redirect_error_handler)
       >>= fun _server -> Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   forever
