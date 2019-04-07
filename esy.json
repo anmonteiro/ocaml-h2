@@ -40,7 +40,7 @@
         }
       }
     },
-    "@opam/ssl": "anmonteiro/ocaml-ssl:ssl.opam#9752831",
+    "@opam/ssl": "anmonteiro/ocaml-ssl:ssl.opam#b965d15",
     "@opam/httpaf": "inhabitedtype/httpaf:httpaf.opam#53042e5",
     "@opam/httpaf-lwt": "anmonteiro/httpaf:httpaf-lwt.opam#25149c6"
   }
