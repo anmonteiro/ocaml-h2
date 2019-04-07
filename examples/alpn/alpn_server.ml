@@ -18,34 +18,39 @@ let start_https_server () =
       Lwt_io.establish_server_with_client_socket
         listen_address
         (fun client_addr fd ->
-          X509_lwt.private_of_pems ~cert ~priv_key >>= fun certificate ->
-          let config =
-            Tls.Config.server
-              ~alpn_protocols:
-                [ "h2"; "http/1.1" ] (* accept h2 before http/1.1 *)
-              ~certificates:
-                (`Single certificate)
-                (* ~version:Tls.Core.(TLS_1_2, TLS_1_2) *)
-              ~ciphers:
-                (List.filter
-                   Tls.Ciphersuite.ciphersuite_tls12_only
-                   Tls.Config.Ciphers.supported)
-              ()
-          in
-          Tls_lwt.Unix.server_of_fd config fd >>= fun tls_server ->
-          match Tls_lwt.Unix.epoch tls_server with
-          | `Error ->
-            assert false
-          | `Ok { alpn_protocol; _ } ->
-            (match alpn_protocol with
-            | None ->
-              assert false
-            | Some "http/1.1" ->
-              Http1_handler.connection_handler tls_server client_addr fd
-            | Some "h2" ->
-              H2_handler.connection_handler tls_server client_addr fd
-            | _ ->
-              assert false))
+          Lwt.catch
+            (fun () ->
+              X509_lwt.private_of_pems ~cert ~priv_key >>= fun certificate ->
+              let config =
+                Tls.Config.server
+                  ~alpn_protocols:
+                    [ "h2"; "http/1.1" ] (* accept h2 before http/1.1 *)
+                  ~certificates:(`Single certificate)
+                  ~ciphers:
+                    (List.filter
+                       Tls.Ciphersuite.ciphersuite_tls12_only
+                       Tls.Config.Ciphers.supported)
+                  ()
+              in
+              Tls_lwt.Unix.server_of_fd config fd >>= fun tls_server ->
+              match Tls_lwt.Unix.epoch tls_server with
+              | `Error ->
+                Lwt_io.eprintlf
+                  "Unable to fetch session data. Did the handshake fail?"
+              | `Ok { alpn_protocol; _ } ->
+                (match alpn_protocol with
+                | None ->
+                  (* Unable to negotiate a protocol *)
+                  Lwt.return_unit
+                | Some "http/1.1" ->
+                  Http1_handler.connection_handler tls_server client_addr fd
+                | Some "h2" ->
+                  H2_handler.connection_handler tls_server client_addr fd
+                | _ ->
+                  (* Can't really happen - would mean that TLS negotiated a
+                   * protocol that we didn't specify. *)
+                  assert false))
+            (fun exn -> Lwt_io.eprintlf "EXN: %s" (Printexc.to_string exn)))
       >>= fun _server -> Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   forever
