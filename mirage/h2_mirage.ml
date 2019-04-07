@@ -32,14 +32,13 @@
 
 open Lwt.Infix
 
-module Io :
-  H2_lwt.IO with type socket = Conduit_mirage.Flow.flow and type addr = unit =
-struct
-  type socket = Conduit_mirage.Flow.flow
+module Make_IO (Flow : Mirage_flow_lwt.S) :
+  H2_lwt.IO with type socket = Flow.flow and type addr = unit = struct
+  type socket = Flow.flow
 
   type addr = unit
 
-  let shutdown flow = Conduit_mirage.Flow.close flow
+  let shutdown flow = Flow.close flow
 
   let shutdown_receive flow = Lwt.async (fun () -> shutdown flow)
 
@@ -48,7 +47,6 @@ struct
   let close flow = shutdown flow
 
   let read flow bigstring ~off ~len:_ =
-    let open Conduit_mirage in
     Lwt.catch
       (fun () ->
         Flow.read flow >|= function
@@ -67,7 +65,6 @@ struct
       (fun exn -> shutdown flow >>= fun () -> Lwt.fail exn)
 
   let writev flow iovecs =
-    let open Conduit_mirage in
     let cstruct_iovecs =
       List.map
         (fun { Faraday.buffer; off; len } ->
@@ -107,8 +104,10 @@ struct
     Lwt.return_unit
 end
 
-module Server = struct
-  include H2_lwt.Server (Io)
+module Server (Flow : Mirage_flow_lwt.S) = struct
+  include H2_lwt.Server (Make_IO (Flow))
+
+  type flow = Flow.flow
 
   let create_connection_handler ?config ~request_handler ~error_handler flow =
     let request_handler () = request_handler in
@@ -119,17 +118,19 @@ end
 module type Server_intf = sig
   open H2
 
+  type flow
+
   val create_connection_handler
     :  ?config:Config.t
     -> request_handler:Server_connection.request_handler
     -> error_handler:Server_connection.error_handler
-    -> Conduit_mirage.Flow.flow
+    -> flow
     -> unit Lwt.t
 end
 
 module Server_with_conduit = struct
   open Conduit_mirage
-  include Server
+  include Server (Conduit_mirage.Flow)
 
   type t = Conduit_mirage.Flow.flow -> unit Lwt.t
 
@@ -141,4 +142,4 @@ module Server_with_conduit = struct
     Lwt.return listen
 end
 
-module Client = H2_lwt.Client (Io)
+module Client (Flow : Mirage_flow_lwt.S) = H2_lwt.Client (Make_IO (Flow))

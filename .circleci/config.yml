@@ -30,10 +30,14 @@ opam-steps: &opam-steps
     - run:
         name: "Install deps"
         command: |
-          sudo apt-get install -y pkg-config libgmp-dev autotools-dev autoconf lsof
+          sudo apt-get install -y pkg-config libgmp-dev autotools-dev autoconf lsof libssl-dev
           opam update
           opam install -y dune
           opam install -y ocamlformat
+          opam pin add -y httpaf git+https://github.com/anmonteiro/httpaf#anmonteiro/lwt-https-support
+          opam pin add -y httpaf-lwt git+https://github.com/anmonteiro/httpaf#anmonteiro/lwt-https-support
+          opam pin add -y ssl git+https://github.com/anmonteiro/ocaml-ssl#b965d15
+          opam install -y lwt_ssl
           opam install -t --deps-only .
     - run:
         name: 'Clean'
