@@ -49,10 +49,13 @@ opam-steps: &opam-steps
     - run:
         name: 'Test'
         command: |
-          source ~/.bash_profile
           eval `opam config env`
           dune build @all
           dune runtest --no-buffer
+    - run:
+        name: 'Slow Tests'
+        command: |
+          eval `opam config env`
           dune build @slowtests --no-buffer
     - run:
         name: 'Conformance tests'
