@@ -1,5 +1,5 @@
 {
-  "checksum": "99eb60253a80bc5886a54c33000b2267",
+  "checksum": "8ddacd0a07cfe245d3d601d1663bd8f4",
   "root": "h2@link-dev:./esy.json",
   "node": {
     "yarn-pkg-config@github:esy-ocaml/yarn-pkg-config#d488cd9321cd5036bd36ec96744ce78c5d45fc49@d41d8cd9": {
@@ -550,13 +550,13 @@
         "ocaml@4.7.1004@d41d8cd9", "@opam/base@opam:v0.12.0@bd6e6655"
       ]
     },
-    "@opam/ssl@github:anmonteiro/ocaml-ssl:ssl.opam#7ad9314@d41d8cd9": {
-      "id": "@opam/ssl@github:anmonteiro/ocaml-ssl:ssl.opam#7ad9314@d41d8cd9",
+    "@opam/ssl@github:anmonteiro/ocaml-ssl:ssl.opam#9752831@d41d8cd9": {
+      "id": "@opam/ssl@github:anmonteiro/ocaml-ssl:ssl.opam#9752831@d41d8cd9",
       "name": "@opam/ssl",
-      "version": "github:anmonteiro/ocaml-ssl:ssl.opam#7ad9314",
+      "version": "github:anmonteiro/ocaml-ssl:ssl.opam#9752831",
       "source": {
         "type": "install",
-        "source": [ "github:anmonteiro/ocaml-ssl:ssl.opam#7ad9314" ]
+        "source": [ "github:anmonteiro/ocaml-ssl:ssl.opam#9752831" ]
       },
       "overrides": [],
       "dependencies": [
@@ -1898,7 +1898,7 @@
       "overrides": [],
       "dependencies": [
         "ocaml@4.7.1004@d41d8cd9",
-        "@opam/ssl@github:anmonteiro/ocaml-ssl:ssl.opam#7ad9314@d41d8cd9",
+        "@opam/ssl@github:anmonteiro/ocaml-ssl:ssl.opam#9752831@d41d8cd9",
         "@opam/lwt@opam:4.2.1@c1888ec9",
         "@opam/jbuilder@opam:transition@58bdfe0a",
         "@opam/base-unix@opam:base@87d0b2eb",
@@ -1906,7 +1906,7 @@
       ],
       "devDependencies": [
         "ocaml@4.7.1004@d41d8cd9",
-        "@opam/ssl@github:anmonteiro/ocaml-ssl:ssl.opam#7ad9314@d41d8cd9",
+        "@opam/ssl@github:anmonteiro/ocaml-ssl:ssl.opam#9752831@d41d8cd9",
         "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/base-unix@opam:base@87d0b2eb"
       ]
     },
