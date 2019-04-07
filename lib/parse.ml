@@ -643,14 +643,6 @@ module Reader = struct
   let force_close t =
     ignore (read_with_more t Bigstringaf.empty ~off:0 ~len:0 Complete : int)
 
-  let state_to_string = function
-    | Fail _ ->
-      "fail"
-    | Done ->
-      "done"
-    | Partial _ ->
-      "partial"
-
   let fail_to_string marks err = String.concat " > " marks ^ ": " ^ err
 
   let next_from_error t ?(msg = "") error_code =

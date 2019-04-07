@@ -14,7 +14,20 @@ module Client_connection_tests = struct
       ]
 
     let pp_hum fmt t =
-      let str = match t with `Read -> "Read" | `Close -> "Close" in
+      let str =
+        match t with
+        | `Read ->
+          "Read"
+        | `Error (Error.ConnectionError (e, msg)) ->
+          Format.sprintf "ConnectionError: %ld %S" (Error.serialize e) msg
+        | `Error (Error.StreamError (stream_id, e)) ->
+          Format.sprintf
+            "StreamError on %ld: %ld"
+            stream_id
+            (Error.serialize e)
+        | `Close ->
+          "Close"
+      in
       Format.pp_print_string fmt str
   end
 
@@ -226,6 +239,37 @@ module Client_connection_tests = struct
         ~error_handler:default_error_handler
     in
     handle_preface t
+
+  let test_invalid_preface () =
+    let error_handler_called = ref false in
+    let error_handler error =
+      error_handler_called := true;
+      match error with
+      | `Protocol_error ->
+        Alcotest.(check pass)
+          "Error handler is called with a protocol error"
+          ()
+          ()
+      | _ ->
+        Alcotest.fail "Expected error handler to be called with protocol error"
+    in
+    let t = create ?config:None ?push_handler:None ~error_handler in
+    let _, lenv = flush_pending_writes t in
+    report_write_result t (`Ok lenv);
+    let headers, _ = header_and_continuation_frames in
+    read_frames t [ headers ];
+    Alcotest.check
+      read_operation
+      "There was a connection error of type PROTOCOL_ERROR"
+      (`Error
+        Error.(ConnectionError (ProtocolError, "Invalid connection preface")))
+      (Reader.next (reader t));
+    Alcotest.check
+      read_operation
+      "Reader issues a `Close operation"
+      `Close
+      (next_read_operation t);
+    Alcotest.(check bool) "Error handler got called" true !error_handler_called
 
   let test_simple_get_request () =
     let t =
@@ -774,6 +818,9 @@ module Client_connection_tests = struct
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
+    ; ( "invalid connection preface from the server"
+      , `Quick
+      , test_invalid_preface )
     ; "simple GET request", `Quick, test_simple_get_request
     ; "data larger than declared", `Quick, test_data_larger_than_reported
     ; ( "stream error handler gets called on stream-level protocol errors"
