@@ -12,6 +12,8 @@ Unreleased
   which required a linear traversal of all the streams. The optimization is to
   allow every stream to wake up a global writer to which they hold a reference
   ([#40](https://github.com/anmonteiro/ocaml-h2/pull/40))
+- h2: improve handling of received frames against closed streams
+  ([#40](https://github.com/anmonteiro/ocaml-h2/pull/40))
 
 0.2.0 2019-04-06
 --------------

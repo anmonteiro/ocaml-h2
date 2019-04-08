@@ -123,6 +123,15 @@ let shutdown t =
   shutdown_writer t;
   wakeup_writer t
 
+(* Handling frames against closed streams is hard. See:
+ * https://docs.google.com/presentation/d/1iG_U2bKTc9CnKr0jPTrNfmxyLufx_cK2nNh9VjrKH6s
+ *)
+let was_closed_or_implicitly_closed t stream_id =
+  if Stream_identifier.is_request stream_id then
+    Stream_identifier.(stream_id <= t.max_client_stream_id)
+  else
+    Stream_identifier.(stream_id <= t.max_pushed_stream_id)
+
 let report_error t = function
   | Error.ConnectionError (error, data) ->
     if not t.did_send_go_away then (
@@ -158,11 +167,12 @@ let report_error t = function
     | Some reqd ->
       Stream.reset_stream reqd error
     | None ->
-      (* Possible if the stream was going to enter the Idle state (first time
-       * we saw e.g. a PRIORITY frame for it) but had e.g. a
-       * FRAME_SIZE_ERROR. *)
-      let frame_info = Writer.make_frame_info stream_id in
-      Writer.write_rst_stream t.writer frame_info error);
+      if not (was_closed_or_implicitly_closed t stream_id) then
+        (* Possible if the stream was going to enter the Idle state (first time
+         * we saw e.g. a PRIORITY frame for it) but had e.g. a
+         * FRAME_SIZE_ERROR. *)
+        let frame_info = Writer.make_frame_info stream_id in
+        Writer.write_rst_stream t.writer frame_info error);
     wakeup_writer t
 
 let report_connection_error t ?(additional_debug_data = "") error =
@@ -182,9 +192,14 @@ let report_exn t exn =
     let additional_debug_data = Printexc.to_string exn in
     report_connection_error t ~additional_debug_data Error.InternalError
 
-let on_stream_closed t id () =
-  Scheduler.remove_stream t.streams id;
-  t.current_client_streams <- t.current_client_streams - 1
+let on_close_stream t id ~active closed =
+  if active then
+    (* From RFC7540§5.1.2:
+     *   Streams that are in the "open" state or in either of the "half-closed"
+     *   states count toward the maximum number of streams that an endpoint is
+     *   permitted to open. *)
+    t.current_client_streams <- t.current_client_streams - 1;
+  Scheduler.mark_for_removal t.streams id closed
 
 let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
   if not t.settings.enable_push then
@@ -212,7 +227,7 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
         ~max_frame_size:t.settings.max_frame_size
         t.writer
         t.error_handler
-        (on_stream_closed t pushed_stream_id)
+        (on_close_stream t pushed_stream_id)
     in
     Scheduler.add
       t.streams (* TODO: *)
@@ -394,7 +409,7 @@ let open_stream t frame_header ?priority headers_block =
             ~max_frame_size:t.settings.max_frame_size
             t.writer
             t.error_handler
-            (on_stream_closed t stream_id)
+            (on_close_stream t stream_id)
         in
         Scheduler.add
           t.streams
@@ -528,7 +543,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
          *   frames, other than WINDOW_UPDATE, PRIORITY, or RST_STREAM, for a
          *   stream that is in this state, it MUST respond with a stream
          *   error (Section 5.4.2) of type STREAM_CLOSED. *)
-        | Closed (ResetByThem _) ->
+        | Closed { reason = ResetByThem _; _ } ->
           (* From RFC7540§5.1:
            *   closed: [...] An endpoint that receives any frame other than
            *   PRIORITY after receiving a RST_STREAM MUST treat that as a
@@ -660,7 +675,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
          *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
         report_connection_error t Error.ProtocolError
       (* This is technically in the half-closed (local) state *)
-      | Closed (ResetByUs NoError) ->
+      | Closed { reason = ResetByUs NoError; _ } ->
         (* From RFC7540§6.9:
          *   A receiver that receives a flow-controlled frame MUST always
          *   account for its contribution against the connection flow-control
@@ -686,11 +701,12 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
          *   stream error (Section 5.4.2) of type STREAM_CLOSED. *)
         report_stream_error t stream_id Error.StreamClosed)
     | None ->
-      (* From RFC7540§5.1:
-       *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
-       *   a stream in this state MUST be treated as a connection error
-       *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-      report_connection_error t Error.ProtocolError)
+      if not (was_closed_or_implicitly_closed t stream_id) then
+        (* From RFC7540§5.1:
+         *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
+         *   a stream in this state MUST be treated as a connection error
+         *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
+        report_connection_error t Error.ProtocolError)
 
 let process_priority_frame t { Frame.frame_header; _ } priority =
   let { Frame.stream_id; _ } = frame_header in
@@ -720,16 +736,16 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
        * Note:
        *   if we're receiving a PRIORITY frame for a stream that we already
        *   removed from the tree (i.e. can't be found in the hash table, and
-       *   for which the stream ID is strictly smaller than the maximum stream
+       *   for which the stream ID is smaller then or equal to the max stream
        *   id that the client has opened), don't bother processing it. *)
-      if Stream_identifier.(stream_id >= t.max_client_stream_id) then
+      if not (was_closed_or_implicitly_closed t stream_id) then
         let reqd =
           Stream.create
             stream_id
             ~max_frame_size:t.settings.max_frame_size
             t.writer
             t.error_handler
-            (on_stream_closed t stream_id)
+            (on_close_stream t stream_id)
         in
         Scheduler.add
           t.streams
@@ -778,7 +794,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
       (* We might have removed the stream from the hash table. If its stream
        * id is smaller than or equal to the max client stream id we've seen,
        * then it must have been closed. *)
-      if Stream_identifier.(stream_id > t.max_client_stream_id) then
+      if not (was_closed_or_implicitly_closed t stream_id) then
         (* From RFC7540§6.4:
          *   RST_STREAM frames MUST NOT be sent for a stream in the "idle"
          *   state. If a RST_STREAM frame identifying an idle stream is
@@ -997,11 +1013,12 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
          *   error (Section 5.4.1) of type PROTOCOL_ERROR. *)
         ())
     | None ->
-      (* From RFC7540§5.1:
-       *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
-       *   a stream in this state MUST be treated as a connection error
-       *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-      report_connection_error t Error.ProtocolError
+      if not (was_closed_or_implicitly_closed t stream_id) then
+        (* From RFC7540§5.1:
+         *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
+         *   a stream in this state MUST be treated as a connection error
+         *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
+        report_connection_error t Error.ProtocolError
 
 let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
@@ -1226,12 +1243,9 @@ let read t bs ~off ~len =
 let read_eof t bs ~off ~len =
   Reader.read_with_more (reader t) bs ~off ~len Complete
 
-let flush_response_body t =
-  if is_active t then
-    Scheduler.flush t.streams (t.max_client_stream_id, t.max_pushed_stream_id)
-
 let next_write_operation t =
-  flush_response_body t;
+  if is_active t then
+    Scheduler.flush t.streams (t.max_client_stream_id, t.max_pushed_stream_id);
   Writer.next t.writer
 
 let report_write_result t result = Writer.report_result t.writer result

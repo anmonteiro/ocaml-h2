@@ -75,6 +75,16 @@ type closed_reason =
   (* Received an RST_STREAM frame from the peer. *)
   | ResetByThem of Error.error_code
 
+type closed =
+  { reason : closed_reason
+        (* When a stream is closed, we may want to keep it around in the hash
+         * table for a while (e.g. to know whether this stream was reset by the
+         * peer - some error handling code depends on that). We start with a
+         * default value, and on every writer yield we decrement it. If it
+         * reaches 0, the stream is finally removed from the hash table. *)
+  ; mutable ttl : int
+  }
+
 type ('opn, 'half_closed) active_state =
   | Open of 'opn remote_state
   | HalfClosed of 'half_closed
@@ -83,7 +93,7 @@ type ('active_state, 'active, 'reserved) state =
   | Idle
   | Reserved of 'reserved
   | Active of 'active_state * 'active
-  | Closed of closed_reason
+  | Closed of closed
   constraint 'active_state = (_, _) active_state
 
 type ('state, 'error_code, 'error_handler) stream =
@@ -94,11 +104,13 @@ type ('state, 'error_code, 'error_handler) stream =
   ; mutable state : 'state
         (* The largest frame payload we're allowed to write. *)
   ; mutable max_frame_size : int
-  ; on_stream_closed : unit -> unit
+  ; on_close_stream : active:bool -> closed -> unit
   }
   constraint 'state = (_, _, _) state
 
-let create id ~max_frame_size writer error_handler on_stream_closed =
+let initial_ttl = 10
+
+let create id ~max_frame_size writer error_handler on_close_stream =
   { id
   ; writer
   ; error_handler
@@ -107,7 +119,7 @@ let create id ~max_frame_size writer error_handler on_stream_closed =
   ; state = Idle
   ; error_code = `Ok, None
   ; max_frame_size
-  ; on_stream_closed
+  ; on_close_stream
   }
 
 let id { id; _ } = id
@@ -117,16 +129,10 @@ let is_idle t = match t.state with Idle -> true | _ -> false
 let is_open t = match t.state with Active (Open _, _) -> true | _ -> false
 
 let finish_stream t reason =
-  (match t.state with
-  | Active _ ->
-    (* From RFC7540§5.1.2:
-     *   Streams that are in the "open" state or in either of the "half-closed"
-     *   states count toward the maximum number of streams that an endpoint is
-     *   permitted to open. *)
-    t.on_stream_closed ()
-  | _ ->
-    ());
-  t.state <- Closed reason
+  let active = match t.state with Active _ -> true | _ -> false in
+  let closed = { reason; ttl = initial_ttl } in
+  t.on_close_stream ~active closed;
+  t.state <- Closed closed
 
 let reset_stream t error_code =
   let frame_info = Writer.make_frame_info t.id in

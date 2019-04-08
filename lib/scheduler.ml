@@ -91,6 +91,8 @@ module Make (Streamd : StreamDescriptor) = struct
           ; mutable flow : Settings.WindowSize.t
                 (* inbound flow control, what the client is allowed to send. *)
           ; mutable inflow : Settings.WindowSize.t
+          ; mutable marked_for_removal :
+              (Stream_identifier.t * Stream.closed) list
           }
           -> root node
       | Stream :
@@ -138,6 +140,7 @@ module Make (Streamd : StreamDescriptor) = struct
       ; all_streams = StreamsTbl.create ~random:true capacity
       ; flow = Settings.WindowSize.default_initial_window_size
       ; inflow = Settings.WindowSize.default_initial_window_size
+      ; marked_for_removal = []
       }
 
   let create ~parent ~initial_window_size descriptor =
@@ -349,8 +352,8 @@ module Make (Streamd : StreamDescriptor) = struct
     in
     stream.t <- tlast_p + (n * 256 / stream.priority.weight)
 
-  let remove_stream (Connection root) id =
-    StreamsTbl.remove root.all_streams id
+  let mark_for_removal (Connection root) id closed =
+    root.marked_for_removal <- (id, closed) :: root.marked_for_removal
 
   let implicitly_close_idle_stream descriptor max_seen_ids =
     let implicitly_close_stream descriptor =
@@ -431,7 +434,26 @@ module Make (Streamd : StreamDescriptor) = struct
             (* Queue is empty, see line 6 above. *)
             0, false)
     in
-    ignore (schedule t)
+    let (Connection root) = t in
+    ignore (schedule t);
+    root.marked_for_removal
+    <- List.fold_left
+         (fun acc (id, closed) ->
+           (* When a stream completes, i.e. doesn't require more output and
+            * enters the `Closed` state, we set a TTL value which represents
+            * the * number of writer yields that the stream has before it is
+            * removed * from the connection Hash Table. By doing this we avoid
+            * losing some * potentially useful information regarding the
+            * stream's state at the * cost of keeping it around for a little
+            * while longer. *)
+           if closed.Stream.ttl == 0 then (
+             StreamsTbl.remove root.all_streams id;
+             acc)
+           else (
+             closed.ttl <- closed.ttl - 1;
+             (id, closed) :: acc))
+         []
+         root.marked_for_removal
 
   let check_flow flow growth flow' =
     (* Check for overflow on 32-bit systems. *)

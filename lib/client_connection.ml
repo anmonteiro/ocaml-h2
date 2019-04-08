@@ -131,6 +131,15 @@ let shutdown_rw t =
   shutdown_reader t;
   shutdown_writer t
 
+(* Handling frames against closed streams is hard. See:
+ * https://docs.google.com/presentation/d/1iG_U2bKTc9CnKr0jPTrNfmxyLufx_cK2nNh9VjrKH6s
+ *)
+let was_closed_or_implicitly_closed t stream_id =
+  if Stream_identifier.is_request stream_id then
+    Stream_identifier.(stream_id <= t.current_stream_id)
+  else
+    Stream_identifier.(stream_id <= t.max_pushed_stream_id)
+
 let report_error t = function
   | Error.ConnectionError (error, data) ->
     if not t.did_send_go_away then (
@@ -172,11 +181,12 @@ let report_error t = function
     | Some respd ->
       Respd.report_error respd `Protocol_error error
     | None ->
-      (* Possible if the stream was going to enter the Idle state (first time
-       * we saw e.g. a PRIORITY frame for it) but had e.g. a
-       * FRAME_SIZE_ERROR. *)
-      let frame_info = Writer.make_frame_info stream_id in
-      Writer.write_rst_stream t.writer frame_info error);
+      if not (was_closed_or_implicitly_closed t stream_id) then
+        (* Possible if the stream was going to enter the Idle state (first time
+         * we saw e.g. a PRIORITY frame for it) but had e.g. a
+         * FRAME_SIZE_ERROR. *)
+        let frame_info = Writer.make_frame_info stream_id in
+        Writer.write_rst_stream t.writer frame_info error);
     wakeup_writer t
 
 let report_connection_error t ?(additional_debug_data = "") error =
@@ -561,7 +571,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
           active_response
           frame_header
           headers_block
-      | Closed (ResetByThem _) ->
+      | Closed { reason = ResetByThem _; _ } ->
         (* From RFC7540§5.1:
          *   closed: [...] An endpoint that receives any frame other than
          *   PRIORITY after receiving a RST_STREAM MUST treat that as a
@@ -685,7 +695,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
        *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
       report_connection_error t Error.ProtocolError
     (* This is technically in the half-closed (local) state *)
-    | Closed (ResetByUs NoError) ->
+    | Closed { reason = ResetByUs NoError; _ } ->
       (* From RFC7540§6.9:
        *   A receiver that receives a flow-controlled frame MUST always
        *   account for its contribution against the connection flow-control
@@ -711,14 +721,21 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
        *   stream error (Section 5.4.2) of type STREAM_CLOSED. *)
       report_stream_error t stream_id Error.StreamClosed)
   | None ->
-    (* From RFC7540§5.1:
-     *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
-     *   a stream in this state MUST be treated as a connection error
-     *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-    report_connection_error t Error.ProtocolError
+    if not (was_closed_or_implicitly_closed t stream_id) then
+      (* From RFC7540§5.1:
+       *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
+       *   a stream in this state MUST be treated as a connection error
+       *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
+      report_connection_error t Error.ProtocolError
 
-let on_stream_closed t () =
-  t.current_server_streams <- t.current_server_streams - 1
+let on_close_stream t id ~active closed =
+  if active then
+    (* From RFC7540§5.1.2:
+     *   Streams that are in the "open" state or in either of the "half-closed"
+     *   states count toward the maximum number of streams that an endpoint is
+     *   permitted to open. *)
+    t.current_server_streams <- t.current_server_streams - 1;
+  Scheduler.mark_for_removal t.streams id closed
 
 let process_priority_frame t { Frame.frame_header; _ } priority =
   let { Frame.stream_id; _ } = frame_header in
@@ -784,9 +801,9 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
       Stream.finish_stream respd (ResetByThem error_code))
   | None ->
     (* We might have removed the stream from the hash table. If its stream
-     * id is strictly smaller than the max client stream id we've seen, then
-     * it must have been closed. *)
-    if Stream_identifier.(stream_id >= t.current_stream_id) then
+     * id is smaller than or equal to the max client stream id we've generated,
+     * then it must have been closed. *)
+    if not (was_closed_or_implicitly_closed t stream_id) then
       (* From RFC7540§6.4:
        *   RST_STREAM frames MUST NOT be sent for a stream in the "idle"
        *   state. If a RST_STREAM frame identifying an idle stream is
@@ -905,7 +922,7 @@ let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block
       ~max_frame_size:t.settings.max_frame_size
       t.writer
       t.error_handler
-      (on_stream_closed t)
+      (on_close_stream t promised_stream_id)
   in
   Scheduler.add
     t.streams
@@ -1076,11 +1093,12 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
          *   error (Section 5.4.1) of type PROTOCOL_ERROR. *)
         ())
     | None ->
-      (* From RFC7540§5.1:
-       *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
-       *   a stream in this state MUST be treated as a connection error
-       *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-      report_connection_error t Error.ProtocolError
+      if not (was_closed_or_implicitly_closed t stream_id) then
+        (* From RFC7540§5.1:
+         *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
+         *   a stream in this state MUST be treated as a connection error
+         *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
+        report_connection_error t Error.ProtocolError
 
 let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
@@ -1261,7 +1279,7 @@ let request t request ~error_handler ~response_handler =
       ~max_frame_size
       t.writer
       error_handler
-      (on_stream_closed t)
+      (on_close_stream t stream_id)
   in
   (* TODO: priority *)
   Scheduler.add
