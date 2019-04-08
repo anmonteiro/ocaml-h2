@@ -439,15 +439,15 @@ let requires_output t =
     false
   | Reserved _ ->
     true
-  (* From RFC7540§8.1:
-   *   A server can send a complete response prior to the client sending an
-   *   entire request if the response does not depend on any portion of the
-   *   request that has not been sent and received. *)
   | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
     false
   | Active
       ( (Open (FullHeaders | ActiveMessage _) | HalfClosed _)
       , { response_state; _ } ) ->
+    (* From RFC7540§8.1:
+     *   A server can send a complete response prior to the client sending an
+     *   entire request if the response does not depend on any portion of the
+     *   request that has not been sent and received. *)
     (match response_state with
     | Complete _ ->
       false
