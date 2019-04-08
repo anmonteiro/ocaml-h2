@@ -63,6 +63,7 @@ type active_request =
   { request : Request.t
   ; request_body : [ `read ] Body.t
   ; response_handler : response_handler
+  ; wakeup_writer : unit -> unit
   }
 
 type active_state =
@@ -226,16 +227,6 @@ let close_request_body { request_body; _ } = Body.close_reader request_body
 
 let error_code t =
   match fst t.error_code with #error as error -> Some error | `Ok -> None
-
-let on_more_output_available t f =
-  match t.state with
-  | Idle | Reserved _ ->
-    assert false
-  | Active (_, { request_body; _ }) ->
-    if not (Body.is_closed request_body) then
-      Body.when_ready_to_write request_body f
-  | Closed _ ->
-    assert false
 
 let request_body_requires_output response_body =
   (not (Body.is_closed response_body)) || Body.has_pending_output response_body

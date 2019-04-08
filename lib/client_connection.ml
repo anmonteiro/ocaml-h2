@@ -35,7 +35,16 @@
 module AB = Angstrom.Buffered
 module Reader = Parse.Reader
 module Writer = Serialize.Writer
-module Scheduler = Scheduler.Client_scheduler
+
+module Scheduler = Scheduler.Make (struct
+  include Stream
+
+  type t = Respd.t
+
+  let flush_write_body = Respd.flush_request_body
+
+  let requires_output = Respd.requires_output
+end)
 
 module Queue = struct
   include Queue
@@ -112,7 +121,7 @@ let shutdown_reader t = Reader.force_close (reader t)
 
 let flush_request_body t =
   if is_active t then
-    Scheduler.flush t.streams
+    Scheduler.flush t.streams (t.current_stream_id, t.max_pushed_stream_id)
 
 let shutdown_writer t =
   flush_request_body t;
@@ -247,7 +256,13 @@ let handle_push_promise_headers t respd headers =
         respd.state
         <- Active
              ( HalfClosed Stream.WaitingForPeer
-             , { Respd.request; request_body; response_handler } )
+               (* TODO: should we just store a `unit -> unit` in `t` to avoid
+                * one closure allocation here? *)
+             , { Respd.request
+               ; request_body
+               ; response_handler
+               ; wakeup_writer = (fun () -> wakeup_writer t)
+               } )
       | Error _ ->
         (* From RFC7540§6.6:
          *   Recipients of PUSH_PROMISE frames can choose to reject promised
@@ -295,7 +310,9 @@ let handle_response_headers t respd ~end_stream active_request headers =
                * value for [response_body_buffer_size]. *)
               t.config.response_body_buffer_size
           in
-          Body.create (Bigstringaf.create buffer_size)
+          Body.create
+            (Bigstringaf.create buffer_size)
+            active_request.Respd.wakeup_writer
       in
       let new_response_state =
         Respd.create_active_response response response_body
@@ -1127,7 +1144,7 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
         config.enable_server_push && push_handler != default_push_handler
     }
   in
-  let rec preface_handler recv_frame settings_list =
+  let rec connection_preface_handler recv_frame settings_list =
     let t = Lazy.force t in
     (* The server has sent us a valid connection preface, we can start reading
      * other frames now. *)
@@ -1197,7 +1214,8 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
       ; pending_pings = Queue.create ()
       ; error_handler
       ; push_handler
-      ; reader = New (Reader.server_connection_preface preface_handler)
+      ; reader =
+          New (Reader.server_connection_preface connection_preface_handler)
       ; writer = Writer.create settings.max_frame_size
       ; streams = Scheduler.make_root ()
       ; wakeup_writer =
@@ -1231,7 +1249,10 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
 
 let request t request ~error_handler ~response_handler =
   let max_frame_size = t.settings.max_frame_size in
-  let request_body = Body.create (Bigstringaf.create max_frame_size) in
+  let wakeup_stream () = wakeup_writer t in
+  let request_body =
+    Body.create (Bigstringaf.create max_frame_size) wakeup_stream
+  in
   t.current_stream_id <- Int32.add t.current_stream_id 2l;
   let stream_id = t.current_stream_id in
   let respd =
@@ -1254,7 +1275,12 @@ let request t request ~error_handler ~response_handler =
   Writer.flush t.writer (fun () ->
       respd.state
       <- Active
-           (Open WaitingForPeer, { request; request_body; response_handler }));
+           ( Open WaitingForPeer
+           , { request
+             ; request_body
+             ; response_handler
+             ; wakeup_writer = wakeup_stream
+             } ));
   wakeup_writer t;
   (* Closing the request body puts the stream in the half-closed (local) state.
    * This is handled by {!Respd.flush_request_body}, which transitions the
@@ -1330,16 +1356,8 @@ let next_write_operation t =
   Writer.next t.writer
 
 let yield_writer t k =
-  if is_active t then (
-    Scheduler.on_more_output_available
-      t.streams
-      (* FIXME *)
-      (t.current_stream_id, 0l)
-      k;
-    (* We need to let both the connection and each individual streams wake up
-     * the connection, given that some control frames can be scheduled to be
-     * written when all the streams are yielding. *)
-    on_wakeup_writer t k)
+  if is_active t then
+    on_wakeup_writer t k
   else if Writer.is_closed t.writer then
     k ()
   else

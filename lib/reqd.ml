@@ -45,7 +45,7 @@ type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [ `write ] Body.t) -> unit
 
 type response_state =
-  | Waiting of (unit -> unit) ref
+  | Waiting
   | Fixed of
       { response : Response.t
       ; mutable iovec :
@@ -72,11 +72,9 @@ type active_stream =
          * trailer headers are emitted. *)
   ; mutable trailers_parser : partial_headers option
   ; mutable trailers : Headers.t option
+  ; wakeup_writer : unit -> unit
   ; create_push_stream :
-      unit
-      -> ( t * (unit -> unit)
-         , [ `Push_disabled | `Stream_ids_exhausted ] )
-         result
+      unit -> (t, [ `Push_disabled | `Stream_ids_exhausted ]) result
   }
 
 and state =
@@ -84,25 +82,21 @@ and state =
 
 and t = (state, [ `Ok | error ], error_handler) Stream.stream
 
-let default_waiting = Sys.opaque_identity (fun () -> ())
-
 let create_active_request request request_body =
   { request; request_body; request_body_bytes = Int64.zero }
 
-let create_active_stream encoder body_buffer_size create_push_stream =
+let create_active_stream
+    encoder body_buffer_size wakeup_writer create_push_stream
+  =
   { body_buffer_size
   ; encoder
-  ; response_state = Waiting (ref default_waiting)
+  ; response_state = Waiting
   ; wait_for_first_flush = true
   ; trailers_parser = None
   ; trailers = None
+  ; wakeup_writer
   ; create_push_stream
   }
-
-let done_waiting when_done_waiting =
-  let f = !when_done_waiting in
-  when_done_waiting := default_waiting;
-  f ()
 
 let request t =
   match t.state with
@@ -143,7 +137,7 @@ let response t =
       , { response_state; _ } )
   | Reserved (_, { response_state; _ }) ->
     (match response_state with
-    | Waiting _ ->
+    | Waiting ->
       None
     | Streaming (response, _) | Fixed { response; _ } | Complete response ->
       Some response)
@@ -159,7 +153,7 @@ let response_exn t =
       , { response_state; _ } )
   | Reserved (_, { response_state; _ }) ->
     (match response_state with
-    | Waiting _ ->
+    | Waiting ->
       failwith "h2.Reqd.response_exn: response has not started"
     | Streaming (response, _) | Fixed { response; _ } | Complete response ->
       response)
@@ -168,7 +162,7 @@ let response_exn t =
 
 let send_fixed_response t s response data =
   match s.response_state with
-  | Waiting when_done_waiting ->
+  | Waiting ->
     let iovec, length =
       match data with
       | `String s ->
@@ -200,7 +194,7 @@ let send_fixed_response t s response data =
       s.response_state <- Fixed { response; iovec }
     else
       s.response_state <- Complete response;
-    done_waiting when_done_waiting
+    s.wakeup_writer ()
   | Streaming _ ->
     failwith "h2.Reqd.respond_with_*: response already started"
   | Fixed _ | Complete _ ->
@@ -238,16 +232,16 @@ let respond_with_bigstring t response bstr =
 let send_streaming_response ~flush_headers_immediately t s response =
   s.wait_for_first_flush <- not flush_headers_immediately;
   match s.response_state with
-  | Waiting when_done_waiting ->
+  | Waiting ->
     let frame_info =
       Writer.make_frame_info ~max_frame_size:t.max_frame_size t.id
     in
     let response_body_buffer = Bigstringaf.create s.body_buffer_size in
-    let response_body = Body.create response_body_buffer in
+    let response_body = Body.create response_body_buffer s.wakeup_writer in
     Writer.write_response_headers t.writer s.encoder frame_info response;
     if s.wait_for_first_flush then Writer.yield t.writer;
     s.response_state <- Streaming (response, response_body);
-    done_waiting when_done_waiting;
+    s.wakeup_writer ();
     response_body
   | Streaming _ ->
     failwith "h2.Reqd.respond_with_streaming: response already started"
@@ -282,7 +276,7 @@ let respond_with_streaming t ?(flush_headers_immediately = false) response =
 
 let start_push_stream t s request =
   match s.create_push_stream () with
-  | Ok (promised_reqd, wakeup_writer) ->
+  | Ok promised_reqd ->
     let frame_info =
       Writer.make_frame_info ~max_frame_size:t.max_frame_size t.id
     in
@@ -292,12 +286,18 @@ let start_push_stream t s request =
       frame_info
       ~promised_id:promised_reqd.id
       request;
-    let { encoder; body_buffer_size; create_push_stream; _ } = s in
+    let { encoder; body_buffer_size; create_push_stream; wakeup_writer; _ } =
+      s
+    in
     (* From RFC7540§8.2:
      *   Promised requests [...] MUST NOT include a request body. *)
     let request_info = create_active_request request Body.empty in
     let active_stream =
-      create_active_stream encoder body_buffer_size create_push_stream
+      create_active_stream
+        encoder
+        body_buffer_size
+        wakeup_writer
+        create_push_stream
     in
     (* From RFC7540§8.2.1:
      *   Sending a PUSH_PROMISE frame creates a new stream and puts the stream
@@ -360,7 +360,7 @@ let close_stream t =
 
 let _report_error ?request t s exn error_code =
   match s.response_state, fst t.error_code with
-  | Waiting _, `Ok ->
+  | Waiting, `Ok ->
     t.error_code <- (exn :> [ `Ok | error ]), Some error_code;
     let status =
       match (exn :> [ error | Status.standard ]) with
@@ -375,7 +375,7 @@ let _report_error ?request t s exn error_code =
           ~flush_headers_immediately:true
           t
           response)
-  | Waiting _, `Exn _ ->
+  | Waiting, `Exn _ ->
     (* XXX(seliopou): Decide what to do in this unlikely case. There is an
      * outstanding call to the [error_handler], but an intervening exception
      * has been reported as well. *)
@@ -389,7 +389,7 @@ let _report_error ?request t s exn error_code =
     t.error_code <- fst t.error_code, Some error_code;
     reset_stream t error_code;
     Writer.close_and_drain t.writer
-  | (Fixed _ | Complete _ | Streaming _ | Waiting _), _ ->
+  | (Fixed _ | Complete _ | Streaming _ | Waiting), _ ->
     (* XXX(seliopou): Once additional logging support is added, log the error
      * in case it is not spurious. *)
     (* Still need to send an RST_STREAM frame. Set t.error_code with
@@ -430,29 +430,6 @@ let close_request_body { request_body; _ } = Body.close_reader request_body
 let error_code t =
   match fst t.error_code with #error as error -> Some error | `Ok -> None
 
-let on_more_output_available t f =
-  match t.state with
-  | Idle | Reserved _ | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
-    assert false
-  | Active
-      ( (Open (FullHeaders | ActiveMessage _) | HalfClosed _)
-      , { response_state; _ } ) ->
-    (match response_state with
-    | Waiting when_done_waiting ->
-      (* Due to the flow-control window, this function might be called when
-       * another callback is already stored. We don't enforce that the
-       * currently stored callback is equal to `default_waiting` because it is
-       * OK for that not to happen. *)
-      when_done_waiting := f
-    | Streaming (_, response_body) ->
-      Body.when_ready_to_write response_body f
-    | Fixed _ ->
-      ()
-    | Complete _ ->
-      failwith "h2.Reqd.on_more_output_available: response already complete")
-  | Closed _ ->
-    assert false
-
 let response_body_requires_output response_body =
   (not (Body.is_closed response_body)) || Body.has_pending_output response_body
 
@@ -478,7 +455,7 @@ let requires_output t =
       len > 0
     | Streaming (_, response_body) ->
       response_body_requires_output response_body
-    | Waiting _ ->
+    | Waiting ->
       true)
   | Closed _ ->
     false
@@ -531,7 +508,7 @@ let flush_response_body t ~max_bytes =
           write_buffer_data t.writer ~off ~len frame_info buffer;
           close_stream t;
           len)
-    | Waiting _ | Complete _ ->
+    | Waiting | Complete _ ->
       0)
   | _ ->
     0

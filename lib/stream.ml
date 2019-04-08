@@ -122,7 +122,7 @@ let create id ~max_frame_size writer error_handler on_stream_closed =
   ; on_stream_closed
   }
 
-let id t = t.id
+let id { id; _ } = id
 
 let is_idle t = match t.state with Idle -> true | _ -> false
 
@@ -131,8 +131,16 @@ let is_open t = match t.state with Active (Open _, _) -> true | _ -> false
 let closed t = match t.state with Closed c -> Some c | _ -> None
 
 let finish_stream t reason =
-  t.state <- Closed { reason; ttl = initial_ttl };
-  t.on_stream_closed ()
+  (match t.state with
+  | Active _ ->
+    (* From RFC7540§5.1.2:
+     *   Streams that are in the "open" state or in either of the "half-closed"
+     *   states count toward the maximum number of streams that an endpoint is
+     *   permitted to open. *)
+    t.on_stream_closed ()
+  | _ ->
+    ());
+  t.state <- Closed { reason; ttl = initial_ttl }
 
 let reset_stream t error_code =
   let frame_info = Writer.make_frame_info t.id in

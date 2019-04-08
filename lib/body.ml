@@ -40,8 +40,8 @@ type _ t =
   ; mutable write_final_data_frame : bool
   ; mutable on_eof : unit -> unit
   ; mutable on_read : Bigstringaf.t -> off:int -> len:int -> unit
-  ; mutable when_ready_to_write : unit -> unit
   ; buffered_bytes : int ref
+  ; ready_to_write : unit -> unit
   }
 
 let default_on_eof = Sys.opaque_identity (fun () -> ())
@@ -50,29 +50,24 @@ let default_on_read = Sys.opaque_identity (fun _ ~off:_ ~len:_ -> ())
 
 let default_ready_to_write = Sys.opaque_identity (fun () -> ())
 
-let of_faraday faraday =
-  { faraday
+let create buffer ready_to_write =
+  { faraday = Faraday.of_bigstring buffer
   ; read_scheduled = false
   ; write_final_data_frame = true
   ; on_eof = default_on_eof
   ; on_read = default_on_read
-  ; when_ready_to_write = default_ready_to_write
   ; buffered_bytes = ref 0
+  ; ready_to_write
   }
 
-let create buffer = of_faraday (Faraday.of_bigstring buffer)
-
 let create_empty () =
-  let t = create Bigstringaf.empty in
+  let t = create Bigstringaf.empty default_ready_to_write in
   Faraday.close t.faraday;
   t
 
 let empty = create_empty ()
 
-let ready_to_write t =
-  let callback = t.when_ready_to_write in
-  t.when_ready_to_write <- default_ready_to_write;
-  callback ()
+let ready_to_write t = t.ready_to_write ()
 
 let write_char t c =
   Faraday.write_char t.faraday c;
@@ -144,16 +139,6 @@ let has_pending_output t =
 let close_reader t =
   Faraday.close t.faraday;
   execute_read t
-
-let when_ready_to_write t callback =
-  (* Due to the flow-control window, this function might be called when another
-   * callback is already stored. We don't enforce that the currently stored
-   * callback is equal to `default_ready_to_write` because it is OK for that
-   * not to happen. *)
-  if is_closed t then
-    callback ()
-  else
-    t.when_ready_to_write <- callback
 
 let transfer_to_writer t writer ~max_frame_size ~max_bytes stream_id =
   let faraday = t.faraday in

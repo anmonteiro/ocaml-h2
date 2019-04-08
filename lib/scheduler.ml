@@ -51,8 +51,6 @@ module type StreamDescriptor = sig
 
   val flush_write_body : t -> max_bytes:int -> int
 
-  val on_more_output_available : t -> (unit -> unit) -> unit
-
   val finish_stream : t -> Stream.closed_reason -> unit
 
   val is_idle : t -> bool
@@ -357,6 +355,39 @@ module Make (Streamd : StreamDescriptor) = struct
     in
     stream.t <- tlast_p + (n * 256 / stream.priority.weight)
 
+  let implicitly_close_stream t descriptor =
+    let (Connection root) = t in
+    if Streamd.is_idle descriptor then
+      (* From RFC7540§5.1.1:
+       *   The first use of a new stream identifier implicitly closes all
+       *   streams in the "idle" state that might have been initiated by
+       *   that peer with a lower-valued stream identifier. *)
+      Streamd.finish_stream descriptor Finished
+    else
+      match Streamd.closed descriptor with
+      | Some c ->
+        (* When a stream completes, i.e. doesn't require more output and
+         * enters the `Closed` state, we set a TTL value which represents the
+         * number of writer yields that the stream has before it is removed
+         * from the connection Hash Table. By doing this we avoid losing some
+         * potentially useful information regarding the stream's state at the
+         * cost of keeping it around for a little while longer. *)
+        if c.ttl = 0 then
+          StreamsTbl.remove root.all_streams (Streamd.id descriptor)
+        else
+          c.ttl <- c.ttl - 1
+      | None ->
+        ()
+
+  let maybe_implicitly_close t descriptor max_seen_ids =
+    let max_client_stream_id, max_pushed_stream_id = max_seen_ids in
+    let stream_id = Streamd.id descriptor in
+    if Stream_identifier.is_request stream_id then (
+      if stream_id < max_client_stream_id then
+        implicitly_close_stream t descriptor)
+    else if stream_id < max_pushed_stream_id then
+      implicitly_close_stream t descriptor
+
   (* Scheduling algorithm from https://goo.gl/3sSHXJ (based on nghttp2):
    *
    * 1  def schedule(p):
@@ -373,7 +404,7 @@ module Make (Streamd : StreamDescriptor) = struct
    * 12
    * 13 schedule(0)
    *)
-  let flush t =
+  let flush t max_seen_ids =
     let rec schedule : type a. a node -> int * bool = function
       | Connection p ->
         (* The root can never send data. *)
@@ -384,10 +415,12 @@ module Make (Streamd : StreamDescriptor) = struct
           if subtree_is_active then (
             update_t i_node written;
             p.children <- PriorityQueue.add id i_node children')
-          else
+          else (
+            maybe_implicitly_close t i.descriptor max_seen_ids;
             (* XXX(anmonteiro): we may not want to remove from the tree right
              * away. *)
             p.children <- children';
+            StreamsTbl.remove p.all_streams id);
           written, subtree_is_active
         | None ->
           (* Queue is empty, see line 6 above. *)
@@ -410,8 +443,11 @@ module Make (Streamd : StreamDescriptor) = struct
             if subtree_is_active then (
               update_t i_node written;
               p.children <- PriorityQueue.add id i_node children')
-            else
+            else (
+              maybe_implicitly_close t i.descriptor max_seen_ids;
               p.children <- children';
+              let (Connection root) = t in
+              StreamsTbl.remove root.all_streams id);
             written, subtree_is_active
           | None ->
             (* Queue is empty, see line 6 above. *)
@@ -461,44 +497,6 @@ module Make (Streamd : StreamDescriptor) = struct
     | Stream ({ inflow; _ } as stream) ->
       stream.inflow <- inflow - size
 
-  let on_more_output_available t (max_client_stream_id, max_pushed_stream_id) k
-    =
-    let (Connection root) = t in
-    let implicitly_close_stream descriptor =
-      if Streamd.is_idle descriptor then
-        (* From RFC7540§5.1.1:
-         *   The first use of a new stream identifier implicitly closes all
-         *   streams in the "idle" state that might have been initiated by
-         *   that peer with a lower-valued stream identifier. *)
-        Streamd.finish_stream descriptor Finished
-      else
-        match Streamd.closed descriptor with
-        | Some c ->
-          (* When a stream completes, i.e. doesn't require more output and
-           * enters the `Closed` state, we set a TTL value which represents the
-           * number of writer yields that the stream has before it is removed
-           * from the connection Hash Table. By doing this we avoid losing some
-           * potentially useful information regarding the stream's state at the
-           * cost of keeping it around for a little while longer. *)
-          if c.ttl = 0 then
-            StreamsTbl.remove root.all_streams (Streamd.id descriptor)
-          else
-            c.ttl <- c.ttl - 1
-        | None ->
-          ()
-    in
-    StreamsTbl.iter
-      (fun id stream_node ->
-        let (Stream { descriptor; _ }) = stream_node in
-        if Stream_identifier.is_request id then (
-          if id < max_client_stream_id then
-            implicitly_close_stream descriptor)
-        else if id < max_pushed_stream_id then
-          implicitly_close_stream descriptor;
-        if requires_output t stream_node then
-          Streamd.on_more_output_available descriptor k)
-      root.all_streams
-
   let pp_hum fmt t =
     let rec pp_hum_inner level fmt t =
       let pp_binding fmt (i, Stream { children; t; _ }) =
@@ -515,27 +513,3 @@ module Make (Streamd : StreamDescriptor) = struct
     in
     pp_hum_inner 0 fmt t
 end
-
-module Client_scheduler = Make (struct
-  include Stream
-
-  type t = Respd.t
-
-  let flush_write_body = Respd.flush_request_body
-
-  let requires_output = Respd.requires_output
-
-  let on_more_output_available = Respd.on_more_output_available
-end)
-
-module Server_scheduler = Make (struct
-  include Stream
-
-  type t = Reqd.t
-
-  let flush_write_body = Reqd.flush_response_body
-
-  let requires_output = Reqd.requires_output
-
-  let on_more_output_available = Reqd.on_more_output_available
-end)

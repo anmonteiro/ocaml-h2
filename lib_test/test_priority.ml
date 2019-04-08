@@ -1,6 +1,6 @@
 open H2__
 open Test_common
-module Scheduler = Scheduler.Server_scheduler
+module Scheduler = Server_connection.Scheduler
 
 let pp_priority fmt { Priority.weight; stream_dependency; exclusive } =
   Format.fprintf

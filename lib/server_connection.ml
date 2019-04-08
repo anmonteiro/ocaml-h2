@@ -35,7 +35,16 @@
 module AB = Angstrom.Buffered
 module Reader = Parse.Reader
 module Writer = Serialize.Writer
-module Scheduler = Scheduler.Server_scheduler
+
+module Scheduler = Scheduler.Make (struct
+  include Stream
+
+  type t = Reqd.t
+
+  let flush_write_body = Reqd.flush_response_body
+
+  let requires_output = Reqd.requires_output
+end)
 
 type request_handler = Reqd.t -> unit
 
@@ -108,9 +117,6 @@ let shutdown_writer t =
   Writer.close t.writer;
   if not (is_active t) then
     wakeup_writer t
-
-(* let error_code t = if is_active t then Reqd.error_code (current_reqd_exn t)
-   else None *)
 
 let shutdown t =
   shutdown_reader t;
@@ -212,7 +218,7 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
                 (* ?priority *)
       ~initial_window_size:t.settings.initial_window_size
       reqd;
-    Ok (reqd, fun () -> wakeup_writer t)
+    Ok reqd
 
 let handle_headers t ~end_stream reqd active_stream headers =
   (* From RFC7540§5.1.2:
@@ -273,7 +279,9 @@ let handle_headers t ~end_stream reqd active_stream headers =
                  * value for [request_body_buffer_size]. *)
                 t.config.request_body_buffer_size
             in
-            Body.create (Bigstringaf.create buffer_size)
+            Body.create
+              (Bigstringaf.create buffer_size)
+              active_stream.wakeup_writer
         in
         let request_info = Reqd.create_active_request request request_body in
         if end_stream then (
@@ -427,6 +435,7 @@ let open_stream t frame_header ?priority headers_block =
       Reqd.create_active_stream
         t.hpack_encoder
         t.config.response_body_buffer_size
+        (fun () -> wakeup_writer t)
         (create_push_stream t)
     in
     reqd.state <- Active (Open (PartialHeaders partial_headers), active_stream);
@@ -766,9 +775,9 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
         Stream.finish_stream reqd (ResetByThem error_code))
     | None ->
       (* We might have removed the stream from the hash table. If its stream
-       * id is strictly smaller than the max client stream id we've seen, then
-       * it must have been closed. *)
-      if Stream_identifier.(stream_id >= t.max_client_stream_id) then
+       * id is smaller than or equal to the max client stream id we've seen,
+       * then it must have been closed. *)
+      if Stream_identifier.(stream_id > t.max_client_stream_id) then
         (* From RFC7540§6.4:
          *   RST_STREAM frames MUST NOT be sent for a stream in the "idle"
          *   state. If a RST_STREAM frame identifying an idle stream is
@@ -1218,7 +1227,7 @@ let read_eof t bs ~off ~len =
 
 let flush_response_body t =
   if is_active t then
-    Scheduler.flush t.streams
+    Scheduler.flush t.streams (t.max_client_stream_id, t.max_pushed_stream_id)
 
 let next_write_operation t =
   flush_response_body t;
@@ -1227,16 +1236,8 @@ let next_write_operation t =
 let report_write_result t result = Writer.report_result t.writer result
 
 let yield_writer t k =
-  if is_active t then (
-    let { max_client_stream_id; max_pushed_stream_id; _ } = t in
-    Scheduler.on_more_output_available
-      t.streams
-      (max_client_stream_id, max_pushed_stream_id)
-      k;
-    (* We need to let both the connection and each individual streams wake up
-     * the connection, given that some control frames can be scheduled to be
-     * written when all the streams are yielding. *)
-    on_wakeup_writer t k)
+  if is_active t then
+    on_wakeup_writer t k
   else if Writer.is_closed t.writer then
     k ()
   else

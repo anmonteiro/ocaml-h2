@@ -25,7 +25,8 @@
     "@opam/hex": "*",
     "@opam/merlin": "*",
     "@opam/ocamlformat": "*",
-    "@opam/odoc": "*"
+    "@opam/odoc": "*",
+    "@opam/landmarks": "*"
   },
   "resolutions": {
     "@opam/conf-libev": "esy-packages/libev:package.json#86d244e",
