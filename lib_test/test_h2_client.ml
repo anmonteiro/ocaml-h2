@@ -770,7 +770,7 @@ module Client_connection_tests = struct
       "Stream transitions to the closed state once the response has been \
        received"
       true
-      (Stream.closed stream <> None)
+      (match stream.Stream.state with Closed _ -> true | _ -> false)
 
   let test_ping () =
     let t =

@@ -561,7 +561,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
           active_response
           frame_header
           headers_block
-      | Closed { reason = ResetByThem _; _ } ->
+      | Closed (ResetByThem _) ->
         (* From RFC7540§5.1:
          *   closed: [...] An endpoint that receives any frame other than
          *   PRIORITY after receiving a RST_STREAM MUST treat that as a
@@ -685,7 +685,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
        *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
       report_connection_error t Error.ProtocolError
     (* This is technically in the half-closed (local) state *)
-    | Closed { reason = ResetByUs NoError; _ } ->
+    | Closed (ResetByUs NoError) ->
       (* From RFC7540§6.9:
        *   A receiver that receives a flow-controlled frame MUST always
        *   account for its contribution against the connection flow-control

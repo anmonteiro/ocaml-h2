@@ -75,16 +75,6 @@ type closed_reason =
   (* Received an RST_STREAM frame from the peer. *)
   | ResetByThem of Error.error_code
 
-type closed =
-  { reason : closed_reason
-        (* When a stream is closed, we may want to keep it around in the hash
-         * table for a while (e.g. to know whether this stream was reset by the
-         * peer - some error handling code depends on that). We start with a
-         * default value, and on every writer yield we decrement it. If it
-         * reaches 0, the stream is finally removed from the hash table. *)
-  ; mutable ttl : int
-  }
-
 type ('opn, 'half_closed) active_state =
   | Open of 'opn remote_state
   | HalfClosed of 'half_closed
@@ -93,7 +83,7 @@ type ('active_state, 'active, 'reserved) state =
   | Idle
   | Reserved of 'reserved
   | Active of 'active_state * 'active
-  | Closed of closed
+  | Closed of closed_reason
   constraint 'active_state = (_, _) active_state
 
 type ('state, 'error_code, 'error_handler) stream =
@@ -107,8 +97,6 @@ type ('state, 'error_code, 'error_handler) stream =
   ; on_stream_closed : unit -> unit
   }
   constraint 'state = (_, _, _) state
-
-let initial_ttl = 10
 
 let create id ~max_frame_size writer error_handler on_stream_closed =
   { id
@@ -128,8 +116,6 @@ let is_idle t = match t.state with Idle -> true | _ -> false
 
 let is_open t = match t.state with Active (Open _, _) -> true | _ -> false
 
-let closed t = match t.state with Closed c -> Some c | _ -> None
-
 let finish_stream t reason =
   (match t.state with
   | Active _ ->
@@ -140,7 +126,7 @@ let finish_stream t reason =
     t.on_stream_closed ()
   | _ ->
     ());
-  t.state <- Closed { reason; ttl = initial_ttl }
+  t.state <- Closed reason
 
 let reset_stream t error_code =
   let frame_info = Writer.make_frame_info t.id in

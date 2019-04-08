@@ -182,7 +182,8 @@ let report_exn t exn =
     let additional_debug_data = Printexc.to_string exn in
     report_connection_error t ~additional_debug_data Error.InternalError
 
-let on_stream_closed t () =
+let on_stream_closed t id () =
+  Scheduler.remove_stream t.streams id;
   t.current_client_streams <- t.current_client_streams - 1
 
 let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
@@ -211,7 +212,7 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
         ~max_frame_size:t.settings.max_frame_size
         t.writer
         t.error_handler
-        (on_stream_closed t)
+        (on_stream_closed t pushed_stream_id)
     in
     Scheduler.add
       t.streams (* TODO: *)
@@ -393,7 +394,7 @@ let open_stream t frame_header ?priority headers_block =
             ~max_frame_size:t.settings.max_frame_size
             t.writer
             t.error_handler
-            (on_stream_closed t)
+            (on_stream_closed t stream_id)
         in
         Scheduler.add
           t.streams
@@ -527,7 +528,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
          *   frames, other than WINDOW_UPDATE, PRIORITY, or RST_STREAM, for a
          *   stream that is in this state, it MUST respond with a stream
          *   error (Section 5.4.2) of type STREAM_CLOSED. *)
-        | Closed { reason = ResetByThem _; _ } ->
+        | Closed (ResetByThem _) ->
           (* From RFC7540§5.1:
            *   closed: [...] An endpoint that receives any frame other than
            *   PRIORITY after receiving a RST_STREAM MUST treat that as a
@@ -659,7 +660,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
          *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
         report_connection_error t Error.ProtocolError
       (* This is technically in the half-closed (local) state *)
-      | Closed { reason = ResetByUs NoError; _ } ->
+      | Closed (ResetByUs NoError) ->
         (* From RFC7540§6.9:
          *   A receiver that receives a flow-controlled frame MUST always
          *   account for its contribution against the connection flow-control
@@ -728,7 +729,7 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
             ~max_frame_size:t.settings.max_frame_size
             t.writer
             t.error_handler
-            (on_stream_closed t)
+            (on_stream_closed t stream_id)
         in
         Scheduler.add
           t.streams
