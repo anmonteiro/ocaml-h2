@@ -190,6 +190,13 @@ portable (with respect to different I/O runtimes) implementation. To achieve
 that, it takes advantage of the unbuffered parsing interface in Angstrom using
 off-heap buffers wherever possible, for both parsing and serialization.
 
+Below is a plot of H2's latency profile at a sustained rate of 17000 requests
+per second over 30 seconds, benchmarked using the
+[vegeta](https://github.com/tsenart/vegeta) load testing tool.
+
+![ocaml-h2](./vegeta-plot.png)
+
+
 ## Limitations
 
 h2 only currently provides a server implementation. In the future, a
