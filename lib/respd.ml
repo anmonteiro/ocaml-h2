@@ -185,6 +185,7 @@ let close_stream t =
   | _ ->
     ()
 
+(* returns whether we should send an RST_STREAM frame or not. *)
 let _report_error t ?response_body exn error_code =
   match fst t.error_code with
   | `Ok ->
@@ -197,7 +198,7 @@ let _report_error t ?response_body exn error_code =
       ());
     t.error_code <- (exn :> [ `Ok | error ]), Some error_code;
     t.error_handler exn;
-    reset_stream t error_code
+    true
   | `Exn _
   | `Protocol_error
   | `Invalid_response_body_length _
@@ -212,16 +213,19 @@ let report_error t exn error_code =
         | HalfClosed (ActiveMessage { response_body; _ }) )
       , s ) ->
     Body.close_writer s.request_body;
-    _report_error t ~response_body exn error_code
+    if _report_error t ~response_body exn error_code then
+      reset_stream t error_code
   | Reserved (ActiveMessage s) | Active (_, s) ->
     Body.close_writer s.request_body;
-    _report_error t exn error_code
+    if _report_error t exn error_code then
+      reset_stream t error_code
   | Reserved _ ->
     (* Streams in the reserved state don't yet have a stream-level error
      * handler registered with them *)
     ()
   | Idle | Closed _ ->
-    _report_error t exn error_code
+    (* Not allowed to send RST_STREAM frames in these states *)
+    ignore (_report_error t exn error_code)
 
 let close_request_body { request_body; _ } = Body.close_reader request_body
 
