@@ -48,7 +48,7 @@ It sets up a server that listens on 2 ports:
 The ALPN example also provides a unikernel implementation with the same
 functionality that runs on [MirageOS](https://mirage.io).
 
-### A simplistic (server) example
+### A server example
 
 We present an annotated example below that responds to any `GET` request and
 returns a response body containing the target of the request.
@@ -166,6 +166,161 @@ let () =
   Lwt_main.run forever
 ```
 
+### A client example
+
+The following annotated client example performs a `GET` request to `example.com`
+and prints the response body as it arrives.
+
+```ocaml
+open H2
+module Client = H2_lwt_unix.Client
+
+(* This is our response handler. H2 will invoke this function whenever the
+ * server has responded to our request. The `notify_response_received` argument
+ * is explained further down. *)
+let response_handler notify_response_received response response_body =
+  (* `response` contains information about the response that we received. We're
+   * looking at the status to know whether our request produced a successful
+   * response, but we could also get the response headers, for example. *)
+  match response.Response.status with
+  | `OK ->
+    (* If we got a successful response, we're going to read the response body
+     * as it arrives, and print its fragments as we receive them. *)
+    let rec read_response () =
+      (* Scheduling a read of the response body registers two functions with
+       * H2:
+       *
+       * 1. `on_read`: this function will be called upon the receipt of a
+       *    response body chunk (in HTTP/2 speak, a DATA frame). Our handling
+       *    of these chunks is explained inline below.
+       *
+       * 2. `on_eof`: this function will be called once the entire response
+       *    body has arrived. In our case, this is where we fulfill the promise
+       *    that we're done handling the response.
+       *)
+      Body.schedule_read
+        response_body
+        ~on_read:(fun bigstring ~off ~len ->
+          (* Once a response body chunk is handed to us (as a bigarray, and an
+           * offset and length into that bigarray), we'll copy it into a string
+           * and print it to stdout. *)
+          let response_fragment = Bytes.create len in
+          Bigstringaf.blit_to_bytes
+            bigstring
+            ~src_off:off
+            response_fragment
+            ~dst_off:0
+            ~len;
+          print_string (Bytes.to_string response_fragment);
+          (* We need to make sure that we register another read of the response
+           * body after we're done handling a fragment, as it will not be
+           * registered for us. This is where our recursive function comes in
+           * handy. *)
+          read_response ())
+        ~on_eof:(fun () ->
+          (* Signal to the caller of the HTTP/2 request that we are now done
+           * handling the response, and the program can continue. *)
+          Lwt.wakeup_later notify_response_received ())
+    in
+    read_response ()
+  | _ ->
+    (* We didn't get a successful status in the response. Just print what we
+     * received to stderr and bail early. *)
+    Format.eprintf "Unsuccessful response: %a\n%!" Response.pp_hum response;
+    exit 1
+
+let error_handler _error =
+  (* There was an error handling the request. In this simple example, we don't
+   * try too hard to understand it. Just print to stderr and exit with an
+   * unsuccessful status code. *)
+  Format.eprintf "Unsuccessful request!\n%!";
+  exit 1
+
+open Lwt.Infix
+
+let () =
+  let host = "www.example.com" in
+  Lwt_main.run
+    ( (* We start by resolving the address of the host we want to connect to. *)
+      Lwt_unix.getaddrinfo host "443" [ Unix.(AI_FAMILY PF_INET) ]
+    >>= fun addresses ->
+      (* Once the address for the host we want to contact has been resolved, we
+       * need to create the socket through which the communication with the
+       * remote host is going to happen. *)
+      let socket = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
+      (* Then, we connect to the socket we just created, on the address we have
+       * previously obtained through name resolution. *)
+      Lwt_unix.connect socket (List.hd addresses).Unix.ai_addr >>= fun () ->
+      let request =
+        Request.create
+          `GET
+          "/"
+          (* a scheme pseudo-header is required in HTTP/2 requests, otherwise
+           * the request will be considered malformed. In our case, we're
+           * making a request over HTTPS, so we specify "https" *)
+          ~scheme:"https"
+          ~headers:
+            (* The `:authority` pseudo-header is a blurry line in the HTTP/2
+             * specificiation. It's not strictly required but most
+             * implementations treat a request with a missing `:authority`
+             * pseudo-header as malformed. That is the case for example.com, so
+             * we include it. *)
+            Headers.(add_list empty [ ":authority", host ])
+      in
+      (* The H2 API relies on callbacks to allow for a single, stable core to
+       * be used with different I/O runtimes. Because we're using Lwt in this
+       * example, we'll create an Lwt task that is going to help us transform
+       * the callback-calling style of H2 into an Lwt promise whenever we're
+       * done handling the response.
+       *
+       * If you're not familiar with Lwt or its `Lwt.wait` function, it's
+       * recommended you read at least the following bit before moving on:
+       * http://ocsigen.org/lwt/4.1.0/api/Lwt#VALwait. *)
+      let response_received, notify_response_received = Lwt.wait () in
+      (* Partially apply the `response_handler` function that we defined above
+       * to produce one that matches H2's expected signature. After this line,
+       * `response_handler` now has the following signature:
+       *
+       *   val response_handler: Response.t -> [ `read ] Body.t -> unit
+       *)
+      let response_handler = response_handler notify_response_received in
+      (* HTTP/2 itself does not define that the protocol must be used with TLS.
+       * In practice, though, TLS is widely used in the Internet today (and
+       * that's a good thing!) and no serious deployments use plaintext HTTP/2.
+       * The following is a good read on why this is the case:
+       * https://http2-explained.haxx.se/content/en/part8.html#844-its-use-of-tls-makes-it-slower
+       *
+       * For us, this means that we need to make our request over TLS. H2, and
+       * more specifically `h2-lwt-unix`, provide a `TLS` module for both the
+       * client and the server implementations that rely on an optional
+       * dependency to ocaml-tls.
+       *
+       * We start by creating a connection handler. The `create_connection`
+       * function takes two arguments: a connection-level error handler (you
+       * can read more about the difference between connection-level and
+       * stream-level in H2 and HTTP/2 in general here:
+       * https://anmonteiro.com/ocaml-h2/h2/H2/Client_connection/index.html#val-create)
+       * and the file descriptor that we created above. *)
+      Client.TLS.create_connection ~error_handler socket >>= fun connection ->
+      (* Once the connection has been created, we can initiate our request. For
+       * that, we call the `request` function, which will send the request that
+       * we created to the server, and direct its response to either the
+       * response handler - in case of a successful request / response exchange
+       * - or the (stream-level) error handler, in case our request was
+       * malformed. *)
+      let request_body =
+        Client.TLS.request connection request ~error_handler ~response_handler
+      in
+      (* The `request` function returns a request body that we can write to,
+       * but in our case just the headers are sufficient. We close the request
+       * body immediately to signal to the underlying HTTP/2 framing layer that
+       * we're done sending our request. *)
+      Body.close_writer request_body;
+      (* Our call to `Lwt_main.run` above will wait until this promise is
+       * filled  before exiting the program. *)
+      response_received )
+```
+
 ## Conformance
 
 One of h2's goals is to be 100% compliant with the HTTP/2 specification.
@@ -195,11 +350,6 @@ per second over 30 seconds, benchmarked using the
 [vegeta](https://github.com/tsenart/vegeta) load testing tool.
 
 ![ocaml-h2](./vegeta-plot.png)
-
-## Limitations
-
-h2 only currently provides a server implementation. In the future, a
-client library will also be provided.
 
 ## Development
 
