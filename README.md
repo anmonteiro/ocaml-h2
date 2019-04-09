@@ -194,8 +194,7 @@ Below is a plot of H2's latency profile at a sustained rate of 17000 requests
 per second over 30 seconds, benchmarked using the
 [vegeta](https://github.com/tsenart/vegeta) load testing tool.
 
-![ocaml-h2](./vegeta-plot.png)
-
+<img src="./vegeta-plot.png" alt="ocaml-h2 req/s plot" />
 
 ## Limitations
 
