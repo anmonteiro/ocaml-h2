@@ -132,6 +132,10 @@ let was_closed_or_implicitly_closed t stream_id =
   else
     Stream_identifier.(stream_id <= t.max_pushed_stream_id)
 
+(* TODO: currently connection-level errors are not reported to the error
+ * handler because it is assumed that an error handler will produce a response,
+ * and since HTTP/2 is multiplexed, there's no matching response for a
+ * connection error. We should do something about it. *)
 let report_error t = function
   | Error.ConnectionError (error, data) ->
     if not t.did_send_go_away then (
