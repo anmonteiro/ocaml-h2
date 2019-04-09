@@ -82,8 +82,6 @@ opam-steps: &opam-steps
           eval `opam config env`
           # https://github.com/ocaml-ppx/ocamlformat/issues/754
           dune build @fmt --auto-promote || true
-          # https://github.com/ocaml/dune/issues/2012
-          git checkout lwt-unix/dune
           git diff --exit-code
     - run:
         name: 'Check git is clean'
@@ -164,8 +162,6 @@ jobs:
           command: |
             # https://github.com/ocaml-ppx/ocamlformat/issues/754
             ~/.npm-global/bin/esy dune build @fmt --auto-promote || true
-            # https://github.com/ocaml/dune/issues/2012
-            git checkout lwt-unix/dune
             git diff --exit-code
       # Use both pre and post build caches so that we're more likely
       # to have dependencies cached. `esy build` is more likely to fail,
