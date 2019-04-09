@@ -35,7 +35,16 @@
 module AB = Angstrom.Buffered
 module Reader = Parse.Reader
 module Writer = Serialize.Writer
-module Scheduler = Scheduler.Client_scheduler
+
+module Scheduler = Scheduler.Make (struct
+  include Stream
+
+  type t = Respd.t
+
+  let flush_write_body = Respd.flush_request_body
+
+  let requires_output = Respd.requires_output
+end)
 
 module Queue = struct
   include Queue
@@ -112,7 +121,7 @@ let shutdown_reader t = Reader.force_close (reader t)
 
 let flush_request_body t =
   if is_active t then
-    Scheduler.flush t.streams
+    Scheduler.flush t.streams (t.current_stream_id, t.max_pushed_stream_id)
 
 let shutdown_writer t =
   flush_request_body t;
@@ -121,6 +130,15 @@ let shutdown_writer t =
 let shutdown_rw t =
   shutdown_reader t;
   shutdown_writer t
+
+(* Handling frames against closed streams is hard. See:
+ * https://docs.google.com/presentation/d/1iG_U2bKTc9CnKr0jPTrNfmxyLufx_cK2nNh9VjrKH6s
+ *)
+let was_closed_or_implicitly_closed t stream_id =
+  if Stream_identifier.is_request stream_id then
+    Stream_identifier.(stream_id <= t.current_stream_id)
+  else
+    Stream_identifier.(stream_id <= t.max_pushed_stream_id)
 
 let report_error t = function
   | Error.ConnectionError (error, data) ->
@@ -163,11 +181,12 @@ let report_error t = function
     | Some respd ->
       Respd.report_error respd `Protocol_error error
     | None ->
-      (* Possible if the stream was going to enter the Idle state (first time
-       * we saw e.g. a PRIORITY frame for it) but had e.g. a
-       * FRAME_SIZE_ERROR. *)
-      let frame_info = Writer.make_frame_info stream_id in
-      Writer.write_rst_stream t.writer frame_info error);
+      if not (was_closed_or_implicitly_closed t stream_id) then
+        (* Possible if the stream was going to enter the Idle state (first time
+         * we saw e.g. a PRIORITY frame for it) but had e.g. a
+         * FRAME_SIZE_ERROR. *)
+        let frame_info = Writer.make_frame_info stream_id in
+        Writer.write_rst_stream t.writer frame_info error);
     wakeup_writer t
 
 let report_connection_error t ?(additional_debug_data = "") error =
@@ -247,7 +266,13 @@ let handle_push_promise_headers t respd headers =
         respd.state
         <- Active
              ( HalfClosed Stream.WaitingForPeer
-             , { Respd.request; request_body; response_handler } )
+               (* TODO: should we just store a `unit -> unit` in `t` to avoid
+                * one closure allocation here? *)
+             , { Respd.request
+               ; request_body
+               ; response_handler
+               ; wakeup_writer = (fun () -> wakeup_writer t)
+               } )
       | Error _ ->
         (* From RFC7540§6.6:
          *   Recipients of PUSH_PROMISE frames can choose to reject promised
@@ -295,7 +320,9 @@ let handle_response_headers t respd ~end_stream active_request headers =
                * value for [response_body_buffer_size]. *)
               t.config.response_body_buffer_size
           in
-          Body.create (Bigstringaf.create buffer_size)
+          Body.create
+            (Bigstringaf.create buffer_size)
+            active_request.Respd.wakeup_writer
       in
       let new_response_state =
         Respd.create_active_response response response_body
@@ -694,14 +721,21 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
        *   stream error (Section 5.4.2) of type STREAM_CLOSED. *)
       report_stream_error t stream_id Error.StreamClosed)
   | None ->
-    (* From RFC7540§5.1:
-     *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
-     *   a stream in this state MUST be treated as a connection error
-     *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-    report_connection_error t Error.ProtocolError
+    if not (was_closed_or_implicitly_closed t stream_id) then
+      (* From RFC7540§5.1:
+       *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
+       *   a stream in this state MUST be treated as a connection error
+       *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
+      report_connection_error t Error.ProtocolError
 
-let on_stream_closed t () =
-  t.current_server_streams <- t.current_server_streams - 1
+let on_close_stream t id ~active closed =
+  if active then
+    (* From RFC7540§5.1.2:
+     *   Streams that are in the "open" state or in either of the "half-closed"
+     *   states count toward the maximum number of streams that an endpoint is
+     *   permitted to open. *)
+    t.current_server_streams <- t.current_server_streams - 1;
+  Scheduler.mark_for_removal t.streams id closed
 
 let process_priority_frame t { Frame.frame_header; _ } priority =
   let { Frame.stream_id; _ } = frame_header in
@@ -767,9 +801,9 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
       Stream.finish_stream respd (ResetByThem error_code))
   | None ->
     (* We might have removed the stream from the hash table. If its stream
-     * id is strictly smaller than the max client stream id we've seen, then
-     * it must have been closed. *)
-    if Stream_identifier.(stream_id >= t.current_stream_id) then
+     * id is smaller than or equal to the max client stream id we've generated,
+     * then it must have been closed. *)
+    if not (was_closed_or_implicitly_closed t stream_id) then
       (* From RFC7540§6.4:
        *   RST_STREAM frames MUST NOT be sent for a stream in the "idle"
        *   state. If a RST_STREAM frame identifying an idle stream is
@@ -888,7 +922,7 @@ let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block
       ~max_frame_size:t.settings.max_frame_size
       t.writer
       t.error_handler
-      (on_stream_closed t)
+      (on_close_stream t promised_stream_id)
   in
   Scheduler.add
     t.streams
@@ -1059,11 +1093,12 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
          *   error (Section 5.4.1) of type PROTOCOL_ERROR. *)
         ())
     | None ->
-      (* From RFC7540§5.1:
-       *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
-       *   a stream in this state MUST be treated as a connection error
-       *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-      report_connection_error t Error.ProtocolError
+      if not (was_closed_or_implicitly_closed t stream_id) then
+        (* From RFC7540§5.1:
+         *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
+         *   a stream in this state MUST be treated as a connection error
+         *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
+        report_connection_error t Error.ProtocolError
 
 let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
@@ -1127,7 +1162,7 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
         config.enable_server_push && push_handler != default_push_handler
     }
   in
-  let rec preface_handler recv_frame settings_list =
+  let rec connection_preface_handler recv_frame settings_list =
     let t = Lazy.force t in
     (* The server has sent us a valid connection preface, we can start reading
      * other frames now. *)
@@ -1197,7 +1232,8 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
       ; pending_pings = Queue.create ()
       ; error_handler
       ; push_handler
-      ; reader = New (Reader.server_connection_preface preface_handler)
+      ; reader =
+          New (Reader.server_connection_preface connection_preface_handler)
       ; writer = Writer.create settings.max_frame_size
       ; streams = Scheduler.make_root ()
       ; wakeup_writer =
@@ -1231,7 +1267,10 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
 
 let request t request ~error_handler ~response_handler =
   let max_frame_size = t.settings.max_frame_size in
-  let request_body = Body.create (Bigstringaf.create max_frame_size) in
+  let wakeup_stream () = wakeup_writer t in
+  let request_body =
+    Body.create (Bigstringaf.create max_frame_size) wakeup_stream
+  in
   t.current_stream_id <- Int32.add t.current_stream_id 2l;
   let stream_id = t.current_stream_id in
   let respd =
@@ -1240,7 +1279,7 @@ let request t request ~error_handler ~response_handler =
       ~max_frame_size
       t.writer
       error_handler
-      (on_stream_closed t)
+      (on_close_stream t stream_id)
   in
   (* TODO: priority *)
   Scheduler.add
@@ -1254,7 +1293,12 @@ let request t request ~error_handler ~response_handler =
   Writer.flush t.writer (fun () ->
       respd.state
       <- Active
-           (Open WaitingForPeer, { request; request_body; response_handler }));
+           ( Open WaitingForPeer
+           , { request
+             ; request_body
+             ; response_handler
+             ; wakeup_writer = wakeup_stream
+             } ));
   wakeup_writer t;
   (* Closing the request body puts the stream in the half-closed (local) state.
    * This is handled by {!Respd.flush_request_body}, which transitions the
@@ -1330,16 +1374,8 @@ let next_write_operation t =
   Writer.next t.writer
 
 let yield_writer t k =
-  if is_active t then (
-    Scheduler.on_more_output_available
-      t.streams
-      (* FIXME *)
-      (t.current_stream_id, 0l)
-      k;
-    (* We need to let both the connection and each individual streams wake up
-     * the connection, given that some control frames can be scheduled to be
-     * written when all the streams are yielding. *)
-    on_wakeup_writer t k)
+  if is_active t then
+    on_wakeup_writer t k
   else if Writer.is_closed t.writer then
     k ()
   else

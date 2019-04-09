@@ -1,5 +1,5 @@
 {
-  "checksum": "fbf8be9a0f4530756ea3565acecb808c",
+  "checksum": "a8967abbb49e7d1e9360f20adee2f32c",
   "root": "h2@link-dev:./esy.json",
   "node": {
     "yarn-pkg-config@github:esy-ocaml/yarn-pkg-config#d488cd9321cd5036bd36ec96744ce78c5d45fc49@d41d8cd9": {
@@ -42,6 +42,7 @@
         "ocaml@4.7.1004@d41d8cd9", "@opam/psq@opam:0.1.1@d63fffb0",
         "@opam/mirage-conduit@opam:3.1.0@8cff99f9",
         "@opam/lwt_ssl@opam:1.1.2@ac833920", "@opam/lwt@opam:4.2.1@c1888ec9",
+        "@opam/landmarks@opam:1.3@491aaf95",
         "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#25149c6@d41d8cd9",
         "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#53042e5@d41d8cd9",
         "@opam/faraday-lwt-unix@opam:0.7.0@b0dea04f",
@@ -1969,6 +1970,33 @@
       ],
       "devDependencies": [
         "ocaml@4.7.1004@d41d8cd9", "@opam/result@opam:1.3@bee8bf2e"
+      ]
+    },
+    "@opam/landmarks@opam:1.3@491aaf95": {
+      "id": "@opam/landmarks@opam:1.3@491aaf95",
+      "name": "@opam/landmarks",
+      "version": "opam:1.3",
+      "source": {
+        "type": "install",
+        "source": [
+          "archive:https://opam.ocaml.org/cache/md5/92/92e0f9442d8ea91915bee492b1bb1655#md5:92e0f9442d8ea91915bee492b1bb1655",
+          "archive:https://github.com/lexifi/landmarks/releases/download/v1.3/landmarks-v1.3.tbz#md5:92e0f9442d8ea91915bee492b1bb1655"
+        ],
+        "opam": {
+          "name": "landmarks",
+          "version": "1.3",
+          "path": "esy.lock/opam/landmarks.1.3"
+        }
+      },
+      "overrides": [],
+      "dependencies": [
+        "ocaml@4.7.1004@d41d8cd9",
+        "@opam/ocaml-migrate-parsetree@opam:1.2.0@23e55f71",
+        "@opam/dune@opam:1.8.2@511996a8", "@esy-ocaml/substs@0.0.1@d41d8cd9"
+      ],
+      "devDependencies": [
+        "ocaml@4.7.1004@d41d8cd9",
+        "@opam/ocaml-migrate-parsetree@opam:1.2.0@23e55f71"
       ]
     },
     "@opam/jbuilder@opam:transition@58bdfe0a": {

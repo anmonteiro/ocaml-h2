@@ -1,6 +1,6 @@
 open H2__
 open Test_common
-module Scheduler = Scheduler.Server_scheduler
+module Scheduler = Server_connection.Scheduler
 
 let pp_priority fmt { Priority.weight; stream_dependency; exclusive } =
   Format.fprintf
@@ -38,7 +38,7 @@ let test_reqd stream_id =
     stream_id
     Serialize.Writer.(create 0x400)
     default_error_handler
-    ignore
+    (fun ~active:_ _ -> ())
 
 let repeat (Scheduler.PriorityTreeNode.Connection root) queue num =
   let rec loop q n acc =

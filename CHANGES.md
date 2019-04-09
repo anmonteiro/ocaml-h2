@@ -7,6 +7,13 @@ Unreleased
 - h2: Fix bug in the client implementation that didn't report connection
   preface errors as soon as they happened
   ([#38](https://github.com/anmonteiro/ocaml-h2/pull/38))
+- h2: optimize the stream scheduler: previously when the writer yielded between
+  writes, a wake up function was registered with all the (active) streams,
+  which required a linear traversal of all the streams. The optimization is to
+  allow every stream to wake up a global writer to which they hold a reference
+  ([#40](https://github.com/anmonteiro/ocaml-h2/pull/40))
+- h2: improve handling of received frames against closed streams
+  ([#40](https://github.com/anmonteiro/ocaml-h2/pull/40))
 
 0.2.0 2019-04-06
 --------------
