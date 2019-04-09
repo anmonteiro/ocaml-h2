@@ -172,7 +172,7 @@ One of h2's goals is to be 100% compliant with the HTTP/2 specification.
 There are currently 3 mechanisms in place to verify such conformance:
 
 1. Unit tests using the HPACK stories in the
-   [http2jp/hpack-test-case](https://github.com/http2jp/hpack-test-case).
+   [http2jp/hpack-test-case](https://github.com/http2jp/hpack-test-case)
    repository
 2. Unit tests using the test cases provided by the
    [http2jp/http2-frame-test-case](https://github.com/http2jp/http2-frame-test-case)

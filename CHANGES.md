@@ -14,6 +14,9 @@ Unreleased
   ([#40](https://github.com/anmonteiro/ocaml-h2/pull/40))
 - h2: improve handling of received frames against closed streams
   ([#40](https://github.com/anmonteiro/ocaml-h2/pull/40))
+- h2: in the client implementation, call the stream level error handler when
+  receiving an `RST_STREAM` frame
+  ([#42](https://github.com/anmonteiro/ocaml-h2/pull/42))
 
 0.2.0 2019-04-06
 --------------

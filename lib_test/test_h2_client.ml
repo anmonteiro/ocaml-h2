@@ -815,6 +815,70 @@ module Client_connection_tests = struct
       true
       !ping_handler2_called
 
+  let test_error_handler_rst_stream () =
+    let t =
+      create
+        ?config:None
+        ?push_handler:None
+        ~error_handler:default_error_handler
+    in
+    handle_preface t;
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let response_handler _response _response_body = () in
+    let error_handler_called = ref false in
+    let stream_level_error_handler error =
+      error_handler_called := true;
+      match error with
+      | `Protocol_error ->
+        Alcotest.(check pass)
+          "Stream error handler gets a protocol error"
+          ()
+          ()
+      | _ ->
+        Alcotest.fail "Expected stream error handler to pass"
+    in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~error_handler:stream_level_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    Body.close_writer request_body;
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
+    let frame = List.hd frames in
+    Alcotest.(check int)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      (Frame.FrameType.serialize Data)
+      Frame.(frame.frame_header.frame_type |> FrameType.serialize);
+    Alcotest.(check bool)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      true
+      (Flags.test_end_stream frame.frame_header.flags);
+    report_write_result t (`Ok lenv);
+    let rst_stream =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = RSTStream
+          }
+      ; frame_payload = Frame.RSTStream Error.ProtocolError
+      }
+    in
+    read_frames t [ rst_stream ];
+    Alcotest.(check bool)
+      "Stream level error handler called"
+      true
+      !error_handler_called;
+    (* Don't loop *)
+    Alcotest.(check write_operation)
+      "Writer yields, i.e. don't send an RST_STREAM frame in response to one"
+      `Yield
+      (next_write_operation t)
+
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
@@ -837,6 +901,9 @@ module Client_connection_tests = struct
     ; "push handler successful response", `Quick, test_push_handler_success
     ; "push handler cancels push", `Quick, test_push_handler_cancel
     ; "ping", `Quick, test_ping
+    ; ( "stream level error handler called on RST_STREAM frames"
+      , `Quick
+      , test_error_handler_rst_stream )
     ]
 end
 

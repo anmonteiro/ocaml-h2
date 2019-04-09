@@ -798,7 +798,15 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *   prepared to receive and process additional frames sent on the
        *   stream that might have been sent by the peer prior to the arrival
        *   of the RST_STREAM. *)
-      Stream.finish_stream respd (ResetByThem error_code))
+      Stream.finish_stream respd (ResetByThem error_code);
+      (* From RFC7540§5.4.2:
+       *   To avoid looping, an endpoint MUST NOT send a RST_STREAM in response
+       *   to a RST_STREAM frame.
+       *
+       *   Note: the {!Respd.report_error} function does not send an RST_STREAM
+       *   frame for streams in the closed state. So we close the stream before
+       *   reporting the error. *)
+      set_error_and_handle t respd `Protocol_error error_code)
   | None ->
     (* We might have removed the stream from the hash table. If its stream
      * id is smaller than or equal to the max client stream id we've generated,
