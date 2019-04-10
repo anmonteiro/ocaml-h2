@@ -39,7 +39,7 @@
       "source": { "type": "link-dev", "path": ".", "manifest": "esy.json" },
       "overrides": [],
       "dependencies": [
-        "ocaml@4.7.1004@d41d8cd9", "@opam/psq@opam:0.1.1@d63fffb0",
+        "ocaml@4.7.1004@d41d8cd9", "@opam/psq@opam:0.2.0@58d0fdbe",
         "@opam/mirage-conduit@opam:3.1.0@8cff99f9",
         "@opam/lwt_ssl@opam:1.1.2@ac833920", "@opam/lwt@opam:4.2.1@c1888ec9",
         "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#25149c6@d41d8cd9",
@@ -244,7 +244,7 @@
         "@opam/ppx_sexp_conv@opam:v0.12.0@27ffefd6",
         "@opam/ppx_cstruct@opam:4.0.0@ced2fecd",
         "@opam/mirage-flow-lwt@opam:1.5.0@0b771649",
-        "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/io-page@opam:2.1.0@05cbd679",
+        "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/io-page@opam:2.2.0@6b3421c7",
         "@opam/dune@opam:1.9.0@a7408d38",
         "@opam/cstruct@opam:4.0.0@27f747cf",
         "@opam/cmdliner@opam:1.0.3@96d31520",
@@ -260,7 +260,7 @@
         "@opam/ppx_sexp_conv@opam:v0.12.0@27ffefd6",
         "@opam/ppx_cstruct@opam:4.0.0@ced2fecd",
         "@opam/mirage-flow-lwt@opam:1.5.0@0b771649",
-        "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/io-page@opam:2.1.0@05cbd679",
+        "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/io-page@opam:2.2.0@6b3421c7",
         "@opam/cstruct@opam:4.0.0@27f747cf",
         "@opam/cmdliner@opam:1.0.3@96d31520"
       ]
@@ -716,20 +716,20 @@
         "ocaml@4.7.1004@d41d8cd9", "@opam/result@opam:1.3@bee8bf2e"
       ]
     },
-    "@opam/psq@opam:0.1.1@d63fffb0": {
-      "id": "@opam/psq@opam:0.1.1@d63fffb0",
+    "@opam/psq@opam:0.2.0@58d0fdbe": {
+      "id": "@opam/psq@opam:0.2.0@58d0fdbe",
       "name": "@opam/psq",
-      "version": "opam:0.1.1",
+      "version": "opam:0.2.0",
       "source": {
         "type": "install",
         "source": [
-          "archive:https://opam.ocaml.org/cache/md5/6d/6d6347f177adb1c1dae23c599248a9f1#md5:6d6347f177adb1c1dae23c599248a9f1",
-          "archive:https://github.com/pqwy/psq/releases/download/v0.1.1/psq-v0.1.1.tbz#md5:6d6347f177adb1c1dae23c599248a9f1"
+          "archive:https://opam.ocaml.org/cache/md5/b9/b94fb15f8878172bf58446b7d0fb7c1e#md5:b94fb15f8878172bf58446b7d0fb7c1e",
+          "archive:https://github.com/pqwy/psq/releases/download/v0.2.0/psq-v0.2.0.tbz#md5:b94fb15f8878172bf58446b7d0fb7c1e"
         ],
         "opam": {
           "name": "psq",
-          "version": "0.1.1",
-          "path": "esy.lock/opam/psq.0.1.1"
+          "version": "0.2.0",
+          "path": "esy.lock/opam/psq.0.2.0"
         }
       },
       "overrides": [],
@@ -2048,30 +2048,32 @@
         "@opam/macaddr@opam:3.1.0@b114fdd9"
       ]
     },
-    "@opam/io-page@opam:2.1.0@05cbd679": {
-      "id": "@opam/io-page@opam:2.1.0@05cbd679",
+    "@opam/io-page@opam:2.2.0@6b3421c7": {
+      "id": "@opam/io-page@opam:2.2.0@6b3421c7",
       "name": "@opam/io-page",
-      "version": "opam:2.1.0",
+      "version": "opam:2.2.0",
       "source": {
         "type": "install",
         "source": [
-          "archive:https://opam.ocaml.org/cache/md5/b0/b0d25561552d3d7067f57337c5527c54#md5:b0d25561552d3d7067f57337c5527c54",
-          "archive:https://github.com/mirage/io-page/releases/download/v2.1.0/io-page-v2.1.0.tbz#md5:b0d25561552d3d7067f57337c5527c54"
+          "archive:https://opam.ocaml.org/cache/sha256/f5/f51ad9b96dd1378aae1474ee2929b56ddedaca5c5dc49459e291e5476c1ee047#sha256:f51ad9b96dd1378aae1474ee2929b56ddedaca5c5dc49459e291e5476c1ee047",
+          "archive:https://github.com/mirage/io-page/releases/download/v2.2.0/io-page-v2.2.0.tbz#sha256:f51ad9b96dd1378aae1474ee2929b56ddedaca5c5dc49459e291e5476c1ee047"
         ],
         "opam": {
           "name": "io-page",
-          "version": "2.1.0",
-          "path": "esy.lock/opam/io-page.2.1.0"
+          "version": "2.2.0",
+          "path": "esy.lock/opam/io-page.2.2.0"
         }
       },
       "overrides": [],
       "dependencies": [
         "ocaml@4.7.1004@d41d8cd9", "@opam/dune@opam:1.9.0@a7408d38",
         "@opam/cstruct@opam:4.0.0@27f747cf",
+        "@opam/bigarray-compat@opam:1.0.0@77cde57f",
         "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [
-        "ocaml@4.7.1004@d41d8cd9", "@opam/cstruct@opam:4.0.0@27f747cf"
+        "ocaml@4.7.1004@d41d8cd9", "@opam/cstruct@opam:4.0.0@27f747cf",
+        "@opam/bigarray-compat@opam:1.0.0@77cde57f"
       ]
     },
     "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#25149c6@d41d8cd9": {
