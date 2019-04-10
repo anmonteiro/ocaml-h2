@@ -120,6 +120,8 @@ let make_client ?client socket =
     in
     Tls_lwt.Unix.client_of_fd config socket
 
+(* This function does not perform error handling and will therefore crash a
+ * server in case e.g. the handshake fails. *)
 let make_server ?server ?certfile ?keyfile socket =
   let server =
     match server, certfile, keyfile with

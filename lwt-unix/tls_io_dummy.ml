@@ -57,7 +57,10 @@ type client = nothing
 
 type server = nothing
 
-let make_client ?client:_ _socket = Lwt.return `Tls_not_available
+let[@ocaml.warning "-21"] make_client ?client:_ =
+  failwith "TLS not available";
+  fun _socket -> Lwt.return `Tls_not_available
 
-let make_server ?server:_ ?certfile:_ ?keyfile:_ _socket =
-  Lwt.return `Tls_not_available
+let[@ocaml.warning "-21"] make_server ?server:_ ?certfile:_ ?keyfile:_ =
+  failwith "TLS not available";
+  fun _socket -> Lwt.fail_with "TLS not available"
