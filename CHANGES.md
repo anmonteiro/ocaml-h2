@@ -17,6 +17,11 @@ Unreleased
 - h2: in the client implementation, call the stream level error handler when
   receiving an `RST_STREAM` frame
   ([#42](https://github.com/anmonteiro/ocaml-h2/pull/42))
+- h2-lwt-unix: fail earlier when setting up a SSL/TLS server without the
+  depopts being available
+  ([#46](https://github.com/anmonteiro/ocaml-h2/pull/46))
+- h2-lwt-unix: improve the default ALPN negotiation mechanism in the SSL
+  binding ([#46](https://github.com/anmonteiro/ocaml-h2/pull/46))
 
 0.2.0 2019-04-06
 --------------
