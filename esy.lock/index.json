@@ -1,5 +1,5 @@
 {
-  "checksum": "cf548f9361200d32abd0c791dc2aed38",
+  "checksum": "7053ac964e29c386a20df189e8b65997",
   "root": "h2@link-dev:./esy.json",
   "node": {
     "yarn-pkg-config@github:esy-ocaml/yarn-pkg-config#d488cd9321cd5036bd36ec96744ce78c5d45fc49@d41d8cd9": {
@@ -578,12 +578,12 @@
       "overrides": [],
       "dependencies": [
         "ocaml@4.7.1004@d41d8cd9", "@opam/dune@opam:1.9.1@61bdaadf",
-        "@opam/conf-openssl@no-source:@cd4b0026",
+        "@opam/conf-openssl@no-source:@4c0b4718",
         "@opam/base-unix@opam:base@87d0b2eb",
         "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [
-        "ocaml@4.7.1004@d41d8cd9", "@opam/conf-openssl@no-source:@cd4b0026",
+        "ocaml@4.7.1004@d41d8cd9", "@opam/conf-openssl@no-source:@4c0b4718",
         "@opam/base-unix@opam:base@87d0b2eb"
       ]
     },
@@ -2184,7 +2184,7 @@
       "dependencies": [
         "ocaml@4.7.1004@d41d8cd9", "@opam/ocamlfind@opam:1.8.0@f744a0c5",
         "@opam/conf-which@opam:1@56319cdb",
-        "@opam/conf-autoconf@github:esy-packages/esy-autoconf:package.json#71a8836@d41d8cd9",
+        "@opam/conf-autoconf@github:esy-packages/esy-autoconf:package.json#94f846f@d41d8cd9",
         "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [ "ocaml@4.7.1004@d41d8cd9" ]
@@ -2697,8 +2697,8 @@
       "dependencies": [ "@esy-ocaml/substs@0.0.1@d41d8cd9" ],
       "devDependencies": []
     },
-    "@opam/conf-openssl@no-source:@cd4b0026": {
-      "id": "@opam/conf-openssl@no-source:@cd4b0026",
+    "@opam/conf-openssl@no-source:@4c0b4718": {
+      "id": "@opam/conf-openssl@no-source:@4c0b4718",
       "name": "@opam/conf-openssl",
       "version": "no-source:",
       "source": { "type": "install", "source": [ "no-source:" ] },
@@ -2707,17 +2707,14 @@
           "dependencies": {
             "@opam/conf-pkg-config": "*",
             "@esy-packages/esy-openssl": "esy-packages/esy-openssl#65efbc9",
-            "@esy-packages/esy-autoconf":
-              "esy-packages/esy-autoconf:package.json#94f846f",
             "@opam/conf-autoconf": "*"
           }
         }
       ],
       "dependencies": [
         "@opam/conf-pkg-config@opam:1.1@657bff53",
-        "@opam/conf-autoconf@github:esy-packages/esy-autoconf:package.json#71a8836@d41d8cd9",
-        "@esy-packages/esy-openssl@archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz#sha1:1b09930a6099c6c8fa15dd6c6842e134e65e0a31@00057677",
-        "@esy-packages/esy-autoconf@github:esy-packages/esy-autoconf:package.json#94f846f@d41d8cd9"
+        "@opam/conf-autoconf@github:esy-packages/esy-autoconf:package.json#94f846f@d41d8cd9",
+        "@esy-packages/esy-openssl@archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1b.tar.gz#sha1:1b09930a6099c6c8fa15dd6c6842e134e65e0a31@00057677"
       ],
       "devDependencies": []
     },
@@ -2774,17 +2771,19 @@
       "dependencies": [],
       "devDependencies": []
     },
-    "@opam/conf-autoconf@github:esy-packages/esy-autoconf:package.json#71a8836@d41d8cd9": {
+    "@opam/conf-autoconf@github:esy-packages/esy-autoconf:package.json#94f846f@d41d8cd9": {
       "id":
-        "@opam/conf-autoconf@github:esy-packages/esy-autoconf:package.json#71a8836@d41d8cd9",
+        "@opam/conf-autoconf@github:esy-packages/esy-autoconf:package.json#94f846f@d41d8cd9",
       "name": "@opam/conf-autoconf",
-      "version": "github:esy-packages/esy-autoconf:package.json#71a8836",
+      "version": "github:esy-packages/esy-autoconf:package.json#94f846f",
       "source": {
         "type": "install",
-        "source": [ "github:esy-packages/esy-autoconf:package.json#71a8836" ]
+        "source": [ "github:esy-packages/esy-autoconf:package.json#94f846f" ]
       },
       "overrides": [],
-      "dependencies": [],
+      "dependencies": [
+        "esy-help2man@github:esy-packages/esy-help2man#c8e6931d1dcf58a81bd801145a777fd3b115c443@d41d8cd9"
+      ],
       "devDependencies": []
     },
     "@opam/conduit-lwt@opam:1.4.0@c8d62b5a": {
@@ -3211,21 +3210,6 @@
       },
       "overrides": [ "esy.lock/overrides/000576771cef51fdd250f66f22238a27" ],
       "dependencies": [],
-      "devDependencies": []
-    },
-    "@esy-packages/esy-autoconf@github:esy-packages/esy-autoconf:package.json#94f846f@d41d8cd9": {
-      "id":
-        "@esy-packages/esy-autoconf@github:esy-packages/esy-autoconf:package.json#94f846f@d41d8cd9",
-      "name": "@esy-packages/esy-autoconf",
-      "version": "github:esy-packages/esy-autoconf:package.json#94f846f",
-      "source": {
-        "type": "install",
-        "source": [ "github:esy-packages/esy-autoconf:package.json#94f846f" ]
-      },
-      "overrides": [],
-      "dependencies": [
-        "esy-help2man@github:esy-packages/esy-help2man#c8e6931d1dcf58a81bd801145a777fd3b115c443@d41d8cd9"
-      ],
       "devDependencies": []
     },
     "@esy-ocaml/substs@0.0.1@d41d8cd9": {
