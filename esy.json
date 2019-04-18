@@ -38,7 +38,7 @@
         "dependencies": {
           "@opam/conf-pkg-config": "*",
           "@esy-packages/esy-openssl": "esy-packages/esy-openssl#65efbc9",
-          "@esy-packages/esy-autoconf": "esy-packages/esy-autoconf:package.json#71a8836",
+          "@esy-packages/esy-autoconf": "esy-packages/esy-autoconf:package.json#94f846f",
           "@opam/conf-autoconf": "*"
         }
       }
