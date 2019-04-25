@@ -35,7 +35,7 @@ opam-steps: &opam-steps
           opam install -y dune
           opam install -y ocamlformat
           opam pin add -y httpaf --dev-repo
-          opam pin add -y httpaf-lwt git+https://github.com/anmonteiro/httpaf#anmonteiro/lwt-https-support
+          opam pin add -y httpaf-lwt-unix git+https://github.com/anmonteiro/httpaf#anmonteiro/lwt-https-support
           opam pin add -y ssl git+https://github.com/anmonteiro/ocaml-ssl#alpn
           opam install -y lwt_ssl
           opam install -t --deps-only .
