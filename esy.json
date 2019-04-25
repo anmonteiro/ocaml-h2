@@ -18,7 +18,7 @@
     "@opam/lwt_ssl": "*",
     "@opam/conf-libev": "*",
     "@opam/httpaf": "*",
-    "@opam/httpaf-lwt": "*"
+    "@opam/httpaf-lwt-unix": "*"
   },
   "devDependencies": {
     "@opam/alcotest": "*",
@@ -43,7 +43,7 @@
       }
     },
     "@opam/ssl": "anmonteiro/ocaml-ssl:ssl.opam#b965d15",
-    "@opam/httpaf": "inhabitedtype/httpaf:httpaf.opam#50e690f",
-    "@opam/httpaf-lwt": "anmonteiro/httpaf:httpaf-lwt.opam#25149c6"
+    "@opam/httpaf": "inhabitedtype/httpaf:httpaf.opam#a1bc4b9",
+    "@opam/httpaf-lwt-unix": "anmonteiro/httpaf:httpaf-lwt-unix.opam#6d2c80e"
   }
 }
