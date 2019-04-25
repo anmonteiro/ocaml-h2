@@ -1,4 +1,4 @@
 (library
  (name alpn_lib)
  (modules h2_handler http1_handler)
- (libraries h2 httpaf httpaf-lwt h2-lwt-unix lwt))
+ (libraries h2 httpaf httpaf-lwt-unix h2-lwt-unix lwt))
