@@ -74,6 +74,22 @@ let encode_headers hpack_encoder headers =
   Serialize.Writer.encode_headers hpack_encoder f headers;
   Faraday.serialize_to_bigstring f
 
+let preface =
+  let writer = Serialize.Writer.create 0x400 in
+  Serialize.Writer.write_connection_preface writer [];
+  Faraday.serialize_to_string (Serialize.Writer.faraday writer)
+
+let handle_preface t =
+  let open Parse in
+  let preface_len = String.length preface in
+  ignore
+  @@ Reader.read_with_more
+       t
+       (bs_of_string preface)
+       ~off:0
+       ~len:preface_len
+       Incomplete
+
 let parse_frames_bigstring wire =
   let open Parse in
   let frames = ref [] in
@@ -83,7 +99,8 @@ let parse_frames_bigstring wire =
     | _ ->
       Alcotest.fail "Expected frame to parse successfully."
   in
-  let reader = Reader.frame handler in
+  let reader = Reader.server_frames (fun _ -> ignore) handler in
+  handle_preface reader;
   let _read =
     Reader.read_with_more
       reader

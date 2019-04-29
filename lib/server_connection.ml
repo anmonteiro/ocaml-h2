@@ -57,13 +57,9 @@ type error =
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [ `write ] Body.t) -> unit
 
-type reader_state =
-  | New of Reader.client_connection_preface
-  | Active of Reader.frame
-
 type t =
   { settings : Settings.t
-  ; mutable reader : reader_state
+  ; reader : Reader.frame
   ; writer : Writer.t
   ; config : Config.t
   ; request_handler : request_handler
@@ -87,17 +83,10 @@ type t =
   ; hpack_decoder : Hpack.Decoder.t
   }
 
-let reader t =
-  match t.reader with New reader -> reader | Active reader -> reader
-
-let is_closed t = Reader.is_closed (reader t) && Writer.is_closed t.writer
-
-let is_shutdown t = Reader.is_closed (reader t) && Writer.is_closed t.writer
-
-let is_active t = match t.reader with Active _ -> true | New _ -> false
+let is_closed t = Reader.is_closed t.reader && Writer.is_closed t.writer
 
 let on_wakeup_writer t k =
-  if is_shutdown t then
+  if is_closed t then
     failwith "on_wakeup_writer on closed conn"
   else
     t.wakeup_writer := k
@@ -111,17 +100,15 @@ let _wakeup_writer wakeup_ref =
 
 let wakeup_writer t = _wakeup_writer t.wakeup_writer
 
-let shutdown_reader t = Reader.force_close (reader t)
+let shutdown_reader t = Reader.force_close t.reader
 
 let shutdown_writer t =
   Writer.close t.writer;
-  if not (is_active t) then
-    wakeup_writer t
+  wakeup_writer t
 
 let shutdown t =
   shutdown_reader t;
-  shutdown_writer t;
-  wakeup_writer t
+  shutdown_writer t
 
 (* Handling frames against closed streams is hard. See:
  * https://docs.google.com/presentation/d/1iG_U2bKTc9CnKr0jPTrNfmxyLufx_cK2nNh9VjrKH6s
@@ -186,13 +173,12 @@ let report_stream_error t stream_id error =
   report_error t (StreamError (stream_id, error))
 
 let set_error_and_handle ?request t stream error error_code =
-  assert (is_active t);
   assert (request = None);
   Reqd.report_error stream error error_code;
   wakeup_writer t
 
 let report_exn t exn =
-  if not (is_shutdown t) then
+  if not (is_closed t) then
     let additional_debug_data = Printexc.to_string exn in
     report_connection_error t ~additional_debug_data Error.InternalError
 
@@ -656,7 +642,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
                 Reqd.requires_output descriptor
               then
                 (* There's a potential race condition here if the request
-                 * handler completes the response right after . *)
+                 * handler completes the response right after. *)
                 descriptor.state
                 <- Active (HalfClosed request_info, active_stream)
               else
@@ -1103,7 +1089,6 @@ let create
   let writer = Writer.create settings.max_frame_size in
   let rec connection_preface_handler recv_frame settings_list =
     let t = Lazy.force t in
-    t.reader <- Active (Reader.frame (frame_handler t));
     (* Check if the settings for the connection are different than the default
      * HTTP/2 settings. In the event that they are, we need to send a non-empty
      * SETTINGS frame advertising our configuration. *)
@@ -1130,7 +1115,9 @@ let create
     (* Now process the client's SETTINGS frame. `process_settings_frame` will
      * take care of calling `wakeup_writer`. *)
     process_settings_frame t recv_frame settings_list
-  and frame_handler t = function
+  and frame_handler r =
+    let t = Lazy.force t in
+    match r with
     | Error e ->
       report_error t e
     | Ok ({ Frame.frame_payload; frame_header } as frame) ->
@@ -1189,8 +1176,7 @@ let create
   and t =
     lazy
       { settings
-      ; reader =
-          New (Reader.client_connection_preface connection_preface_handler)
+      ; reader = Reader.server_frames connection_preface_handler frame_handler
       ; writer
       ; config
       ; request_handler
@@ -1210,54 +1196,38 @@ let create
   Lazy.force t
 
 let next_read_operation t =
-  if Reader.is_closed (reader t) then shutdown_reader t;
-  match Reader.next (reader t) with
+  if Reader.is_closed t.reader then shutdown_reader t;
+  match Reader.next t.reader with
   | (`Read | `Close) as operation ->
     operation
   | `Error e ->
-    (match t.reader with
-    | New _ ->
+    report_error t e;
+    (match e with
+    | ConnectionError _ ->
       (* From RFC7540§5.4.1:
-       *   Clients and servers MUST treat an invalid connection preface as a
-       *   connection error (Section 5.4.1) of type PROTOCOL_ERROR. A GOAWAY
-       *   frame (Section 6.8) MAY be omitted in this case, since an invalid
-       *   preface indicates that the peer is not using HTTP/2. *)
-      report_connection_error
-        t
-        ~additional_debug_data:"Invalid connection preface"
-        Error.ProtocolError;
+       *   A connection error is any error that prevents further processing
+       *   of the frame layer or corrupts any connection state. *)
       `Close
-    | Active _ ->
-      report_error t e;
-      (match e with
-      | ConnectionError _ ->
-        (* From RFC7540§5.4.1:
-         *   A connection error is any error that prevents further processing
-         *   of the frame layer or corrupts any connection state. *)
-        `Close
-      | StreamError _ ->
-        (* From RFC7540§5.4.2:
-         *   A stream error is an error related to a specific stream that does
-         *   not affect processing of other streams. *)
-        `Read))
+    | StreamError _ ->
+      (* From RFC7540§5.4.2:
+       *   A stream error is an error related to a specific stream that does
+       *   not affect processing of other streams. *)
+      `Read)
 
 let read t bs ~off ~len =
-  Reader.read_with_more (reader t) bs ~off ~len Incomplete
+  Reader.read_with_more t.reader bs ~off ~len Incomplete
 
 let read_eof t bs ~off ~len =
-  Reader.read_with_more (reader t) bs ~off ~len Complete
+  Reader.read_with_more t.reader bs ~off ~len Complete
 
 let next_write_operation t =
-  if is_active t then
-    Scheduler.flush t.streams (t.max_client_stream_id, t.max_pushed_stream_id);
+  Scheduler.flush t.streams (t.max_client_stream_id, t.max_pushed_stream_id);
   Writer.next t.writer
 
 let report_write_result t result = Writer.report_result t.writer result
 
 let yield_writer t k =
-  if is_active t then
-    on_wakeup_writer t k
-  else if Writer.is_closed t.writer then
+  if Writer.is_closed t.writer then
     k ()
   else
     on_wakeup_writer t k

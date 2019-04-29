@@ -33,7 +33,8 @@ module P = struct
       | Error e ->
         error_handler e
     in
-    let reader = Reader.frame handler in
+    let reader = Reader.server_frames (fun _ -> ignore) handler in
+    handle_preface reader;
     let wire_bs = wire |> string_of_hex |> bs_of_string in
     let _read =
       Reader.read_with_more

@@ -1,5 +1,5 @@
 {
-  "checksum": "8328bf3bcc22abd8e27220740ff9729e",
+  "checksum": "3044b6945bc308d4cb4b7a37d3171517",
   "root": "h2@link-dev:./esy.json",
   "node": {
     "yarn-pkg-config@github:esy-ocaml/yarn-pkg-config#d488cd9321cd5036bd36ec96744ce78c5d45fc49@d41d8cd9": {
@@ -43,7 +43,7 @@
         "@opam/mirage-conduit@opam:3.1.0@8cff99f9",
         "@opam/lwt_ssl@opam:1.1.2@ac833920", "@opam/lwt@opam:4.2.1@c1888ec9",
         "@opam/httpaf-lwt-unix@github:anmonteiro/httpaf:httpaf-lwt-unix.opam#6d2c80e@d41d8cd9",
-        "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#a1bc4b9@d41d8cd9",
+        "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#fa9dc4e@d41d8cd9",
         "@opam/faraday-lwt-unix@opam:0.7.0@b0dea04f",
         "@opam/faraday@opam:0.7.0@6026a81f",
         "@opam/dune@opam:1.9.1@61bdaadf",
@@ -2086,24 +2086,24 @@
         "ocaml@4.7.1004@d41d8cd9", "@opam/tls@opam:0.10.2@76ef72ee",
         "@opam/ocamlfind@opam:1.8.0@f744a0c5",
         "@opam/lwt_ssl@opam:1.1.2@ac833920", "@opam/lwt@opam:4.2.1@c1888ec9",
-        "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#a1bc4b9@d41d8cd9",
+        "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#fa9dc4e@d41d8cd9",
         "@opam/faraday-lwt-unix@opam:0.7.0@b0dea04f",
         "@opam/dune@opam:1.9.1@61bdaadf", "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [
         "ocaml@4.7.1004@d41d8cd9", "@opam/lwt@opam:4.2.1@c1888ec9",
-        "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#a1bc4b9@d41d8cd9",
+        "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#fa9dc4e@d41d8cd9",
         "@opam/faraday-lwt-unix@opam:0.7.0@b0dea04f"
       ]
     },
-    "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#a1bc4b9@d41d8cd9": {
+    "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#fa9dc4e@d41d8cd9": {
       "id":
-        "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#a1bc4b9@d41d8cd9",
+        "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#fa9dc4e@d41d8cd9",
       "name": "@opam/httpaf",
-      "version": "github:inhabitedtype/httpaf:httpaf.opam#a1bc4b9",
+      "version": "github:inhabitedtype/httpaf:httpaf.opam#fa9dc4e",
       "source": {
         "type": "install",
-        "source": [ "github:inhabitedtype/httpaf:httpaf.opam#a1bc4b9" ]
+        "source": [ "github:inhabitedtype/httpaf:httpaf.opam#fa9dc4e" ]
       },
       "overrides": [],
       "dependencies": [
