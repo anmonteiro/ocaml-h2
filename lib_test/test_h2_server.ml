@@ -424,9 +424,6 @@ module Server_connection_tests = struct
       "read preface returns preface length"
       (preface_length + frame_length)
       read_preface;
-    (* let read_more = read t preface_and_headers ~off:read_preface
-       ~len:(preface_headers_length - read_preface) in Alcotest.(check int)
-       "should be able to read the next frame" frame_length read_more; *)
     Alcotest.check
       read_operation
       "Reader wants to read"
