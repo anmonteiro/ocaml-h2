@@ -64,13 +64,9 @@ type response_handler = Response.t -> [ `read ] Body.t -> unit
 
 type error_handler = error -> unit
 
-type reader_state =
-  | New of Reader.server_connection_preface
-  | Active of Reader.frame
-
 type t =
   { settings : Settings.t
-  ; mutable reader : reader_state
+  ; reader : Reader.frame
   ; writer : Writer.t
   ; config : Config.t
   ; streams : Scheduler.t
@@ -93,14 +89,9 @@ type t =
 
 let default_push_handler = Sys.opaque_identity (fun _ -> Ok (fun _ _ -> ()))
 
-let is_active t = match t.reader with Active _ -> true | New _ -> false
+let is_shutdown t = Reader.is_closed t.reader && Writer.is_closed t.writer
 
-let reader t =
-  match t.reader with New reader -> reader | Active reader -> reader
-
-let is_shutdown t = Reader.is_closed (reader t) && Writer.is_closed t.writer
-
-let is_closed t = Reader.is_closed (reader t) && Writer.is_closed t.writer
+let is_closed t = Reader.is_closed t.reader && Writer.is_closed t.writer
 
 let on_wakeup_writer t k =
   if is_shutdown t then
@@ -117,11 +108,10 @@ let _wakeup_writer wakeup_ref =
 
 let wakeup_writer t = _wakeup_writer t.wakeup_writer
 
-let shutdown_reader t = Reader.force_close (reader t)
+let shutdown_reader t = Reader.force_close t.reader
 
 let flush_request_body t =
-  if is_active t then
-    Scheduler.flush t.streams (t.current_stream_id, t.max_pushed_stream_id)
+  Scheduler.flush t.streams (t.current_stream_id, t.max_pushed_stream_id)
 
 let shutdown_writer t =
   flush_request_body t;
@@ -1172,13 +1162,12 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
   in
   let rec connection_preface_handler recv_frame settings_list =
     let t = Lazy.force t in
-    (* The server has sent us a valid connection preface, we can start reading
-     * other frames now. *)
-    t.reader <- Active (Reader.frame (frame_handler t));
     (* Now process the client's SETTINGS frame. `process_settings_frame` will
      * take care of calling `wakeup_writer`. *)
     process_settings_frame t recv_frame settings_list
-  and frame_handler t = function
+  and frame_handler r =
+    let t = Lazy.force t in
+    match r with
     | Error e ->
       report_error t e
     | Ok ({ Frame.frame_payload; frame_header } as frame) ->
@@ -1240,8 +1229,7 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
       ; pending_pings = Queue.create ()
       ; error_handler
       ; push_handler
-      ; reader =
-          New (Reader.server_connection_preface connection_preface_handler)
+      ; reader = Reader.client_frames connection_preface_handler frame_handler
       ; writer = Writer.create settings.max_frame_size
       ; streams = Scheduler.make_root ()
       ; wakeup_writer =
@@ -1340,51 +1328,36 @@ let ping t ?payload ?(off = 0) callback =
   wakeup_writer t
 
 let next_read_operation t =
-  if Reader.is_closed (reader t) then shutdown_reader t;
-  match Reader.next (reader t) with
+  if Reader.is_closed t.reader then shutdown_reader t;
+  match Reader.next t.reader with
   | (`Read | `Close) as operation ->
     operation
   | `Error e ->
-    (match t.reader with
-    | New _ ->
+    report_error t e;
+    (match e with
+    | ConnectionError _ ->
       (* From RFC7540§5.4.1:
-       *   Clients and servers MUST treat an invalid connection preface as a
-       *   connection error (Section 5.4.1) of type PROTOCOL_ERROR. A GOAWAY
-       *   frame (Section 6.8) MAY be omitted in this case, since an invalid
-       *   preface indicates that the peer is not using HTTP/2. *)
-      report_connection_error
-        t
-        ~additional_debug_data:"Invalid connection preface"
-        Error.ProtocolError;
+       *   A connection error is any error that prevents further processing
+       *   of the frame layer or corrupts any connection state. *)
       `Close
-    | Active _ ->
-      report_error t e;
-      (match e with
-      | ConnectionError _ ->
-        (* From RFC7540§5.4.1:
-         *   A connection error is any error that prevents further processing
-         *   of the frame layer or corrupts any connection state. *)
-        `Close
-      | StreamError _ ->
-        (* From RFC7540§5.4.2:
-         *   A stream error is an error related to a specific stream that does
-         *   not affect processing of other streams. *)
-        `Read))
+    | StreamError _ ->
+      (* From RFC7540§5.4.2:
+       *   A stream error is an error related to a specific stream that does
+       *   not affect processing of other streams. *)
+      `Read)
 
 let read t bs ~off ~len =
-  Reader.read_with_more (reader t) bs ~off ~len Incomplete
+  Reader.read_with_more t.reader bs ~off ~len Incomplete
 
 let read_eof t bs ~off ~len =
-  Reader.read_with_more (reader t) bs ~off ~len Complete
+  Reader.read_with_more t.reader bs ~off ~len Complete
 
 let next_write_operation t =
   flush_request_body t;
   Writer.next t.writer
 
 let yield_writer t k =
-  if is_active t then
-    on_wakeup_writer t k
-  else if Writer.is_closed t.writer then
+  if Writer.is_closed t.writer then
     k ()
   else
     on_wakeup_writer t k

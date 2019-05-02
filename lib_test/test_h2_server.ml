@@ -147,7 +147,7 @@ module Server_connection_tests = struct
         "read_eof with bad input (triggers a parse error) reads the header"
         10
         c;
-      match Reader.next (reader t) with
+      match Reader.next t.reader with
       | `Error _ ->
         Alcotest.(check pass)
           "bad input triggers an `Error` in the parser state"
@@ -161,7 +161,7 @@ module Server_connection_tests = struct
         read_operation
         "Shutting down a reader closes it"
         `Close
-        (Reader.next (reader t)))
+        (Reader.next t.reader))
 
   (* Well-formed HEADERS + CONTINUATION frames. *)
   let header_and_continuation_frames =
@@ -297,7 +297,7 @@ module Server_connection_tests = struct
         "Next operation should be close"
         (`Close 0)
         (next_write_operation t);
-      Alcotest.(check bool) "Connection is shutdown" true (is_shutdown t)
+      Alcotest.(check bool) "Connection is shutdown" true (is_closed t)
     | _ ->
       Alcotest.fail
         "Expected state machine to issue a write operation after seeing a \
@@ -350,7 +350,7 @@ module Server_connection_tests = struct
       (`Error
         Error.(
           ConnectionError (FrameSizeError, "frame_payload: not enough input")))
-      (Reader.next (reader t))
+      (Reader.next t.reader)
 
   let test_read_frame_size_error_priority_frame () =
     let max_length = String.length preface in
@@ -376,7 +376,7 @@ module Server_connection_tests = struct
       read_operation
       "There was a stream error of type FRAME_SIZE_ERROR"
       (`Error Error.(StreamError (1l, FrameSizeError)))
-      (Reader.next (reader t));
+      (Reader.next t.reader);
     (* payload length declared in the frame header *)
     let bytes_to_skip = ref 0x25 in
     let read2 = read t ~off:0 ~len:max_length frame_payload_wire in
@@ -393,7 +393,7 @@ module Server_connection_tests = struct
       read_operation
       "Stream Error is not reported again, reader wants to read now"
       `Read
-      (Reader.next (reader t))
+      (Reader.next t.reader)
 
   let test_preface_read_with_more_frames () =
     let t = create ~error_handler default_request_handler in
@@ -422,19 +422,8 @@ module Server_connection_tests = struct
     in
     Alcotest.(check int)
       "read preface returns preface length"
-      preface_length
+      (preface_length + frame_length)
       read_preface;
-    let read_more =
-      read
-        t
-        preface_and_headers
-        ~off:read_preface
-        ~len:(preface_headers_length - read_preface)
-    in
-    Alcotest.(check int)
-      "should be able to read the next frame"
-      frame_length
-      read_more;
     Alcotest.check
       read_operation
       "Reader wants to read"
@@ -710,7 +699,7 @@ module Server_connection_tests = struct
       read_operation
       "Reader wants more input to advance and report the stream error"
       `Read
-      (Reader.next (reader t));
+      (Reader.next t.reader);
     let t = create ~error_handler default_request_handler in
     handle_preface t;
     let c = read_eof t wire ~off:0 ~len:wire_length in
@@ -723,7 +712,7 @@ module Server_connection_tests = struct
       read_operation
       "Shutting down a reader closes it"
       (`Error Error.(StreamError (1l, FrameSizeError)))
-      (Reader.next (reader t))
+      (Reader.next t.reader)
 
   let test_connect () =
     let error_handler_called = ref false in

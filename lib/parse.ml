@@ -499,7 +499,7 @@ module Reader = struct
     ]
 
   type 'error parse_state =
-    | Done
+    | Initial
     | Fail of 'error
     | Partial of
         (Bigstringaf.t
@@ -521,14 +521,10 @@ module Reader = struct
            * connection error. *)
     }
 
-  type client_connection_preface = parse_error t
-
-  type server_connection_preface = parse_error t
-
   type frame = parse_error t
 
   let create parser parse_context =
-    { parser; parse_state = Done; closed = false; parse_context }
+    { parser; parse_state = Initial; closed = false; parse_context }
 
   let create_parse_context () =
     { frame_header = None
@@ -536,15 +532,14 @@ module Reader = struct
     ; did_report_stream_error = false
     }
 
-  let settings_preface handler parse_context =
+  let settings_preface parse_context =
     (* From RFC7540§3.5:
      *   [...] the connection preface starts with the string
      *   PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n). This sequence MUST be followed by
      *   a SETTINGS frame (Section 6.5), which MAY be empty. *)
     parse_frame parse_context >>| function
     | Ok ({ frame_payload = Frame.Settings settings_list; _ } as frame) ->
-      handler frame settings_list;
-      Ok ()
+      Ok (frame, settings_list)
     | Ok _ ->
       (* From RFC7540§3.5:
        *   Clients and servers MUST treat an invalid connection preface as a
@@ -557,32 +552,42 @@ module Reader = struct
     | Error e ->
       Error (`Error e)
 
-  let client_connection_preface handler =
+  let connection_preface_and_frames
+      preface_parser preface_handler frame_handler
+    =
     let parse_context = create_parse_context () in
     let parser =
-      connection_preface *> settings_preface handler parse_context
+      preface_parser parse_context <* commit >>= function
+      | Ok (frame, settings_list) ->
+        preface_handler frame settings_list;
+        (* After having received a valid connection preface, we can start
+         * reading other frames now. *)
+        skip_many (parse_frame parse_context <* commit >>| frame_handler)
+        >>| fun () -> Ok ()
+      | Error _ as error ->
+        return error
     in
     create parser parse_context
 
-  let server_connection_preface handler =
-    let parse_context = create_parse_context () in
-    let parser = settings_preface handler parse_context in
-    create parser parse_context
+  let client_frames preface_handler frame_handler =
+    connection_preface_and_frames
+      settings_preface
+      preface_handler
+      frame_handler
 
-  let frame handler =
-    let parse_context = create_parse_context () in
-    let parser =
-      skip_many (parse_frame parse_context <* commit >>| handler) >>| fun () ->
-      Ok ()
-    in
-    create parser parse_context
+  let server_frames preface_handler frame_handler =
+    connection_preface_and_frames
+      (fun parse_context ->
+        connection_preface *> settings_preface parse_context)
+      preface_handler
+      frame_handler
 
   let is_closed t = t.closed
 
   let transition t state =
     match state with
     | AU.Done (consumed, Ok ()) ->
-      t.parse_state <- Done;
+      t.parse_state <- Initial;
       consumed
     | Done (consumed, Error error) ->
       t.parse_state <- Fail error;
@@ -604,7 +609,7 @@ module Reader = struct
   let start t state =
     match state with
     | AU.Done _ ->
-      failwith "h2.Parse.unable to start parser"
+      failwith "h2.Parse.Reader.unable to start parser"
     | Fail (0, marks, msg) ->
       t.parse_state <- Fail (`Parse (marks, msg))
     | Partial { committed = 0; continue } ->
@@ -627,11 +632,11 @@ module Reader = struct
           if remaining_bytes' = 0 then
             (* Reset the parser state to `Done` so that we can read the next
              * frame (after skipping through the bad input) *)
-            t.parse_state <- Done;
+            t.parse_state <- Initial;
           len)
         else
           0
-      | Done ->
+      | Initial ->
         start t (AU.parse t.parser);
         read_with_more t bs ~off ~len more
       | Partial continue ->
@@ -679,7 +684,7 @@ module Reader = struct
     match t.parse_state with
     | Partial _ ->
       `Read
-    | Done ->
+    | Initial ->
       if t.closed then
         `Close
       else

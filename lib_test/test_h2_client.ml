@@ -263,7 +263,7 @@ module Client_connection_tests = struct
       "There was a connection error of type PROTOCOL_ERROR"
       (`Error
         Error.(ConnectionError (ProtocolError, "Invalid connection preface")))
-      (Reader.next (reader t));
+      (Reader.next t.reader);
     Alcotest.check
       read_operation
       "Reader issues a `Close operation"

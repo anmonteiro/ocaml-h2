@@ -670,7 +670,8 @@ module Server_connection : sig
   (** [is_closed t] is [true] if both the read and write processors have been
       shutdown. When this is the case {!next_read_operation} will return
       [`Close _] and {!next_write_operation} will do the same will return a
-      [`Write _] until all buffered output has been flushed. *)
+      [`Write _] until all buffered output has been flushed, at which point it
+      will return [`Close]. *)
 
   (* val error_code : t -> error option *)
   (** [error_code t] returns the [error_code] that caused the connection to
@@ -761,7 +762,7 @@ module Client_connection : sig
   (** [shutdown connection] initiates the graceful shutdown of [connection],
       and sends an HTTP/2 GOAWAY frame with NO_ERROR on the output channel (See
       {{:https://tools.ietf.org/html/rfc7540#section-6.8} RFC7540§6.8} for
-      more details) . *)
+      more details). *)
 
   val next_read_operation : t -> [ `Read | `Close ]
   (** [next_read_operation t] returns a value describing the next operation
@@ -812,4 +813,9 @@ module Client_connection : sig
       connection. *)
 
   val is_closed : t -> bool
+  (** [is_closed t] is [true] if both the read and write processors have been
+      shutdown. When this is the case {!next_read_operation} will return
+      [`Close _] and {!next_write_operation} will do the same will return a
+      [`Write _] until all buffered output has been flushed, at which point it
+      will return [`Close]. *)
 end
