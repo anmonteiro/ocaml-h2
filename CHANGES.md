@@ -1,6 +1,9 @@
 Unreleased
 --------------
 
+0.3.0 2019-05-04
+--------------
+
 - h2-mirage: Provide `Server` and `Client` functors that take a
   `Mirage_flow_lwt.S` module as an argument
   ([#37](https://github.com/anmonteiro/ocaml-h2/pull/37))
