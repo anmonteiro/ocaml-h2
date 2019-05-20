@@ -25,7 +25,7 @@ let v ~ssl ~tls () =
 let main () =
   let is_installed s = Printf.kprintf Sys.command "ocamlfind query %s" s = 0 in
   let ssl = is_installed "lwt_ssl" in
-  let tls = Sys.unix && is_installed "tls.lwt" in
+  let tls = is_installed "tls.lwt" in
   Printf.printf
     "Configuration\n\
     \  ssl    : %b\n\
