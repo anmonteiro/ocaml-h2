@@ -6,7 +6,7 @@
   "license": "BSD-3-clause",
   "repository": "git+https://github.com/anmonteiro/ocaml-h2",
   "dependencies": {
-    "ocaml": " >= 4.4.0",
+    "ocaml": "4.8.0",
     "@opam/dune": "*",
     "@opam/lwt": "*",
     "@opam/bigstringaf": "*",
@@ -18,7 +18,9 @@
     "@opam/lwt_ssl": "*",
     "@opam/conf-libev": "*",
     "@opam/httpaf": "*",
-    "@opam/httpaf-lwt-unix": "*"
+    "@opam/httpaf-lwt-unix": "*",
+    "@opam/tls-lwt": "*",
+    "@opam/tls-mirage": "*"
   },
   "devDependencies": {
     "@opam/alcotest": "*",
@@ -44,6 +46,51 @@
     },
     "@opam/ssl": "anmonteiro/ocaml-ssl:ssl.opam#b965d15",
     "@opam/httpaf": "inhabitedtype/httpaf:httpaf.opam#fa9dc4e",
-    "@opam/httpaf-lwt-unix": "anmonteiro/httpaf:httpaf-lwt-unix.opam#6d2c80e"
+    "@opam/httpaf-lwt-unix": {
+      "source": "anmonteiro/httpaf:httpaf-lwt-unix.opam#6d2c80e",
+      "override": {
+        "dependencies": {
+          "@opam/tls-lwt": "*"
+        }
+      }
+    },
+    "@opam/mirage-conduit": {
+      "source": "mirage/ocaml-conduit:mirage-conduit.opam#0ce7ce3",
+      "override": {
+        "dependencies": {
+          "@opam/tls-mirage": "*"
+        }
+      }
+    },
+    "@opam/ppx_deriving": "gasche/ppx_deriving:ppx_deriving.opam#a7788f8",
+    "@opam/ppx_tools": "ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4",
+    "@opam/nocrypto": {
+      "source": "TheLortex/ocaml-nocrypto:nocrypto.opam#df2348d",
+      "override": {
+        "dependencies": {
+          "@opam/bigarray-compat": "*",
+          "@opam/ppx_sexp_conv": "*"
+        }
+      }
+    },
+    "@opam/mirage-xen-posix": {
+      "source": "no-source:",
+      "override": {}
+    },
+    "@opam/mirage-xen-ocaml": {
+      "source": "no-source:",
+      "override": {}
+    },
+    "@opam/mirage-xen": {
+      "source": "no-source:",
+      "override": {}
+    },
+    "@opam/mirage-net-xen": {
+      "source": "no-source:",
+      "override": {}
+    },
+    "@opam/tls": "dune-universe/ocaml-tls:tls.opam#9761033",
+    "@opam/tls-lwt": "dune-universe/ocaml-tls:tls-lwt.opam#9761033",
+    "@opam/tls-mirage": "dune-universe/ocaml-tls:tls-mirage.opam#9761033"
   }
 }
