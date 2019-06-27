@@ -153,8 +153,7 @@ let frame_testable =
         (t |> frame_to_yojson |> Yojson.Safe.pretty_to_string)
 
     let equal = ( = )
-  end
-  : Alcotest.TESTABLE
+  end : Alcotest.TESTABLE
     with type t = Frame.t)
 
 let priority_of_json json =

@@ -69,6 +69,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
               1
               (fun () ->
                 Body.write_string response_body "FOO";
+
                 (* Body.flush response_body ignore; *)
                 true)
               (* Body.flush response_body ignore; *)
@@ -104,8 +105,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
               Body.write_string response_body "event: end\ndata: 1\n\n"
             in
             Body.flush response_body (fun () ->
-                Body.close_writer response_body
-                (* Lwt.wakeup_later notify () *)))
+                Body.close_writer response_body))
       in
       Body.schedule_read ~on_read ~on_eof request_body;
       ()

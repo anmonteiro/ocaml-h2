@@ -175,7 +175,7 @@ let parse_headers_frame frame_header =
           parse_priority
           (* See RFC7540§6.3:
            *   Stream Dependency (4 octets) + Weight (1 octet). *)
-            (take_bigstring (length - 5))
+          (take_bigstring (length - 5))
       else
         lift
           (fun headers_block -> Ok (Frame.Headers (None, headers_block)))
@@ -195,7 +195,8 @@ let parse_priority_frame { Frame.payload_length; stream_id; _ } =
     (* From RFC7540§6.3:
      *   A PRIORITY frame with a length other than 5 octets MUST be treated as
      *   a stream error (Section 5.4.2) of type FRAME_SIZE_ERROR. *)
-    advance payload_length >>| fun () -> stream_error FrameSizeError stream_id
+    advance payload_length >>| fun () ->
+    stream_error FrameSizeError stream_id
   else
     lift (fun priority -> Ok (Frame.Priority priority)) parse_priority
 
@@ -453,6 +454,7 @@ let parse_frame parse_context =
   (* If we're parsing a new frame, we didn't yet send a stream error on it *)
   parse_context.did_report_stream_error <- false;
   parse_context.frame_header <- Some frame_header;
+
   (* Payload could be 0 (e.g. empty SETTINGS frame). This always succeeds. *)
   Angstrom.Unsafe.peek 0 (fun bs ~off:_ ~len:_ ->
       (* h2 does unbuffered parsing and the bigarray we read input from is
@@ -466,8 +468,8 @@ let parse_frame parse_context =
        *   not affect processing of other streams. *)
       let is_frame_size_error = payload_length > Bigstringaf.length bs in
       if is_frame_size_error then
-        parse_context.remaining_bytes_to_skip
-        <- parse_context.remaining_bytes_to_skip + payload_length)
+        parse_context.remaining_bytes_to_skip <-
+          parse_context.remaining_bytes_to_skip + payload_length)
   >>= fun () ->
   lift
     (function
@@ -560,10 +562,12 @@ module Reader = struct
       preface_parser parse_context <* commit >>= function
       | Ok (frame, settings_list) ->
         preface_handler frame settings_list;
+
         (* After having received a valid connection preface, we can start
          * reading other frames now. *)
         skip_many (parse_frame parse_context <* commit >>| frame_handler)
-        >>| fun () -> Ok ()
+        >>| fun () ->
+        Ok ()
       | Error _ as error ->
         return error
     in
@@ -623,8 +627,8 @@ module Reader = struct
       | Fail _ ->
         let parser_ctx = t.parse_context in
         let remaining_bytes = parser_ctx.remaining_bytes_to_skip in
+        (* Just skip input if we need to *)
         if remaining_bytes > 0 then (
-          (* Just skip input if we need to *)
           assert (remaining_bytes >= len);
           let remaining_bytes' = remaining_bytes - len in
           parser_ctx.remaining_bytes_to_skip <- remaining_bytes';

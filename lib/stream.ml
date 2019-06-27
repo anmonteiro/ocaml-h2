@@ -114,8 +114,8 @@ let create id ~max_frame_size writer error_handler on_close_stream =
   { id
   ; writer
   ; error_handler
-      (* From RFC7540§5.1:
-       *   idle: All streams start in the "idle" state. *)
+    (* From RFC7540§5.1:
+     *   idle: All streams start in the "idle" state. *)
   ; state = Idle
   ; error_code = `Ok, None
   ; max_frame_size

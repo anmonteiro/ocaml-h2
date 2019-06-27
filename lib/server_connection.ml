@@ -247,6 +247,7 @@ let handle_headers t ~end_stream reqd active_stream headers =
       report_stream_error t reqd.Stream.id Error.ProtocolError
   else (
     reqd.state <- Stream.(Active (Open FullHeaders, active_stream));
+
     (* From RFC7540§5.1.2:
      *   Streams that are in the "open" state or in either of the "half-closed"
      *   states count toward the maximum number of streams that an endpoint is
@@ -295,12 +296,13 @@ let handle_headers t ~end_stream reqd active_stream headers =
            *   [...] an endpoint receiving an END_STREAM flag causes the stream
            *   state to become "half-closed (remote)". *)
           reqd.state <- Active (HalfClosed request_info, active_stream);
+
           (* Deliver EOF to the request body, as the handler might be waiting
            * on it to produce a response. *)
           Body.close_reader request_body)
         else
-          reqd.state
-          <- Active (Open (ActiveMessage request_info), active_stream);
+          reqd.state <-
+            Active (Open (ActiveMessage request_info), active_stream);
         t.request_handler reqd;
         wakeup_writer t))
 
@@ -341,6 +343,7 @@ let handle_headers_block
          *   action on. All streams up to and including the identified stream
          *   might have been processed in some way. *)
         t.max_client_stream_id <- reqd.Stream.id;
+
         (* `handle_headers` will take care of transitioning the stream state *)
         handle_headers
           t
@@ -477,6 +480,7 @@ let process_trailer_headers t reqd active_stream frame_header headers_block =
     active_stream.Reqd.trailers_parser <- Some partial_headers;
     if not Flags.(test_end_header flags) then
       t.receiving_headers_for_stream <- Some stream_id;
+
     (* trailer headers: RFC7230§4.4 *)
     handle_trailer_headers
       t
@@ -551,8 +555,8 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
            *   connection error (Section 5.4.1) of type STREAM_CLOSED [...]. *)
           report_connection_error t Error.StreamClosed))
 
-let send_window_update : type a.
-    t -> a Scheduler.PriorityTreeNode.node -> int -> unit
+let send_window_update
+    : type a. t -> a Scheduler.PriorityTreeNode.node -> int -> unit
   =
  fun t stream n ->
   let send_window_update_frame stream_id n =
@@ -596,11 +600,11 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
       (match descriptor.Stream.state with
       | Active (Open (ActiveMessage request_info), active_stream) ->
         let request_body = Reqd.request_body descriptor in
-        request_info.request_body_bytes
-        <- Int64.(
-             add
-               request_info.request_body_bytes
-               (of_int (Bigstringaf.length bstr)));
+        request_info.request_body_bytes <-
+          Int64.(
+            add
+              request_info.request_body_bytes
+              (of_int (Bigstringaf.length bstr)));
         let request = request_info.request in
         if not Scheduler.(allowed_to_receive t.streams stream payload_length)
         then
@@ -619,6 +623,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
              * length to include any padding bytes that the frame might have
              * included - which were ignored at parse time). *)
             send_window_update t t.streams payload_length;
+
             (* From RFC7540§8.1.2.6:
              *   A request or response is also malformed if the value of a
              *   content-length header field does not equal the sum of the
@@ -643,10 +648,11 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
               then
                 (* There's a potential race condition here if the request
                  * handler completes the response right after. *)
-                descriptor.state
-                <- Active (HalfClosed request_info, active_stream)
+                descriptor.state <-
+                  Active (HalfClosed request_info, active_stream)
               else
                 Stream.finish_stream descriptor Finished;
+
             (* From RFC7540§6.9.1:
              *   The receiver of a frame sends a WINDOW_UPDATE frame as it
              *   consumes data and frees up space in flow-control windows.
@@ -685,6 +691,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
        * a time limit. *)
       | _ ->
         send_window_update t t.streams payload_length;
+
         (* From RFC7540§6.1:
          *   If a DATA frame is received whose stream is not in "open" or
          *   "half-closed (local)" state, the recipient MUST respond with a
@@ -881,6 +888,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
           | MaxHeaderListSize, x ->
             t.settings.max_header_list_size <- Some x)
         settings;
+
       (* From RFC7540§6.5.2:
        *   Once all values have been processed, the recipient MUST immediately
        *   emit a SETTINGS frame with the ACK flag set. *)
@@ -931,12 +939,13 @@ let process_goaway_frame t _frame payload =
   let len = Bigstringaf.length debug_data in
   let bytes = Bytes.create len in
   Bigstringaf.unsafe_blit_to_bytes debug_data ~src_off:0 bytes ~dst_off:0 ~len;
+
   (* TODO(anmonteiro): I think we need to allow lower numbered streams to
    * complete. *)
   shutdown t
 
-let add_window_increment : type a.
-    t -> a Scheduler.PriorityTreeNode.node -> int -> unit
+let add_window_increment
+    : type a. t -> a Scheduler.PriorityTreeNode.node -> int -> unit
   =
  fun t stream increment ->
   let open Scheduler in
@@ -1101,6 +1110,7 @@ let create
      *   SETTINGS frame (Section 6.5) that MUST be the first frame the
      *   server sends in the HTTP/2 connection. *)
     Writer.write_settings t.writer frame_info settings;
+
     (* If a higher value for initial window size is configured, add more
      * tokens to the connection (we have no streams at this point). *)
     (if
@@ -1112,6 +1122,7 @@ let create
          - Settings.default_settings.initial_window_size
        in
        send_window_update t t.streams diff);
+
     (* Now process the client's SETTINGS frame. `process_settings_frame` will
      * take care of calling `wakeup_writer`. *)
     process_settings_frame t recv_frame settings_list

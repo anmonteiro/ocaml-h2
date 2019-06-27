@@ -184,8 +184,7 @@ let mk_lookup_token token_map =
                                               (Pconst_string (name, None)) )
                                         ])
                                    (Exp.constant
-                                      (Pconst_integer (string_of_int i, None)))
-                                 )
+                                      (Pconst_integer (string_of_int i, None))))
                                names
                            ; [ Exp.case
                                  (Pat.any ())

@@ -36,6 +36,9 @@ build: [
 dev-repo: "git+https://github.com/mirage/ocaml-vchan.git"
 url {
   src:
-    "https://github.com/mirage/ocaml-vchan/releases/download/v4.0.2/vchan-v4.0.2.tbz"
-  checksum: "md5=59475ed6b62865d501397fc4b51e0f86"
+    "https://github.com/mirage/ocaml-vchan/releases/download/v4.0.3/vchan-v4.0.3.tbz"
+  checksum: [
+    "sha256=881561336d1b52443512297e156586aa0ae4c8637f273b9316e873a35afabfa7"
+    "sha512=691394329b1cbd1c5c842b607fe7fd9ba5a959b501e75dfaf818d02a82d507399cba9a9e4e97c2c69ad1fec078f5f994b8dae539fef3946af6cb355b3eed5c60"
+  ]
 }

@@ -186,6 +186,7 @@ let send_fixed_response t s response data =
         t.id
     in
     Writer.write_response_headers t.writer s.encoder frame_info response;
+
     (* From RFC7540§8.1:
      *   An HTTP request/response exchange fully consumes a single stream.
      *   [...] A response starts with a HEADERS frame and ends with a frame
@@ -208,6 +209,7 @@ let unsafe_respond_with_data t response data =
     send_fixed_response t stream response data
   | Reserved (request_info, stream) ->
     send_fixed_response t stream response data;
+
     (* From RFC7540§8.1:
      *   reserved (local): [...] In this state, only the following transitions
      *   are possible: The endpoint can send a HEADERS frame. This causes the

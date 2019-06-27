@@ -92,6 +92,7 @@ let evict_one ({ capacity; entries; on_evict; _ } as table) =
   let name, value, entry_size = entries.(i) in
   entries.(i) <- default_entry;
   table.size <- table.size - entry_size;
+
   (* Don't bother calling if the eviction callback is not meaningful. *)
   if on_evict != default_evict then
     on_evict (name, value)
@@ -119,6 +120,7 @@ let add ({ max_size; _ } as table) (name, value) =
   while table.size > 0 && table.size + entry_size > max_size do
     evict_one table
   done;
+
   (* From RFC7541§4.4:
    *   If the size of the new entry is less than or equal to the maximum size,
    *   that entry is added to the table. *)
@@ -135,6 +137,7 @@ let[@inline] table_size table = table.length
 
 let set_capacity table max_size =
   table.max_size <- max_size;
+
   (* From RFC7541§4.3:
    *   Whenever the maximum size for the dynamic table is reduced, entries are
    *   evicted from the end of the dynamic table until the size of the dynamic

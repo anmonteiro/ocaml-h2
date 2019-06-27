@@ -56,7 +56,7 @@
       ],
       "devDependencies": [
         "@opam/odoc@opam:1.4.1@1423b616",
-        "@opam/ocamlformat@opam:0.9.1@66eb7587",
+        "@opam/ocamlformat@opam:0.10@76aa45c4",
         "@opam/merlin@opam:3.3.1@43415979",
         "@opam/landmarks@opam:1.3@491aaf95", "@opam/hex@opam:1.4.0@70cc7ec2",
         "@opam/alcotest@opam:0.8.5@0b35b339"
@@ -218,20 +218,20 @@
         "@opam/asn1-combinators@opam:0.2.0@8d14b60d"
       ]
     },
-    "@opam/vchan@opam:4.0.2@e9e398d4": {
-      "id": "@opam/vchan@opam:4.0.2@e9e398d4",
+    "@opam/vchan@opam:4.0.3@719d7c55": {
+      "id": "@opam/vchan@opam:4.0.3@719d7c55",
       "name": "@opam/vchan",
-      "version": "opam:4.0.2",
+      "version": "opam:4.0.3",
       "source": {
         "type": "install",
         "source": [
-          "archive:https://opam.ocaml.org/cache/md5/59/59475ed6b62865d501397fc4b51e0f86#md5:59475ed6b62865d501397fc4b51e0f86",
-          "archive:https://github.com/mirage/ocaml-vchan/releases/download/v4.0.2/vchan-v4.0.2.tbz#md5:59475ed6b62865d501397fc4b51e0f86"
+          "archive:https://opam.ocaml.org/cache/sha256/88/881561336d1b52443512297e156586aa0ae4c8637f273b9316e873a35afabfa7#sha256:881561336d1b52443512297e156586aa0ae4c8637f273b9316e873a35afabfa7",
+          "archive:https://github.com/mirage/ocaml-vchan/releases/download/v4.0.3/vchan-v4.0.3.tbz#sha256:881561336d1b52443512297e156586aa0ae4c8637f273b9316e873a35afabfa7"
         ],
         "opam": {
           "name": "vchan",
-          "version": "4.0.2",
-          "path": "esy.lock/opam/vchan.4.0.2"
+          "version": "4.0.3",
+          "path": "esy.lock/opam/vchan.4.0.3"
         }
       },
       "overrides": [],
@@ -245,7 +245,7 @@
         "@opam/ppx_sexp_conv@opam:v0.12.0@6aa153b5",
         "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
         "@opam/mirage-flow-lwt@opam:1.6.0@4764001e",
-        "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/io-page@opam:2.2.0@6b3421c7",
+        "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/io-page@opam:2.3.0@278f3131",
         "@opam/dune@opam:1.10.0@b15ce221",
         "@opam/cstruct@opam:4.0.0@27f747cf",
         "@opam/cmdliner@opam:1.0.4@93208aac",
@@ -261,7 +261,7 @@
         "@opam/ppx_sexp_conv@opam:v0.12.0@6aa153b5",
         "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
         "@opam/mirage-flow-lwt@opam:1.6.0@4764001e",
-        "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/io-page@opam:2.2.0@6b3421c7",
+        "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/io-page@opam:2.3.0@278f3131",
         "@opam/cstruct@opam:4.0.0@27f747cf",
         "@opam/cmdliner@opam:1.0.4@93208aac"
       ]
@@ -295,6 +295,37 @@
         "ocaml@4.8.0@d41d8cd9", "@opam/uchar@opam:0.0.2@c8218eea"
       ]
     },
+    "@opam/uuseg@opam:12.0.0@bf82c4c7": {
+      "id": "@opam/uuseg@opam:12.0.0@bf82c4c7",
+      "name": "@opam/uuseg",
+      "version": "opam:12.0.0",
+      "source": {
+        "type": "install",
+        "source": [
+          "archive:https://opam.ocaml.org/cache/md5/1d/1d4487ddf5154e3477e55021b978d58a#md5:1d4487ddf5154e3477e55021b978d58a",
+          "archive:https://erratique.ch/software/uuseg/releases/uuseg-12.0.0.tbz#md5:1d4487ddf5154e3477e55021b978d58a"
+        ],
+        "opam": {
+          "name": "uuseg",
+          "version": "12.0.0",
+          "path": "esy.lock/opam/uuseg.12.0.0"
+        }
+      },
+      "overrides": [],
+      "dependencies": [
+        "ocaml@4.8.0@d41d8cd9", "@opam/uutf@opam:1.0.2@4440868f",
+        "@opam/uucp@opam:12.0.0@b7d4c3df", "@opam/uchar@opam:0.0.2@c8218eea",
+        "@opam/topkg@opam:1.0.0@61f4ccf9",
+        "@opam/ocamlfind@opam:1.8.0@f744a0c5",
+        "@opam/ocamlbuild@opam:0.14.0@427a2331",
+        "@opam/cmdliner@opam:1.0.4@93208aac",
+        "@esy-ocaml/substs@0.0.1@d41d8cd9"
+      ],
+      "devDependencies": [
+        "ocaml@4.8.0@d41d8cd9", "@opam/uucp@opam:12.0.0@b7d4c3df",
+        "@opam/uchar@opam:0.0.2@c8218eea"
+      ]
+    },
     "@opam/uuidm@opam:0.9.7@bf725775": {
       "id": "@opam/uuidm@opam:0.9.7@bf725775",
       "name": "@opam/uuidm",
@@ -320,6 +351,35 @@
         "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [ "ocaml@4.8.0@d41d8cd9" ]
+    },
+    "@opam/uucp@opam:12.0.0@b7d4c3df": {
+      "id": "@opam/uucp@opam:12.0.0@b7d4c3df",
+      "name": "@opam/uucp",
+      "version": "opam:12.0.0",
+      "source": {
+        "type": "install",
+        "source": [
+          "archive:https://opam.ocaml.org/cache/md5/cf/cf210ed43375b7f882c0540874e2cb81#md5:cf210ed43375b7f882c0540874e2cb81",
+          "archive:https://erratique.ch/software/uucp/releases/uucp-12.0.0.tbz#md5:cf210ed43375b7f882c0540874e2cb81"
+        ],
+        "opam": {
+          "name": "uucp",
+          "version": "12.0.0",
+          "path": "esy.lock/opam/uucp.12.0.0"
+        }
+      },
+      "overrides": [],
+      "dependencies": [
+        "ocaml@4.8.0@d41d8cd9", "@opam/uutf@opam:1.0.2@4440868f",
+        "@opam/uchar@opam:0.0.2@c8218eea", "@opam/topkg@opam:1.0.0@61f4ccf9",
+        "@opam/ocamlfind@opam:1.8.0@f744a0c5",
+        "@opam/ocamlbuild@opam:0.14.0@427a2331",
+        "@opam/cmdliner@opam:1.0.4@93208aac",
+        "@esy-ocaml/substs@0.0.1@d41d8cd9"
+      ],
+      "devDependencies": [
+        "ocaml@4.8.0@d41d8cd9", "@opam/uchar@opam:0.0.2@c8218eea"
+      ]
     },
     "@opam/uri@opam:2.2.1@6bd26f86": {
       "id": "@opam/uri@opam:2.2.1@6bd26f86",
@@ -1134,25 +1194,26 @@
         "@opam/base-bytes@opam:base@19d0c2ff"
       ]
     },
-    "@opam/ocamlformat@opam:0.9.1@66eb7587": {
-      "id": "@opam/ocamlformat@opam:0.9.1@66eb7587",
+    "@opam/ocamlformat@opam:0.10@76aa45c4": {
+      "id": "@opam/ocamlformat@opam:0.10@76aa45c4",
       "name": "@opam/ocamlformat",
-      "version": "opam:0.9.1",
+      "version": "opam:0.10",
       "source": {
         "type": "install",
         "source": [
-          "archive:https://opam.ocaml.org/cache/md5/5f/5f528fcf4a4544769ede57f57a4aebec#md5:5f528fcf4a4544769ede57f57a4aebec",
-          "archive:https://github.com/ocaml-ppx/ocamlformat/archive/0.9.1.tar.gz#md5:5f528fcf4a4544769ede57f57a4aebec"
+          "archive:https://opam.ocaml.org/cache/md5/7f/7f3531e0cd326c7f33d365eb99916a7b#md5:7f3531e0cd326c7f33d365eb99916a7b",
+          "archive:https://github.com/ocaml-ppx/ocamlformat/archive/0.10.tar.gz#md5:7f3531e0cd326c7f33d365eb99916a7b"
         ],
         "opam": {
           "name": "ocamlformat",
-          "version": "0.9.1",
-          "path": "esy.lock/opam/ocamlformat.0.9.1"
+          "version": "0.10",
+          "path": "esy.lock/opam/ocamlformat.0.10"
         }
       },
       "overrides": [],
       "dependencies": [
         "ocaml@4.8.0@d41d8cd9", "@opam/uutf@opam:1.0.2@4440868f",
+        "@opam/uuseg@opam:12.0.0@bf82c4c7",
         "@opam/stdio@opam:v0.12.0@1d18adcb",
         "@opam/octavius@opam:1.2.1@6ab49b19",
         "@opam/ocaml-migrate-parsetree@opam:1.3.1@266527bd",
@@ -1164,6 +1225,7 @@
       ],
       "devDependencies": [
         "ocaml@4.8.0@d41d8cd9", "@opam/uutf@opam:1.0.2@4440868f",
+        "@opam/uuseg@opam:12.0.0@bf82c4c7",
         "@opam/stdio@opam:v0.12.0@1d18adcb",
         "@opam/octavius@opam:1.2.1@6ab49b19",
         "@opam/ocaml-migrate-parsetree@opam:1.3.1@266527bd",
@@ -1396,7 +1458,7 @@
         "@opam/mirage-fs@opam:2.0.0@2a37a9ef",
         "@opam/mirage-flow@opam:1.6.0@821b4031",
         "@opam/mirage-device@opam:1.2.0@ed0c95c6",
-        "@opam/mirage-console@opam:2.4.2@e90ac30c",
+        "@opam/mirage-console@opam:2.4.3@8630c69c",
         "@opam/mirage-clock@opam:2.0.0@9977799a",
         "@opam/mirage-channel@opam:3.2.0@4a00b220",
         "@opam/mirage-block@opam:1.2.0@c9af036d",
@@ -1412,7 +1474,7 @@
         "@opam/mirage-fs@opam:2.0.0@2a37a9ef",
         "@opam/mirage-flow@opam:1.6.0@821b4031",
         "@opam/mirage-device@opam:1.2.0@ed0c95c6",
-        "@opam/mirage-console@opam:2.4.2@e90ac30c",
+        "@opam/mirage-console@opam:2.4.3@8630c69c",
         "@opam/mirage-clock@opam:2.0.0@9977799a",
         "@opam/mirage-channel@opam:3.2.0@4a00b220",
         "@opam/mirage-block@opam:1.2.0@c9af036d"
@@ -1892,20 +1954,20 @@
         "ocaml@4.8.0@d41d8cd9", "@opam/fmt@opam:0.8.6@a06c130d"
       ]
     },
-    "@opam/mirage-console@opam:2.4.2@e90ac30c": {
-      "id": "@opam/mirage-console@opam:2.4.2@e90ac30c",
+    "@opam/mirage-console@opam:2.4.3@8630c69c": {
+      "id": "@opam/mirage-console@opam:2.4.3@8630c69c",
       "name": "@opam/mirage-console",
-      "version": "opam:2.4.2",
+      "version": "opam:2.4.3",
       "source": {
         "type": "install",
         "source": [
-          "archive:https://opam.ocaml.org/cache/md5/78/78bdb8d509f2c3576e69e49cd191896a#md5:78bdb8d509f2c3576e69e49cd191896a",
-          "archive:https://github.com/mirage/mirage-console/releases/download/v2.4.2/mirage-console-v2.4.2.tbz#md5:78bdb8d509f2c3576e69e49cd191896a"
+          "archive:https://opam.ocaml.org/cache/sha256/96/9677d51f4075567b488b45ce7f9ee6512fb4f03e72209bb761cc7bd64570cc5b#sha256:9677d51f4075567b488b45ce7f9ee6512fb4f03e72209bb761cc7bd64570cc5b",
+          "archive:https://github.com/mirage/mirage-console/releases/download/v2.4.3/mirage-console-v2.4.3.tbz#sha256:9677d51f4075567b488b45ce7f9ee6512fb4f03e72209bb761cc7bd64570cc5b"
         ],
         "opam": {
           "name": "mirage-console",
-          "version": "2.4.2",
-          "path": "esy.lock/opam/mirage-console.2.4.2"
+          "version": "2.4.3",
+          "path": "esy.lock/opam/mirage-console.2.4.3"
         }
       },
       "overrides": [],
@@ -1933,7 +1995,7 @@
       "overrides": [ { "dependencies": { "@opam/tls-mirage": "*" } } ],
       "dependencies": [
         "ocaml@4.8.0@d41d8cd9", "@opam/xenstore@opam:2.1.0@02d15b14",
-        "@opam/vchan@opam:4.0.2@e9e398d4",
+        "@opam/vchan@opam:4.0.3@719d7c55",
         "@opam/tls-mirage@github:dune-universe/ocaml-tls:tls-mirage.opam#9761033@d41d8cd9",
         "@opam/tls@github:dune-universe/ocaml-tls:tls.opam#9761033@d41d8cd9",
         "@opam/sexplib@opam:v0.12.0@c65643bb",
@@ -1950,7 +2012,7 @@
       ],
       "devDependencies": [
         "ocaml@4.8.0@d41d8cd9", "@opam/xenstore@opam:2.1.0@02d15b14",
-        "@opam/vchan@opam:4.0.2@e9e398d4",
+        "@opam/vchan@opam:4.0.3@719d7c55",
         "@opam/tls@github:dune-universe/ocaml-tls:tls.opam#9761033@d41d8cd9",
         "@opam/sexplib@opam:v0.12.0@c65643bb",
         "@opam/ppx_sexp_conv@opam:v0.12.0@6aa153b5",
@@ -2255,20 +2317,20 @@
         "@opam/macaddr@opam:3.1.0@b114fdd9"
       ]
     },
-    "@opam/io-page@opam:2.2.0@6b3421c7": {
-      "id": "@opam/io-page@opam:2.2.0@6b3421c7",
+    "@opam/io-page@opam:2.3.0@278f3131": {
+      "id": "@opam/io-page@opam:2.3.0@278f3131",
       "name": "@opam/io-page",
-      "version": "opam:2.2.0",
+      "version": "opam:2.3.0",
       "source": {
         "type": "install",
         "source": [
-          "archive:https://opam.ocaml.org/cache/sha256/f5/f51ad9b96dd1378aae1474ee2929b56ddedaca5c5dc49459e291e5476c1ee047#sha256:f51ad9b96dd1378aae1474ee2929b56ddedaca5c5dc49459e291e5476c1ee047",
-          "archive:https://github.com/mirage/io-page/releases/download/v2.2.0/io-page-v2.2.0.tbz#sha256:f51ad9b96dd1378aae1474ee2929b56ddedaca5c5dc49459e291e5476c1ee047"
+          "archive:https://opam.ocaml.org/cache/sha256/96/9605a8a03e53bc12682212c371bc477f2a44ed829725ae38cc3005e2f83da2c3#sha256:9605a8a03e53bc12682212c371bc477f2a44ed829725ae38cc3005e2f83da2c3",
+          "archive:https://github.com/mirage/io-page/releases/download/v2.3.0/io-page-v2.3.0.tbz#sha256:9605a8a03e53bc12682212c371bc477f2a44ed829725ae38cc3005e2f83da2c3"
         ],
         "opam": {
           "name": "io-page",
-          "version": "2.2.0",
-          "path": "esy.lock/opam/io-page.2.2.0"
+          "version": "2.3.0",
+          "path": "esy.lock/opam/io-page.2.3.0"
         }
       },
       "overrides": [],
@@ -2279,7 +2341,8 @@
         "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [
-        "ocaml@4.8.0@d41d8cd9", "@opam/cstruct@opam:4.0.0@27f747cf",
+        "ocaml@4.8.0@d41d8cd9", "@opam/dune@opam:1.10.0@b15ce221",
+        "@opam/cstruct@opam:4.0.0@27f747cf",
         "@opam/bigarray-compat@opam:1.0.0@77cde57f"
       ]
     },

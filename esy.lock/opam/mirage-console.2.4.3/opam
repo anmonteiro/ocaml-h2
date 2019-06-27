@@ -24,6 +24,9 @@ for use in MirageOS.
 """
 url {
   src:
-    "https://github.com/mirage/mirage-console/releases/download/v2.4.2/mirage-console-v2.4.2.tbz"
-  checksum: "md5=78bdb8d509f2c3576e69e49cd191896a"
+    "https://github.com/mirage/mirage-console/releases/download/v2.4.3/mirage-console-v2.4.3.tbz"
+  checksum: [
+    "sha256=9677d51f4075567b488b45ce7f9ee6512fb4f03e72209bb761cc7bd64570cc5b"
+    "sha512=e08a353738bae403418047b19e585543f91f5027c690240d8b3c13b35f62856216d4405ccd758c71ba9c1567638215bb8ef85776965f233ed2ef84d966a1358b"
+  ]
 }

@@ -253,16 +253,16 @@ let handle_push_promise_headers t respd headers =
         (* From RFC7540§5.1:
          *   reserved (remote): [...] Receiving a HEADERS frame causes the
          *   stream to transition to "half-closed (local)". *)
-        respd.state
-        <- Active
-             ( HalfClosed Stream.WaitingForPeer
-               (* TODO: should we just store a `unit -> unit` in `t` to avoid
-                * one closure allocation here? *)
-             , { Respd.request
-               ; request_body
-               ; response_handler
-               ; wakeup_writer = (fun () -> wakeup_writer t)
-               } )
+        respd.state <-
+          Active
+            ( HalfClosed Stream.WaitingForPeer
+              (* TODO: should we just store a `unit -> unit` in `t` to avoid
+               * one closure allocation here? *)
+            , { Respd.request
+              ; request_body
+              ; response_handler
+              ; wakeup_writer = (fun () -> wakeup_writer t)
+              } )
       | Error _ ->
         (* From RFC7540§6.6:
          *   Recipients of PUSH_PROMISE frames can choose to reject promised
@@ -317,19 +317,20 @@ let handle_response_headers t respd ~end_stream active_request headers =
       let new_response_state =
         Respd.create_active_response response response_body
       in
-      respd.state
-      <- Stream.(
-           Active
-             ( (if is_open respd then
-                  Open new_response_state
-               else
-                 HalfClosed new_response_state)
-             , active_request ));
+      respd.state <-
+        Stream.(
+          Active
+            ( (if is_open respd then
+                 Open new_response_state
+              else
+                HalfClosed new_response_state)
+            , active_request ));
       active_request.response_handler response response_body;
       if end_stream then (
         (* Deliver EOF to the response body, as the handler might be waiting
          * on it to act. *)
         Body.close_reader response_body;
+
         (* From RFC7540§5.1:
          *   [...] an endpoint receiving an END_STREAM flag causes the stream
          *   state to become "half-closed (remote)". *)
@@ -461,11 +462,11 @@ let handle_first_response_bytes
   let { Frame.flags; stream_id; _ } = frame_header in
   let partial_headers = create_partial_headers t flags headers_block in
   let remote_state = Stream.PartialHeaders partial_headers in
-  descriptor.Stream.state
-  <- (if Stream.is_open descriptor then
-        Active (Open remote_state, active_request)
-     else
-       Active (HalfClosed remote_state, active_request));
+  descriptor.Stream.state <-
+    (if Stream.is_open descriptor then
+       Active (Open remote_state, active_request)
+    else
+      Active (HalfClosed remote_state, active_request));
   if not (Flags.test_end_header flags) then
     t.receiving_headers_for_stream <- Some stream_id;
   (match priority with
@@ -500,6 +501,7 @@ let process_trailer_headers t respd active_response frame_header headers_block =
     active_response.Respd.trailers_parser <- Some partial_headers;
     if not Flags.(test_end_header flags) then
       t.receiving_headers_for_stream <- Some stream_id;
+
     (* trailer headers: RFC7230§4.4 *)
     handle_trailer_headers t respd partial_headers flags headers_block
 
@@ -579,8 +581,8 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
          *   connection error (Section 5.4.1) of type STREAM_CLOSED [...]. *)
         report_connection_error t Error.StreamClosed))
 
-let send_window_update : type a.
-    t -> a Scheduler.PriorityTreeNode.node -> int -> unit
+let send_window_update
+    : type a. t -> a Scheduler.PriorityTreeNode.node -> int -> unit
   =
  fun t stream n ->
   let send_window_update_frame stream_id n =
@@ -621,8 +623,8 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
       let { Respd.response; response_body; response_body_bytes; _ } =
         response_info
       in
-      response_info.response_body_bytes
-      <- Int64.(add response_body_bytes (of_int (Bigstringaf.length bstr)));
+      response_info.response_body_bytes <-
+        Int64.(add response_body_bytes (of_int (Bigstringaf.length bstr)));
       if not Scheduler.(allowed_to_receive t.streams stream payload_length)
       then
         (* From RFC7540§6.9:
@@ -640,6 +642,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
            * length to include any padding bytes that the frame might have
            * included - which were ignored at parse time). *)
           send_window_update t t.streams payload_length;
+
           (* From RFC7540§8.1.2.6:
            *   A request or response is also malformed if the value of a
            *   content-length header field does not equal the sum of the
@@ -705,6 +708,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
      * a time limit. *)
     | _ ->
       send_window_update t t.streams payload_length;
+
       (* From RFC7540§6.1:
        *   If a DATA frame is received whose stream is not in "open" or
        *   "half-closed (local)" state, the recipient MUST respond with a
@@ -789,6 +793,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *   stream that might have been sent by the peer prior to the arrival
        *   of the RST_STREAM. *)
       Stream.finish_stream respd (ResetByThem error_code);
+
       (* From RFC7540§5.4.2:
        *   To avoid looping, an endpoint MUST NOT send a RST_STREAM in response
        *   to a RST_STREAM frame.
@@ -1023,12 +1028,13 @@ let process_goaway_frame t _frame payload =
   let len = Bigstringaf.length debug_data in
   let bytes = Bytes.create len in
   Bigstringaf.unsafe_blit_to_bytes debug_data ~src_off:0 bytes ~dst_off:0 ~len;
+
   (* TODO(anmonteiro): I think we need to allow lower numbered streams to
    * complete. *)
   shutdown_rw t
 
-let add_window_increment : type a.
-    t -> a Scheduler.PriorityTreeNode.node -> int -> unit
+let add_window_increment
+    : type a. t -> a Scheduler.PriorityTreeNode.node -> int -> unit
   =
  fun t stream increment ->
   let open Scheduler in
@@ -1217,9 +1223,9 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
     lazy
       { settings
       ; config
-          (* From RFC7540§5.1.1:
-           *   Streams initiated by a client MUST use odd-numbered stream
-           *   identifiers *)
+        (* From RFC7540§5.1.1:
+         *   Streams initiated by a client MUST use odd-numbered stream
+         *   identifiers *)
       ; current_stream_id = -1l
       ; max_pushed_stream_id = 0l
       ; current_server_streams = 0
@@ -1248,6 +1254,7 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
   let settings = Settings.settings_for_the_connection t.settings in
   (* Send the client connection preface *)
   Writer.write_connection_preface t.writer settings;
+
   (* If a higher value for initial window size is configured, add more
    * tokens to the connection (we have no streams at this point). *)
   (if
@@ -1287,15 +1294,16 @@ let request t request ~error_handler ~response_handler =
   in
   Writer.write_request_headers t.writer t.hpack_encoder frame_info request;
   Writer.flush t.writer (fun () ->
-      respd.state
-      <- Active
-           ( Open WaitingForPeer
-           , { request
-             ; request_body
-             ; response_handler
-             ; wakeup_writer = wakeup_stream
-             } ));
+      respd.state <-
+        Active
+          ( Open WaitingForPeer
+          , { request
+            ; request_body
+            ; response_handler
+            ; wakeup_writer = wakeup_stream
+            } ));
   wakeup_writer t;
+
   (* Closing the request body puts the stream in the half-closed (local) state.
    * This is handled by {!Respd.flush_request_body}, which transitions the
    * state once it verifies that there's no more data to send for the

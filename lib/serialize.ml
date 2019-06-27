@@ -105,6 +105,7 @@ let write_priority t { Priority.exclusive; stream_dependency; weight } =
       stream_dependency
   in
   BE.write_uint32 t stream_dependency_id;
+
   (* From RFC7540§6.3:
    *   An unsigned 8-bit integer representing a priority weight for the stream
    *   (see Section 5.3). Add one to the value to obtain a weight between 1 and
