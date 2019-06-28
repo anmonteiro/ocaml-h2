@@ -36,8 +36,8 @@ let _ = Nocrypto_entropy_lwt.initialize ()
 
 module Io :
   H2_lwt.IO
-  with type socket = Lwt_unix.file_descr * Tls_lwt.Unix.t
-   and type addr = Unix.sockaddr = struct
+    with type socket = Lwt_unix.file_descr * Tls_lwt.Unix.t
+     and type addr = Unix.sockaddr = struct
   type socket = Lwt_unix.file_descr * Tls_lwt.Unix.t
 
   type addr = Unix.sockaddr

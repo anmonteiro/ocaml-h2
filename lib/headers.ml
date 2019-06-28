@@ -249,6 +249,7 @@ let valid_headers ?(is_request = true) t =
           let pseudo_did_end = !pseudo_ended in
           if (not is_pseudo) && not pseudo_did_end then
             pseudo_ended := true;
+
           (* From RFC7540§8.1.2:
            *   [...] header field names MUST be converted to lowercase
            *   prior to their encoding in HTTP/2. A request or response

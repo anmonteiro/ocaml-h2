@@ -34,8 +34,8 @@ type nothing = [ `Tls_not_available ]
 
 module Io :
   H2_lwt.IO
-  with type socket = Lwt_unix.file_descr * nothing
-   and type addr = Unix.sockaddr = struct
+    with type socket = Lwt_unix.file_descr * nothing
+     and type addr = Unix.sockaddr = struct
   type socket = Lwt_unix.file_descr * nothing
 
   type addr = Unix.sockaddr

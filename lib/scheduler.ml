@@ -200,13 +200,14 @@ module Make (Streamd : StreamDescriptor) = struct
          *   reprioritized. Setting a dependency with the exclusive flag for a
          *   reprioritized stream causes all the dependencies of the new parent
          *   stream to become dependent on the reprioritized stream. *)
-        stream.children
-        <- PriorityQueue.fold
-             (fun k (Stream p as p_node) pq ->
-               p.parent <- Parent stream_node;
-               PriorityQueue.add k p_node pq)
-             stream.children
-             new_children;
+        stream.children <-
+          PriorityQueue.fold
+            (fun k (Stream p as p_node) pq ->
+              p.parent <- Parent stream_node;
+              PriorityQueue.add k p_node pq)
+            stream.children
+            new_children;
+
         (* From RFC7540§5.3.1:
          *   An exclusive flag allows for the insertion of a new level of
          *   dependencies. The exclusive flag causes the stream to become the
@@ -275,14 +276,15 @@ module Make (Streamd : StreamDescriptor) = struct
              *   on the reprioritized stream's previous parent. The moved
              *   dependency retains its weight. *)
             set_parent new_parent_node ~exclusive:false stream.parent;
-            new_parent_stream.priority
-            <- { new_parent_stream.priority with
-                 stream_dependency = current_parent_id
-               })
+            new_parent_stream.priority <-
+              { new_parent_stream.priority with
+                stream_dependency = current_parent_id
+              })
         | Connection _ ->
           (* The root node cannot be dependent on any other streams, so we
            * don't need to worry about it creating cycles. *)
           ());
+
         (* From RFC7540§5.3.1:
          *   When assigning a dependency on another stream, the stream is added
          *   as a new dependency of the parent stream. *)
@@ -401,6 +403,7 @@ module Make (Streamd : StreamDescriptor) = struct
             p.children <- PriorityQueue.add id i_node children')
           else (
             implicitly_close_idle_stream i.descriptor max_seen_ids;
+
             (* XXX(anmonteiro): we may not want to remove from the tree right
              * away. *)
             p.children <- children');
@@ -436,24 +439,24 @@ module Make (Streamd : StreamDescriptor) = struct
     in
     let (Connection root) = t in
     ignore (schedule t);
-    root.marked_for_removal
-    <- List.fold_left
-         (fun acc (id, closed) ->
-           (* When a stream completes, i.e. doesn't require more output and
-            * enters the `Closed` state, we set a TTL value which represents
-            * the * number of writer yields that the stream has before it is
-            * removed * from the connection Hash Table. By doing this we avoid
-            * losing some * potentially useful information regarding the
-            * stream's state at the * cost of keeping it around for a little
-            * while longer. *)
-           if closed.Stream.ttl == 0 then (
-             StreamsTbl.remove root.all_streams id;
-             acc)
-           else (
-             closed.ttl <- closed.ttl - 1;
-             (id, closed) :: acc))
-         []
-         root.marked_for_removal
+    root.marked_for_removal <-
+      List.fold_left
+        (fun acc (id, closed) ->
+          (* When a stream completes, i.e. doesn't require more output and
+           * enters the `Closed` state, we set a TTL value which represents
+           * the * number of writer yields that the stream has before it is
+           * removed * from the connection Hash Table. By doing this we avoid
+           * losing some * potentially useful information regarding the
+           * stream's state at the * cost of keeping it around for a little
+           * while longer. *)
+          if closed.Stream.ttl == 0 then (
+            StreamsTbl.remove root.all_streams id;
+            acc)
+          else (
+            closed.ttl <- closed.ttl - 1;
+            (id, closed) :: acc))
+        []
+        root.marked_for_removal
 
   let check_flow flow growth flow' =
     (* Check for overflow on 32-bit systems. *)

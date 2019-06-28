@@ -36,6 +36,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
               Reqd.respond_with_streaming request_descriptor response
             in
             Body.write_string response_body (String.make 100 'a');
+
             (* Body.close_writer response_body *)
             (* Body.flush response_body (fun () -> Body.close_writer
                response_body ); *)

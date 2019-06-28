@@ -44,6 +44,7 @@
 
 (** {2 Basic HTTP Types} *)
 
+module Method : module type of Httpaf.Method
 (** Request Method
 
     The request method token is the primary source of request semantics; it
@@ -55,7 +56,6 @@
 
     This module is a proxy to [Httpaf.Method] and is included in h2 for
     convenience. *)
-module Method : module type of Httpaf.Method
 
 (** Response Status Codes
 
@@ -76,28 +76,32 @@ module Method : module type of Httpaf.Method
     See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1}
     for more details. *)
 module Status : sig
+  type informational = [ `Continue ]
   (** The 1xx (Informational) class of status code indicates an interim
       response for communicating connection status or request progress prior to
       completing the requested action and sending a final response.
 
       See {{:https://tools.ietf.org/html/rfc7231#section-6.2} RFC7231§6.2} for
       more details. *)
-  type informational = [ `Continue ]
 
+  type successful = Httpaf.Status.successful
   (** The 2xx (Successful) class of status code indicates that the client's
       request was successfully received, understood, and accepted.
 
       See {{:https://tools.ietf.org/html/rfc7231#section-6.3} RFC7231§6.3} for
       more details. *)
-  type successful = Httpaf.Status.successful
 
+  type redirection = Httpaf.Status.redirection
   (** The 3xx (Redirection) class of status code indicates that further action
       needs to be taken by the user agent in order to fulfill the request.
 
       See {{:https://tools.ietf.org/html/rfc7231#section-6.4} RFC7231§6.4} for
       more details. *)
-  type redirection = Httpaf.Status.redirection
 
+  type client_error =
+    [ Httpaf.Status.client_error
+    | `Misdirected_request
+    ]
   (** The 4xx (Client Error) class of status code indicates that the client
       seems to have erred.
 
@@ -108,26 +112,15 @@ module Status : sig
       Request) tag. See
       {{:https://tools.ietf.org/html/rfc7540#section-9.1.2} RFC7540§9.1.2} for
       more details. *)
-  type client_error =
-    [ Httpaf.Status.client_error
-    | `Misdirected_request
-    ]
 
+  type server_error = Httpaf.Status.server_error
   (** The 5xx (Server Error) class of status code indicates that the server is
       aware that it has erred or is incapable of performing the requested
       method.
 
       See {{:https://tools.ietf.org/html/rfc7231#section-6.6} RFC7231§6.6} for
       more details. *)
-  type server_error = Httpaf.Status.server_error
 
-  (** The status codes defined in the HTTP/1.1 RFCs, excluding the
-      [Switching Protocols] status and including the [Misdirected Request] as
-      per the HTTP/2 RFC.
-
-      See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1}
-      and {{:https://tools.ietf.org/html/rfc7540#section-9.1.2} RFC7540§9.1.2}
-      for more details. *)
   type standard =
     [ informational
     | successful
@@ -135,12 +128,19 @@ module Status : sig
     | client_error
     | server_error
     ]
+  (** The status codes defined in the HTTP/1.1 RFCs, excluding the
+      [Switching Protocols] status and including the [Misdirected Request] as
+      per the HTTP/2 RFC.
 
-  (** The standard codes along with support for custom codes. *)
+      See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1}
+      and {{:https://tools.ietf.org/html/rfc7540#section-9.1.2} RFC7540§9.1.2}
+      for more details. *)
+
   type t =
     [ standard
     | `Code of int
     ]
+  (** The standard codes along with support for custom codes. *)
 
   val default_reason_phrase : standard -> string
   (** [default_reason_phrase standard] is the example reason phrase provided by
@@ -228,14 +228,14 @@ end
     See {{:https://tools.ietf.org/html/rfc7230#section-3.2} RFC7230§3.2} for
     more details. *)
 module Headers : sig
-  (** The type of a group of header fields. *)
   type t
+  (** The type of a group of header fields. *)
 
-  (** The type of a lowercase header name. *)
   type name = string
+  (** The type of a lowercase header name. *)
 
-  (** The type of a header value. *)
   type value = string
+  (** The type of a header value. *)
 
   (** {3 Constructor} *)
 
@@ -484,8 +484,8 @@ module Response : sig
   val pp_hum : Format.formatter -> t -> unit
 end
 
-(** IOVec *)
 module IOVec : module type of Httpaf.IOVec
+(** IOVec *)
 
 (** {2 Request Descriptor} *)
 module Reqd : sig

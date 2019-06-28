@@ -8,9 +8,9 @@ bug-reports: "https://github.com/mirage/io-page/issues"
 doc: "https://mirage.github.io/io-page/"
 depends: [
   "ocaml" {>= "4.02.3"}
-  "dune" {build & >= "1.0"}
+  "dune"
   "cstruct" {>= "2.0.0"}
-  "bigarray-compat" {>= "1.0.0"}
+  "bigarray-compat"
 ]
 build: [
   ["dune" "subst"] {pinned}
@@ -24,9 +24,9 @@ copying the data contained within the page.
 """
 url {
   src:
-    "https://github.com/mirage/io-page/releases/download/v2.2.0/io-page-v2.2.0.tbz"
+    "https://github.com/mirage/io-page/releases/download/v2.3.0/io-page-v2.3.0.tbz"
   checksum: [
-    "sha256=f51ad9b96dd1378aae1474ee2929b56ddedaca5c5dc49459e291e5476c1ee047"
-    "sha512=4240bbc0c7b6c8c1bc0b628fcde51c73bc7f6e49b2cd7157e32d3277d1fe31f0604829a1ae49c84524922d3954ead870e02d215768310b21a0b1f57ee7344294"
+    "sha256=9605a8a03e53bc12682212c371bc477f2a44ed829725ae38cc3005e2f83da2c3"
+    "sha512=ce1775bff151d62bb85405a13fe75f912c11b09cbc0a6dd81dd27b3f4c767f0b9c4d3e7383d494eb5c130311482ea69877c45b71b91153177562ffc47de4da2f"
   ]
 }

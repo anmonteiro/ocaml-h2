@@ -873,6 +873,7 @@ module Client_connection_tests = struct
       "Stream level error handler called"
       true
       !error_handler_called;
+
     (* Don't loop *)
     Alcotest.(check write_operation)
       "Writer yields, i.e. don't send an RST_STREAM frame in response to one"

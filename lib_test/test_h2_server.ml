@@ -341,6 +341,7 @@ module Server_connection_tests = struct
     Alcotest.(check int) "only read the frame header" 9 read1;
     let read2 = read t ~off:9 ~len:(max_length - 9) frame_wire in
     Alcotest.(check int) "couldn't read more" 0 read2;
+
     (* Read buffer advanced, contents are not the same anymore. *)
     let read3 = read_eof t ~off:20 ~len:(max_length - 9) frame_wire in
     Alcotest.(check int) "couldn't read more" 0 read3;
@@ -377,6 +378,7 @@ module Server_connection_tests = struct
       "There was a stream error of type FRAME_SIZE_ERROR"
       (`Error Error.(StreamError (1l, FrameSizeError)))
       (Reader.next t.reader);
+
     (* payload length declared in the frame header *)
     let bytes_to_skip = ref 0x25 in
     let read2 = read t ~off:0 ~len:max_length frame_payload_wire in
@@ -598,6 +600,7 @@ module Server_connection_tests = struct
     let response = Response.create `OK in
     (* Send the response for / *)
     Reqd.respond_with_string reqd response "Hello";
+
     (* Send the response for /main.css *)
     Reqd.respond_with_string pushed_reqd response "Hello"
 

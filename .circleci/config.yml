@@ -80,9 +80,10 @@ opam-steps: &opam-steps
         name: 'Check code is formatted with ocamlformat'
         command: |
           eval `opam config env`
-          # https://github.com/ocaml-ppx/ocamlformat/issues/754
-          dune build @fmt --auto-promote || true
-          git diff --exit-code
+          if [[ $AUTOFORMAT == 'true' ]]; then
+            dune build @fmt --auto-promote
+            git diff --exit-code
+          fi
     - run:
         name: 'Check git is clean'
         command: git diff --exit-code
@@ -95,6 +96,7 @@ jobs:
       - TERM: dumb
       - OCAML_VERSION: "4.04.2"
       - OPAMSOLVERTIMEOUT: "240"
+      - AUTOFORMAT: "false"
     <<: *opam-steps
   4.05.0:
     docker:
@@ -102,6 +104,7 @@ jobs:
     environment:
       - TERM: dumb
       - OCAML_VERSION: "4.05.0"
+      - AUTOFORMAT: "false"
     <<: *opam-steps
   4.06.1:
     docker:
@@ -109,6 +112,7 @@ jobs:
     environment:
       - TERM: dumb
       - OCAML_VERSION: "4.06.1"
+      - AUTOFORMAT: "true"
     <<: *opam-steps
   4.07.1:
     docker:
@@ -116,6 +120,7 @@ jobs:
     environment:
       - TERM: dumb
       - OCAML_VERSION: "4.07.1"
+      - AUTOFORMAT: "true"
     <<: *opam-steps
   esy:
     docker:
@@ -160,8 +165,7 @@ jobs:
       - run:
           name: 'Check code is formatted with ocamlformat'
           command: |
-            # https://github.com/ocaml-ppx/ocamlformat/issues/754
-            ~/.npm-global/bin/esy dune build @fmt --auto-promote || true
+            ~/.npm-global/bin/esy dune build @fmt --auto-promote
             git diff --exit-code
       # Use both pre and post build caches so that we're more likely
       # to have dependencies cached. `esy build` is more likely to fail,

@@ -28,7 +28,8 @@ let start_http_server () =
            ?config:None
            ~request_handler:Http1_handler.redirect_handler
            ~error_handler:Http1_handler.redirect_error_handler)
-      >>= fun _server -> Lwt.return_unit);
+      >>= fun _server ->
+      Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   forever
 
@@ -74,7 +75,8 @@ let start_https_server () =
                    * protocol that we didn't specify. *)
                   assert false))
             (fun exn -> Lwt_io.eprintlf "EXN: %s" (Printexc.to_string exn)))
-      >>= fun _server -> Lwt.return_unit);
+      >>= fun _server ->
+      Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   forever
 

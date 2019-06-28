@@ -298,6 +298,7 @@ let[@inline] encode_string t s =
      *   The number of octets used to encode the string literal, encoded as an
      *   integer with a 7-bit prefix (see Section 5.1). *)
     encode_int t 0 7 string_length;
+
     (* From RFC7541§5.2:
      *   The encoded data of the string literal. If H is '0', then the encoded
      *   data is the raw octets of the string literal. If H is '1', then the
@@ -308,6 +309,7 @@ let[@inline] encode_string t s =
      *   The number of octets used to encode the string literal, encoded as an
      *   integer with a 7-bit prefix (see Section 5.1). *)
     encode_int t 128 7 huffman_length;
+
     (* From RFC7541§5.2:
      *   The encoded data of the string literal. If H is '0', then the encoded
      *   data is the raw octets of the string literal. If H is '1', then the
@@ -330,6 +332,7 @@ let encode_header encoder t ({ name; value; _ } as header) =
        *   (see Section 5.2). A value 0 is used in place of the 4-bit index,
        *   followed by the header field name. *)
       encode_string t name;
+
     (* From RFC7541§6.2.2: Literal Header Field without Indexing
      *   Either form of header field name representation is followed by the
      *   header field value represented as a string literal (see

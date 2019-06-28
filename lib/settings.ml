@@ -47,7 +47,9 @@ module WindowSize = struct
    * support them. We avoid introducing a new dependency on an unsigned integer
    * library by letting it overflow at parse time and checking if bit 31 is set
    * here, since * `Window.max_window_size` is never allowed to be above
-   * 2^31-1 (see `max_window_size` above). *)
+   * 2^31-1 (see `max_window_size` above).
+   * See http://caml.inria.fr/pub/ml-archives/caml-list/2004/07/f1c483068cc62075c916f7ad7d640ce0.fr.html
+   * for more info. *)
   let is_window_overflow n = Util.test_bit n 31
 end
 

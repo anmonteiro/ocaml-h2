@@ -100,11 +100,11 @@ let rec traverse root transitions failed symbol node remaining i =
       true, root, None
   in
   if remaining = 0 then (
-    transitions.(i)
-    <- (if failed then
-          None, false, None
-       else
-         Some node.id, node.accept, symbol);
+    transitions.(i) <-
+      (if failed then
+         None, false, None
+      else
+        Some node.id, node.accept, symbol);
     i + 1)
   else
     traverse root transitions failed symbol node.left (remaining - 1) i
