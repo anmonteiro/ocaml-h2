@@ -33,13 +33,12 @@
   "resolutions": {
     "@opam/conf-libev": "esy-packages/libev:package.json#86d244e",
     "@opam/conf-autoconf": "esy-packages/esy-autoconf:package.json#71a8836",
-    "@opam/conf-gmp": "esy-packages/esy-gmp:package.json#1ecf502",
     "@opam/conf-openssl": {
       "source": "no-source:",
       "override": {
         "dependencies": {
           "@opam/conf-pkg-config": "*",
-          "@esy-packages/esy-openssl": "esy-packages/esy-openssl#65efbc9",
+          "@esy-packages/esy-openssl": "esy-packages/esy-openssl#f6107d6",
           "@opam/conf-autoconf": "*"
         }
       }
