@@ -12,6 +12,7 @@
     "@opam/bigstringaf": "*",
     "@opam/angstrom": "*",
     "@opam/faraday": "*",
+    "@opam/hpack": "*",
     "@opam/psq": "*",
     "@opam/mirage-conduit": "*",
     "@opam/faraday-lwt-unix": "*",
@@ -89,6 +90,7 @@
     },
     "@opam/tls": "dune-universe/ocaml-tls:tls.opam#9761033",
     "@opam/tls-lwt": "dune-universe/ocaml-tls:tls-lwt.opam#9761033",
-    "@opam/tls-mirage": "dune-universe/ocaml-tls:tls-mirage.opam#9761033"
+    "@opam/tls-mirage": "dune-universe/ocaml-tls:tls-mirage.opam#9761033",
+    "@opam/hpack": "314eter/ocaml-hpack:hpack.opam#9be540d"
   }
 }
