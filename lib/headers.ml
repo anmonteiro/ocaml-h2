@@ -36,10 +36,10 @@ type name = string
 
 type value = string
 
-type header = Hpack.header =
+type header = Hpack.Header.t = private
   { name : name
   ; value : value
-  ; sensitive : bool
+  ; never_index : bool
   }
 
 type t = header list
@@ -47,7 +47,7 @@ type t = header list
 let empty : t = []
 
 let of_rev_list hs =
-  List.map (fun (name, value) -> { name; value; sensitive = false }) hs
+  List.map (fun (name, value) -> Hpack.Header.make name value) hs
 
 let of_list t = of_rev_list (List.rev t)
 
@@ -108,7 +108,7 @@ let rec mem t name =
     false
 
 (* TODO: do we need to keep a list of never indexed fields? *)
-let add t ?(sensitive = false) name value = { name; value; sensitive } :: t
+let add t ?(never_index = false) name value = Hpack.Header.make ~never_index name value :: t
 
 let add_list t ls = of_rev_list ls @ t (* XXX(seliopou): do better here *)
 
@@ -120,17 +120,17 @@ let add_multi =
     | [] ->
       loop_outer t lss
     | v :: vs' ->
-      loop_inner ({ name = n; value = v; sensitive = false } :: t) n vs' lss
+      loop_inner (Hpack.Header.make n v :: t) n vs' lss
   in
   loop_outer
 
-let add_unless_exists t ?(sensitive = false) name value =
+let add_unless_exists t ?(never_index = false) name value =
   if mem t name then
     t
   else
-    { name; value; sensitive } :: t
+    Hpack.Header.make ~never_index name value :: t
 
-let replace t ?(sensitive = false) name value =
+let replace t ?(never_index = false) name value =
   let rec loop t n nv seen =
     match t with
     | [] ->
@@ -144,7 +144,7 @@ let replace t ?(sensitive = false) name value =
       else
         nv' :: loop t n nv false
   in
-  try loop t name { name; value; sensitive } false with Local -> t
+  try loop t name (Hpack.Header.make ~never_index name value) false with Local -> t
 
 let remove t name =
   let rec loop s n seen =

@@ -34,7 +34,7 @@ module AB = Angstrom.Buffered
 module Writer = Serialize.Writer
 
 type partial_headers =
-  { mutable parse_state : (Headers.t, Hpack.error) result AB.state
+  { mutable parse_state : Headers.header list AB.state
   ; end_stream : bool
   }
 

@@ -402,7 +402,7 @@ let handle_headers_block
     t.receiving_headers_for_stream <- None;
     let parse_state' = AB.feed parse_state' `Eof in
     match parse_state' with
-    | Done (_, Ok headers) ->
+    | Done (_, headers) ->
       if not is_trailers then
         (* `handle_headers` will take care of transitioning the stream state *)
         let end_stream = partial_headers.end_stream in
@@ -425,7 +425,7 @@ let handle_headers_block
     (* From RFC7540§4.3:
      *   A decoding error in a header block MUST be treated as a connection
      *   error (Section 5.4.1) of type COMPRESSION_ERROR. *)
-    | Done (_, Error _) | Partial _ ->
+    | Partial _ ->
       report_connection_error t Error.CompressionError
     | Fail (_, _, message) ->
       report_connection_error
@@ -451,7 +451,7 @@ let create_partial_headers t flags headers_block =
   { Stream.parse_state =
       AB.parse
         ~initial_buffer_size
-        (Hpack.Decoder.decode_headers t.hpack_decoder)
+        (Hpack.Decoder.headers t.hpack_decoder)
   ; end_stream = Flags.test_end_stream flags
   }
 
@@ -493,7 +493,7 @@ let process_trailer_headers t respd active_response frame_header headers_block =
   else
     let partial_headers =
       { Stream.parse_state =
-          AB.parse (Hpack.Decoder.decode_headers t.hpack_decoder)
+          AB.parse (Hpack.Decoder.headers t.hpack_decoder)
           (* obviously true at this point. *)
       ; end_stream
       }
@@ -846,7 +846,8 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
              *   size of the header compression table used to decode header
              *   blocks, in octets. *)
             t.settings.header_table_size <- x;
-            Hpack.Encoder.set_capacity t.hpack_encoder x
+            let table_size = min t.config.encoder_table_size x in
+            Hpack.Encoder.change_table_size t.hpack_encoder table_size
           | EnablePush, x ->
             (* We've already verified that this setting is either 0 or 1 in the
              * call to `Settings.check_settings_list` above. *)
@@ -1164,6 +1165,7 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
         (* If the caller is not going to process PUSH_PROMISE frames, just
          * disable it. *)
         config.enable_server_push && push_handler != default_push_handler
+    ; header_table_size = config.decoder_table_size
     }
   in
   let rec connection_preface_handler recv_frame settings_list =
@@ -1243,8 +1245,8 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
           (* From RFC7540§4.3:
            *   Header compression is stateful. One compression context and one
            *   decompression context are used for the entire connection. *)
-      ; hpack_encoder = Hpack.Encoder.(create settings.header_table_size)
-      ; hpack_decoder = Hpack.Decoder.(create settings.header_table_size)
+      ; hpack_encoder = Hpack.Encoder.create ~max_size:(min Settings.default_settings.header_table_size config.encoder_table_size) ()
+      ; hpack_decoder = Hpack.Decoder.create ~max_size_limit:config.decoder_table_size ()
       }
   in
   let t = Lazy.force t in

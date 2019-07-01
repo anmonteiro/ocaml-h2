@@ -39,6 +39,8 @@ type t =
   ; enable_server_push : bool
   ; max_concurrent_streams : int
   ; initial_window_size : int
+  ; encoder_table_size : int
+  ; decoder_table_size : int
   }
 
 let default =
@@ -71,4 +73,6 @@ let default =
        *   Indicates the sender's initial window size (in octets) for
        *   stream-level flow control. *)
   ; initial_window_size = Settings.WindowSize.default_initial_window_size
+  ; encoder_table_size = 0x1000
+  ; decoder_table_size = 0x1000
   }

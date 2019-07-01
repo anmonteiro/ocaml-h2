@@ -165,7 +165,7 @@ module Server_connection_tests = struct
 
   (* Well-formed HEADERS + CONTINUATION frames. *)
   let header_and_continuation_frames =
-    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let hpack_encoder = Hpack.Encoder.create () in
     let headers =
       { Frame.frame_header =
           { payload_length = 0
@@ -308,7 +308,7 @@ module Server_connection_tests = struct
     let config = { Config.default with read_buffer_size = max_length } in
     let t = create ~config ~error_handler default_request_handler in
     handle_preface t;
-    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let hpack_encoder = Hpack.Encoder.create () in
     let headers =
       { Frame.frame_header =
           { payload_length = 0
@@ -510,7 +510,7 @@ module Server_connection_tests = struct
   let test_dependent_stream () =
     let t = create ~error_handler data_request_handler in
     handle_preface t;
-    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let hpack_encoder = Hpack.Encoder.create () in
     let headers =
       { Frame.frame_header =
           { payload_length = 0
@@ -607,7 +607,7 @@ module Server_connection_tests = struct
   let test_server_push () =
     let t = create ~error_handler server_push_request_handler in
     handle_preface t;
-    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let hpack_encoder = Hpack.Encoder.create () in
     let headers =
       { Frame.frame_header =
           { payload_length = 0
@@ -728,7 +728,7 @@ module Server_connection_tests = struct
     in
     let t = create ~error_handler default_request_handler in
     handle_preface t;
-    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let hpack_encoder = Hpack.Encoder.create () in
     let headers =
       { Frame.frame_header =
           { payload_length = 0
@@ -777,7 +777,7 @@ module Server_connection_tests = struct
     in
     let t = create ~error_handler default_request_handler in
     handle_preface t;
-    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let hpack_encoder = Hpack.Encoder.create () in
     let headers =
       { Frame.frame_header =
           { payload_length = 0
