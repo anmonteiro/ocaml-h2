@@ -1,5 +1,5 @@
 {
-  "checksum": "da7de81cbb5f04a618cfba9b02a5f8ba",
+  "checksum": "7677c103d74a45a530a6bc4e593bb0e5",
   "root": "h2@link-dev:./esy.json",
   "node": {
     "yarn-pkg-config@github:esy-ocaml/yarn-pkg-config#cca65f99674ed2d954d28788edeb8c57fada5ed0@d41d8cd9": {
@@ -584,7 +584,7 @@
         "@opam/sexplib@opam:v0.12.0@c65643bb",
         "@opam/ptime@opam:0.8.5@0051d642",
         "@opam/ppx_sexp_conv@opam:v0.12.0@6aa153b5",
-        "@opam/ppx_deriving@github:gasche/ppx_deriving:ppx_deriving.opam#a7788f8@d41d8cd9",
+        "@opam/ppx_deriving@github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#e12921c@d41d8cd9",
         "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
         "@opam/ocamlfind@opam:1.8.0@f744a0c5",
         "@opam/ocamlbuild@opam:0.14.0@427a2331",
@@ -602,7 +602,7 @@
         "@opam/sexplib@opam:v0.12.0@c65643bb",
         "@opam/ptime@opam:0.8.5@0051d642",
         "@opam/ppx_sexp_conv@opam:v0.12.0@6aa153b5",
-        "@opam/ppx_deriving@github:gasche/ppx_deriving:ppx_deriving.opam#a7788f8@d41d8cd9",
+        "@opam/ppx_deriving@github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#e12921c@d41d8cd9",
         "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
         "@opam/nocrypto@github:TheLortex/ocaml-nocrypto:nocrypto.opam#df2348d@d86b9d71",
         "@opam/mirage-kv-lwt@opam:2.0.0@585db097",
@@ -1014,14 +1014,16 @@
         "@opam/base@opam:v0.12.2@e209c8f2"
       ]
     },
-    "@opam/ppx_deriving@github:gasche/ppx_deriving:ppx_deriving.opam#a7788f8@d41d8cd9": {
+    "@opam/ppx_deriving@github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#e12921c@d41d8cd9": {
       "id":
-        "@opam/ppx_deriving@github:gasche/ppx_deriving:ppx_deriving.opam#a7788f8@d41d8cd9",
+        "@opam/ppx_deriving@github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#e12921c@d41d8cd9",
       "name": "@opam/ppx_deriving",
-      "version": "github:gasche/ppx_deriving:ppx_deriving.opam#a7788f8",
+      "version": "github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#e12921c",
       "source": {
         "type": "install",
-        "source": [ "github:gasche/ppx_deriving:ppx_deriving.opam#a7788f8" ]
+        "source": [
+          "github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#e12921c"
+        ]
       },
       "overrides": [],
       "dependencies": [
@@ -2460,7 +2462,7 @@
       "dependencies": [
         "ocaml@4.8.0@d41d8cd9", "@opam/ocamlfind@opam:1.8.0@f744a0c5",
         "@opam/conf-which@opam:1@56319cdb",
-        "@opam/conf-autoconf@github:esy-packages/esy-autoconf:package.json#71a8836@d41d8cd9",
+        "@opam/conf-autoconf@opam:0.1@f636cabb",
         "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [ "ocaml@4.8.0@d41d8cd9" ]
@@ -2929,7 +2931,7 @@
       ],
       "dependencies": [
         "@opam/conf-pkg-config@opam:1.1@da0b7ce6",
-        "@opam/conf-autoconf@github:esy-packages/esy-autoconf:package.json#71a8836@d41d8cd9",
+        "@opam/conf-autoconf@opam:0.1@f636cabb",
         "@esy-packages/esy-openssl@archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1c.tar.gz#sha1:eb59b090bd757e30b676fb5e80c25ddb5a2f9511@4d267550"
       ],
       "devDependencies": []
@@ -2994,17 +2996,24 @@
       ],
       "devDependencies": []
     },
-    "@opam/conf-autoconf@github:esy-packages/esy-autoconf:package.json#71a8836@d41d8cd9": {
-      "id":
-        "@opam/conf-autoconf@github:esy-packages/esy-autoconf:package.json#71a8836@d41d8cd9",
+    "@opam/conf-autoconf@opam:0.1@f636cabb": {
+      "id": "@opam/conf-autoconf@opam:0.1@f636cabb",
       "name": "@opam/conf-autoconf",
-      "version": "github:esy-packages/esy-autoconf:package.json#71a8836",
+      "version": "opam:0.1",
       "source": {
         "type": "install",
-        "source": [ "github:esy-packages/esy-autoconf:package.json#71a8836" ]
+        "source": [ "no-source:" ],
+        "opam": {
+          "name": "conf-autoconf",
+          "version": "0.1",
+          "path": "esy.lock/opam/conf-autoconf.0.1"
+        }
       },
       "overrides": [],
-      "dependencies": [],
+      "dependencies": [
+        "@opam/conf-which@opam:1@56319cdb",
+        "@esy-ocaml/substs@0.0.1@d41d8cd9"
+      ],
       "devDependencies": []
     },
     "@opam/conduit-lwt@opam:1.4.0@c8d62b5a": {

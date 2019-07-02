@@ -25,9 +25,9 @@ open Lwt.Infix
 
 let () =
   let host = ref None in
-  let port = ref 80 in
+  let port = ref 443 in
   Arg.parse
-    [ "-p", Set_int port, " Port number (80 by default)" ]
+    [ "-p", Set_int port, " Port number (443 by default)" ]
     (fun host_argument -> host := Some host_argument)
     "lwt_get.exe [-p N] HOST";
   let host =
@@ -54,9 +54,9 @@ let () =
       in
       let response_received, notify_response_received = Lwt.wait () in
       let response_handler = response_handler notify_response_received in
-      Client.TLS.create_connection ~error_handler socket >>= fun connection ->
+      Client.SSL.create_connection ~error_handler socket >>= fun connection ->
       let request_body =
-        Client.TLS.request connection request ~error_handler ~response_handler
+        Client.SSL.request connection request ~error_handler ~response_handler
       in
       Body.close_writer request_body;
 
