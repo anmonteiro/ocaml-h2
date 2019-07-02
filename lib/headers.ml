@@ -55,8 +55,6 @@ let to_rev_list t = List.map (fun { name; value; _ } -> name, value) t
 
 let to_list t = List.rev (to_rev_list t)
 
-let to_hpack_list t = List.rev t
-
 exception Local
 
 module CI = struct
@@ -278,7 +276,7 @@ let valid_headers ?(is_request = true) t =
               *   after a regular header field MUST be treated as malformed
               *   (Section 8.1.2.6). *)
              (is_pseudo && pseudo_did_end))
-        (to_hpack_list t)
+        t
     in
     not invalid
 
