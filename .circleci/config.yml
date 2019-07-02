@@ -37,7 +37,7 @@ opam-steps: &opam-steps
           opam pin add -y httpaf --dev-repo
           opam pin add -y httpaf-lwt-unix git+https://github.com/anmonteiro/httpaf#anmonteiro/lwt-https-support
           opam pin add -y ssl git+https://github.com/anmonteiro/ocaml-ssl#alpn
-          opam pin add -y hpack git+https://github.com/314eter/ocaml-hpack
+          opam pin add -y hpack git+https://github.com/314eter/ocaml-hpack#8077a85
           opam install -y lwt_ssl
           opam install -t --deps-only .
     - run:
