@@ -1,7 +1,7 @@
 version: 2
 
 common_cache_key: &common_cache_key
-  key: dependency-cache-{{ checksum "../ocaml-version" }}-{{ checksum ".circleci/config.yml" }}-{{ checksum "hpack.opam" }}-{{ checksum "h2.opam" }}-{{ checksum "h2-lwt.opam" }}-{{ checksum "h2-lwt-unix.opam" }}-{{ checksum "h2-mirage.opam" }}
+  key: dependency-cache-{{ checksum "../ocaml-version" }}-{{ checksum ".circleci/config.yml" }}-{{ checksum "h2.opam" }}-{{ checksum "h2-lwt.opam" }}-{{ checksum "h2-lwt-unix.opam" }}-{{ checksum "h2-mirage.opam" }}
 
 esy_cache_key: &esy_cache_key
   key: esy-cache-{{ checksum "esy.json" }}-{{ checksum "../esy-checksum" }}-{{ checksum ".circleci/config.yml" }}
@@ -37,6 +37,7 @@ opam-steps: &opam-steps
           opam pin add -y httpaf --dev-repo
           opam pin add -y httpaf-lwt-unix git+https://github.com/anmonteiro/httpaf#anmonteiro/lwt-https-support
           opam pin add -y ssl git+https://github.com/anmonteiro/ocaml-ssl#alpn
+          opam pin add -y hpack git+https://github.com/314eter/ocaml-hpack
           opam install -y lwt_ssl
           opam install -t --deps-only .
     - run:
