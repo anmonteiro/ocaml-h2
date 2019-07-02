@@ -434,9 +434,7 @@ let open_stream t frame_header ?priority headers_block =
     in
     let partial_headers =
       { Stream.parse_state =
-          AB.parse
-            ~initial_buffer_size
-            (Hpack.Decoder.headers t.hpack_decoder)
+          AB.parse ~initial_buffer_size (Hpack.Decoder.headers t.hpack_decoder)
       ; end_stream = Flags.test_end_stream flags
       }
     in
@@ -1202,8 +1200,15 @@ let create
       ; did_send_go_away = false
       ; unacked_settings = 0
       ; wakeup_writer = ref default_wakeup_writer
-      ; hpack_encoder = Hpack.Encoder.create ~max_size:(min Settings.default_settings.header_table_size config.encoder_table_size) ()
-      ; hpack_decoder = Hpack.Decoder.create ~max_size_limit:config.decoder_table_size ()
+      ; hpack_encoder =
+          Hpack.Encoder.create
+            ~max_size:
+              (min
+                 Settings.default_settings.header_table_size
+                 config.encoder_table_size)
+            ()
+      ; hpack_decoder =
+          Hpack.Decoder.create ~max_size_limit:config.decoder_table_size ()
       }
   in
   Lazy.force t

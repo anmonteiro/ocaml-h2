@@ -449,9 +449,7 @@ let create_partial_headers t flags headers_block =
       2 * headers_block_length
   in
   { Stream.parse_state =
-      AB.parse
-        ~initial_buffer_size
-        (Hpack.Decoder.headers t.hpack_decoder)
+      AB.parse ~initial_buffer_size (Hpack.Decoder.headers t.hpack_decoder)
   ; end_stream = Flags.test_end_stream flags
   }
 
@@ -1245,8 +1243,15 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
           (* From RFC7540§4.3:
            *   Header compression is stateful. One compression context and one
            *   decompression context are used for the entire connection. *)
-      ; hpack_encoder = Hpack.Encoder.create ~max_size:(min Settings.default_settings.header_table_size config.encoder_table_size) ()
-      ; hpack_decoder = Hpack.Decoder.create ~max_size_limit:config.decoder_table_size ()
+      ; hpack_encoder =
+          Hpack.Encoder.create
+            ~max_size:
+              (min
+                 Settings.default_settings.header_table_size
+                 config.encoder_table_size)
+            ()
+      ; hpack_decoder =
+          Hpack.Decoder.create ~max_size_limit:config.decoder_table_size ()
       }
   in
   let t = Lazy.force t in

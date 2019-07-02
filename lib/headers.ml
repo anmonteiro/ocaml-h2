@@ -106,7 +106,8 @@ let rec mem t name =
     false
 
 (* TODO: do we need to keep a list of never indexed fields? *)
-let add t ?(never_index = false) name value = Hpack.Header.make ~never_index name value :: t
+let add t ?(never_index = false) name value =
+  Hpack.Header.make ~never_index name value :: t
 
 let add_list t ls = of_rev_list ls @ t (* XXX(seliopou): do better here *)
 
@@ -142,7 +143,9 @@ let replace t ?(never_index = false) name value =
       else
         nv' :: loop t n nv false
   in
-  try loop t name (Hpack.Header.make ~never_index name value) false with Local -> t
+  try loop t name (Hpack.Header.make ~never_index name value) false with
+  | Local ->
+    t
 
 let remove t name =
   let rec loop s n seen =
