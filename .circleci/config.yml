@@ -53,11 +53,6 @@ opam-steps: &opam-steps
           dune build @all
           dune runtest --no-buffer
     - run:
-        name: 'Slow Tests'
-        command: |
-          eval `opam config env`
-          dune build @slowtests --no-buffer
-    - run:
         name: 'Conformance tests'
         command: |
           eval `opam config env`
@@ -159,9 +154,6 @@ jobs:
       - run:
           name: 'esy test'
           command: ~/.npm-global/bin/esy b dune runtest --no-buffer
-      - run:
-          name: 'esy slow-test'
-          command: ~/.npm-global/bin/esy b dune build @slowtests --no-buffer
       - run:
           name: 'Check code is formatted with ocamlformat'
           command: |
