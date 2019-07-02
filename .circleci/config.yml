@@ -143,7 +143,7 @@ jobs:
       - run:
           name: "Install esy + system deps"
           command: |
-            sudo apt-get install texinfo
+            sudo apt-get install texinfo autotools-dev autoconf
             npm install -g esy
       - run:
           name: 'esy install'
