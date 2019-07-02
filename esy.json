@@ -32,7 +32,6 @@
   },
   "resolutions": {
     "@opam/conf-libev": "esy-packages/libev:package.json#86d244e",
-    "@opam/conf-autoconf": "esy-packages/esy-autoconf:package.json#71a8836",
     "@opam/conf-openssl": {
       "source": "no-source:",
       "override": {
@@ -61,7 +60,7 @@
         }
       }
     },
-    "@opam/ppx_deriving": "gasche/ppx_deriving:ppx_deriving.opam#a7788f8",
+    "@opam/ppx_deriving": "ocaml-ppx/ppx_deriving:ppx_deriving.opam#e12921c",
     "@opam/ppx_tools": "ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4",
     "@opam/nocrypto": {
       "source": "TheLortex/ocaml-nocrypto:nocrypto.opam#df2348d",
