@@ -8,9 +8,6 @@ all: build
 test:
 	esy b dune runtest --no-buffer
 
-slow-test:
-	esy b dune build @slowtests --no-buffer
-
 install:
 	esy b dune install
 

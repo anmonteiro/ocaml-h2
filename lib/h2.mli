@@ -268,10 +268,10 @@ module Headers : sig
   (** [to_rev_list t] is the association list of header fields contained in [t]
       in {i reverse} transmission order. *)
 
-  val add : t -> ?sensitive:bool -> name -> value -> t
-  (** [add t ?sensitive name value] is a collection of header fields that is
+  val add : t -> ?never_index:bool -> name -> value -> t
+  (** [add t ?never_index name value] is a collection of header fields that is
       the same as [t] except with [(name, value)] added at the end of the
-      trasmission order. Additionally, [sensitive] specifies whether this
+      trasmission order. Additionally, [never_index] specifies whether this
       header field should not be compressed by HPACK and instead encoded as a
       never-indexed literal (see
       {{:https://tools.ietf.org/html/rfc7541#section-7.1.3} RFC7541§7.1.3} for
@@ -281,10 +281,10 @@ module Headers : sig
 
       - [get (add t name value) name = Some value] *)
 
-  val add_unless_exists : t -> ?sensitive:bool -> name -> value -> t
-  (** [add_unless_exists t ?sensitive name value] is a collection of header
+  val add_unless_exists : t -> ?never_index:bool -> name -> value -> t
+  (** [add_unless_exists t ?never_index name value] is a collection of header
       fields that is the same as [t] if [t] already inclues [name], and
-      otherwise is equivalent to [add t ?sensitive name value]. *)
+      otherwise is equivalent to [add t ?never_index name value]. *)
 
   val add_list : t -> (name * value) list -> t
   (** [add_list t assoc] is a collection of header fields that is the same as
@@ -312,8 +312,8 @@ add_multi t ["name1", ["x", "y"]; "name2", ["p", "q"]] = add_list
       equal to [name]. If [t] contains multiple header fields whose name is
       [name], they will all be removed. *)
 
-  val replace : t -> ?sensitive:bool -> name -> value -> t
-  (** [replace t ?sensitive name value] is a collection of header fields that
+  val replace : t -> ?never_index:bool -> name -> value -> t
+  (** [replace t ?never_index name value] is a collection of header fields that
       is the same as [t] except with all header fields with a name equal to
       [name] removed and replaced with a single header field whose name is
       [name] and whose value is [value]. This new header field will appear in
@@ -588,6 +588,8 @@ module Config : sig
     ; initial_window_size : int
           (** [initial_window_size] specifies the initial window size for flow
               control tokens. Defaults to [65535] *)
+    ; encoder_table_size : int  (** Defaults to [4096] *)
+    ; decoder_table_size : int  (** Defaults to [4096] *)
     }
 
   val default : t

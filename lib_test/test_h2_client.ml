@@ -192,7 +192,7 @@ module Client_connection_tests = struct
 
   (* Well-formed HEADERS + CONTINUATION frames. *)
   let header_and_continuation_frames =
-    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let hpack_encoder = Hpack.Encoder.create () in
     let headers =
       { Frame.frame_header =
           { payload_length = 0
@@ -303,7 +303,7 @@ module Client_connection_tests = struct
       true
       (Flags.test_end_stream frame.frame_header.flags);
     report_write_result t (`Ok lenv);
-    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let hpack_encoder = Hpack.Encoder.create () in
     write_response t hpack_encoder (Response.create `OK);
     Alcotest.(check bool) "Response handler called" true !handler_called
 
@@ -350,7 +350,7 @@ module Client_connection_tests = struct
       true
       (Flags.test_end_stream frame.frame_header.flags);
     report_write_result t (`Ok lenv);
-    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let hpack_encoder = Hpack.Encoder.create () in
     write_response
       t
       hpack_encoder
@@ -405,7 +405,7 @@ module Client_connection_tests = struct
       true
       (Flags.test_end_stream frame.frame_header.flags);
     report_write_result t (`Ok lenv);
-    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let hpack_encoder = Hpack.Encoder.create () in
     write_response
       t
       hpack_encoder
@@ -561,7 +561,7 @@ module Client_connection_tests = struct
       true
       (Flags.test_end_stream frame.frame_header.flags);
     report_write_result t (`Ok lenv);
-    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let hpack_encoder = Hpack.Encoder.create () in
     write_response
       t
       hpack_encoder
@@ -635,7 +635,7 @@ module Client_connection_tests = struct
       true
       (Flags.test_end_stream frame.frame_header.flags);
     report_write_result t (`Ok lenv);
-    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let hpack_encoder = Hpack.Encoder.create () in
     write_response
       t
       hpack_encoder
@@ -763,7 +763,7 @@ module Client_connection_tests = struct
        body"
       true
       (not (Stream.is_open stream));
-    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let hpack_encoder = Hpack.Encoder.create () in
     write_response t hpack_encoder (Response.create `OK);
     Alcotest.(check bool) "Response handler called" true !handler_called;
     Alcotest.(check bool)

@@ -473,7 +473,7 @@ module Writer = struct
   let encode_headers hpack_encoder faraday headers =
     List.iter
       (fun header -> Hpack.Encoder.encode_header hpack_encoder faraday header)
-      (Headers.to_hpack_list headers)
+      headers
 
   let write_request_like_frame t hpack_encoder ~write_frame frame_info request =
     let { Request.meth; target; scheme; headers } = request in
@@ -481,21 +481,18 @@ module Writer = struct
     Hpack.Encoder.encode_header
       hpack_encoder
       faraday
-      { Headers.name = ":method"
-      ; value = Httpaf.Method.to_string meth
-      ; sensitive = false
-      };
+      (Hpack.Header.make ":method" (Httpaf.Method.to_string meth));
     if meth <> `CONNECT then (
       (* From RFC7540§8.3:
        *   The :scheme and :path pseudo-header fields MUST be omitted. *)
       Hpack.Encoder.encode_header
         hpack_encoder
         faraday
-        { Headers.name = ":path"; value = target; sensitive = false };
+        (Hpack.Header.make ":path" target);
       Hpack.Encoder.encode_header
         hpack_encoder
         faraday
-        { Headers.name = ":scheme"; value = scheme; sensitive = false });
+        (Hpack.Header.make ":scheme" scheme));
     encode_headers hpack_encoder faraday headers;
     chunk_header_block_fragments t frame_info ~write_frame faraday
 
@@ -518,10 +515,7 @@ module Writer = struct
     Hpack.Encoder.encode_header
       hpack_encoder
       faraday
-      { Headers.name = ":status"
-      ; value = Status.to_string status
-      ; sensitive = false
-      };
+      (Hpack.Header.make ":status" (Status.to_string status));
     encode_headers hpack_encoder faraday headers;
     let has_priority = match priority with Some _ -> true | None -> false in
     chunk_header_block_fragments

@@ -211,4 +211,10 @@ let settings_for_the_connection settings =
     else
       settings_list
   in
+  let settings_list =
+    if settings.header_table_size <> default_settings.header_table_size then
+      (HeaderTableSize, settings.header_table_size) :: settings_list
+    else
+      settings_list
+  in
   settings_list

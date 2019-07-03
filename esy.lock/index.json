@@ -1,5 +1,5 @@
 {
-  "checksum": "7677c103d74a45a530a6bc4e593bb0e5",
+  "checksum": "04c99fb49954ba2fae6bdfb8c449927a",
   "root": "h2@link-dev:./esy.json",
   "node": {
     "yarn-pkg-config@github:esy-ocaml/yarn-pkg-config#cca65f99674ed2d954d28788edeb8c57fada5ed0@d41d8cd9": {
@@ -47,6 +47,7 @@
         "@opam/lwt_ssl@opam:1.1.2@ac833920", "@opam/lwt@opam:4.2.1@c1888ec9",
         "@opam/httpaf-lwt-unix@github:anmonteiro/httpaf:httpaf-lwt-unix.opam#6d2c80e@33b6fb1d",
         "@opam/httpaf@github:inhabitedtype/httpaf:httpaf.opam#fa9dc4e@d41d8cd9",
+        "@opam/hpack@github:314eter/ocaml-hpack:hpack.opam#9be540d@d41d8cd9",
         "@opam/faraday-lwt-unix@opam:0.7.0@b0dea04f",
         "@opam/faraday@opam:0.7.0@6026a81f",
         "@opam/dune@opam:1.10.0@b15ce221",
@@ -2411,6 +2412,27 @@
         "ocaml@4.8.0@d41d8cd9", "@opam/result@opam:1.4@7add0d71",
         "@opam/faraday@opam:0.7.0@6026a81f",
         "@opam/bigstringaf@opam:0.5.0@93c1ca28",
+        "@opam/angstrom@opam:0.11.2@2e02b026"
+      ]
+    },
+    "@opam/hpack@github:314eter/ocaml-hpack:hpack.opam#9be540d@d41d8cd9": {
+      "id":
+        "@opam/hpack@github:314eter/ocaml-hpack:hpack.opam#9be540d@d41d8cd9",
+      "name": "@opam/hpack",
+      "version": "github:314eter/ocaml-hpack:hpack.opam#9be540d",
+      "source": {
+        "type": "install",
+        "source": [ "github:314eter/ocaml-hpack:hpack.opam#9be540d" ]
+      },
+      "overrides": [],
+      "dependencies": [
+        "ocaml@4.8.0@d41d8cd9", "@opam/faraday@opam:0.7.0@6026a81f",
+        "@opam/dune@opam:1.10.0@b15ce221",
+        "@opam/angstrom@opam:0.11.2@2e02b026",
+        "@esy-ocaml/substs@0.0.1@d41d8cd9"
+      ],
+      "devDependencies": [
+        "ocaml@4.8.0@d41d8cd9", "@opam/faraday@opam:0.7.0@6026a81f",
         "@opam/angstrom@opam:0.11.2@2e02b026"
       ]
     },
