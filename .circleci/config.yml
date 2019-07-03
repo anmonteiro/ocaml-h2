@@ -61,7 +61,7 @@ opam-steps: &opam-steps
         name: 'Conformance tests'
         command: |
           eval `opam config env`
-          curl -L https://github.com/summerwind/h2spec/releases/download/v2.2.1/h2spec_linux_amd64.tar.gz | tar xvz
+          curl -L https://github.com/summerwind/h2spec/releases/download/v2.3.0/h2spec_linux_amd64.tar.gz | tar xz
           nohup dune exec spec/lwt_h2spec_string.exe &
           sleep 2
           ./h2spec --strict -p 8080
