@@ -39,9 +39,10 @@
         "val": "#{self.lib / 'pkgconfig'}",
         "scope": "global"
       }
+    },
+    "dependencies": {
+      "@opam/conf-autoconf": "esy-packages/esy-autoconf:package.json#71a8836",
+      "@opam/conf-pkg-config": "*"
     }
-  },
-  "dependencies": {
-    "@esy-packages/esy-autoconf": "esy-packages/esy-autoconf:package.json#71a8836"
   }
 }
