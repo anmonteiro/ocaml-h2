@@ -13,17 +13,15 @@ let secrets = generic_kv_ro "../../../certificates"
 let server =
   let packages =
     [ package ~sublibs:[ "mirage" ] "tls"
-    ; package ~pin:"git+https://github.com/anmonteiro/httpaf#mirage" "httpaf"
+    ; package ~pin:"git+https://github.com/anmonteiro/httpaf#fork" "httpaf"
+    ; package ~pin:"git+https://github.com/anmonteiro/httpaf#fork" "httpaf-lwt"
     ; package
-        ~pin:"git+https://github.com/anmonteiro/httpaf#mirage"
+        ~pin:"git+https://github.com/anmonteiro/httpaf#fork"
         "httpaf-mirage"
     ; package
-        ~pin:"git+https://github.com/anmonteiro/httpaf#mirage"
-        "httpaf-lwt"
-      (* Just because 0.2.0 is not merged in opam *)
-    ; package ~pin:"git+https://github.com/anmonteiro/ocaml-h2" "h2"
-    ; package ~pin:"git+https://github.com/anmonteiro/ocaml-h2" "h2-lwt"
-    ; package ~pin:"git+https://github.com/anmonteiro/ocaml-h2" "h2-mirage"
+        ~pin:"git+https://github.com/anmonteiro/httpaf#fork"
+        "httpaf-lwt-unix"
+    ; package "h2-mirage"
     ]
   in
   foreign

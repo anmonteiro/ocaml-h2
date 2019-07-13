@@ -19,9 +19,10 @@
     "@opam/conf-libev": "*",
     "@opam/httpaf": "*",
     "@opam/httpaf-lwt-unix": "*",
-    "@opam/ssl": " >= 0.5.8",
+    "@opam/ssl": ">= 0.5.8",
     "@opam/tls-lwt": "*",
-    "@opam/tls-mirage": "*"
+    "@opam/tls-mirage": "*",
+    "@opam/macaddr": ">= 3.0.0 < 4.0.0"
   },
   "devDependencies": {
     "@opam/alcotest": "*",
@@ -32,11 +33,12 @@
     "@opam/landmarks": "*"
   },
   "resolutions": {
-    "@opam/conf-libev": "esy-packages/libev:package.json#86d244e",
+    "@opam/conf-libev": "esy-packages/libev:package.json#0b5eb66",
     "@opam/conf-openssl": "esy-packages/esy-openssl#dafe9ad",
-    "@opam/httpaf": "inhabitedtype/httpaf:httpaf.opam#fa9dc4e",
+    "@opam/httpaf": "anmonteiro/httpaf:httpaf.opam#7c5d991",
+    "@opam/httpaf-lwt": "anmonteiro/httpaf:httpaf-lwt.opam#7c5d991",
     "@opam/httpaf-lwt-unix": {
-      "source": "anmonteiro/httpaf:httpaf-lwt-unix.opam#6d2c80e",
+      "source": "anmonteiro/httpaf:httpaf-lwt-unix.opam#7c5d991",
       "override": {
         "dependencies": {
           "@opam/tls-lwt": "*"
@@ -51,17 +53,7 @@
         }
       }
     },
-    "@opam/ppx_deriving": "ocaml-ppx/ppx_deriving:ppx_deriving.opam#403d384",
-    "@opam/ppx_tools": "ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4",
-    "@opam/nocrypto": {
-      "source": "TheLortex/ocaml-nocrypto:nocrypto.opam#df2348d",
-      "override": {
-        "dependencies": {
-          "@opam/bigarray-compat": "*",
-          "@opam/ppx_sexp_conv": "*"
-        }
-      }
-    },
+    "@opam/nocrypto": "TheLortex/ocaml-nocrypto:nocrypto.opam#8e389a8",
     "@opam/mirage-xen-posix": {
       "source": "no-source:",
       "override": {}

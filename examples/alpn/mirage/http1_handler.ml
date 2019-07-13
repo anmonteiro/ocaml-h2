@@ -1,6 +1,6 @@
 open Httpaf
 
-let redirect_handler : Reqd.t -> unit =
+let redirect_handler : 'a Reqd.t -> unit =
  fun request_descriptor ->
   let response =
     Response.create
@@ -18,7 +18,7 @@ let redirect_error_handler
   let response_body = start_response Headers.empty in
   Body.close_writer response_body
 
-let request_handler : Reqd.t -> unit =
+let request_handler : 'a Reqd.t -> unit =
  fun request_descriptor ->
   let request = Reqd.request request_descriptor in
   let response_content_type =
