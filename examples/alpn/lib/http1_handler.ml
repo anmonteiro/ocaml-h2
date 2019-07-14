@@ -1,6 +1,6 @@
 open Httpaf
 
-let redirect_handler : Unix.sockaddr -> Reqd.t -> unit =
+let redirect_handler : Unix.sockaddr -> 'a Reqd.t -> unit =
  fun _client_address request_descriptor ->
   let response =
     Response.create
@@ -19,7 +19,7 @@ let redirect_error_handler
   let response_body = start_response Headers.empty in
   Body.close_writer response_body
 
-let request_handler : Unix.sockaddr -> Reqd.t -> unit =
+let request_handler : Unix.sockaddr -> 'a Reqd.t -> unit =
  fun _client_address request_descriptor ->
   let request = Reqd.request request_descriptor in
   let response_content_type =

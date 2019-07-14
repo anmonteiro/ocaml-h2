@@ -32,6 +32,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
+(* TODO: add a config option for `Reqd` to flush max bytes at a time? *)
 type t =
   { read_buffer_size : int
   ; request_body_buffer_size : int
