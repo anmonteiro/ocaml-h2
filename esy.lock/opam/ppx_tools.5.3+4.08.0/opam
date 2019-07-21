@@ -14,6 +14,6 @@ depends: [
   "ocamlfind" {build & >= "1.5.0"}
 ]
 url {
-  src: "https://github.com/ocaml-ppx/ppx_tools/archive/5.2+4.08.0.tar.gz"
-  checksum: "md5=3f911ebddad5eb4dd279b303a34d9493"
+  src: "https://github.com/ocaml-ppx/ppx_tools/archive/5.3+4.08.0.tar.gz"
+  checksum: "md5=702b11138c095662c175aa4dcce5c921"
 }

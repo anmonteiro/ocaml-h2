@@ -21,8 +21,7 @@
     "@opam/httpaf-lwt-unix": "*",
     "@opam/ssl": ">= 0.5.8",
     "@opam/tls-lwt": "*",
-    "@opam/tls-mirage": "*",
-    "@opam/macaddr": ">= 3.0.0 < 4.0.0"
+    "@opam/tls-mirage": "*"
   },
   "devDependencies": {
     "@opam/alcotest": "*",
@@ -46,7 +45,7 @@
       }
     },
     "@opam/mirage-conduit": {
-      "source": "mirage/ocaml-conduit:mirage-conduit.opam#0ce7ce3",
+      "source": "mirage/ocaml-conduit:mirage-conduit.opam#05ddf13",
       "override": {
         "dependencies": {
           "@opam/tls-mirage": "*"

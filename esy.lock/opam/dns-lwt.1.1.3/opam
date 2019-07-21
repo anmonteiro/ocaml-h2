@@ -25,10 +25,10 @@ doc: "https://mirage.github.io/ocaml-dns/"
 bug-reports: "https://github.com/mirage/ocaml-dns/issues"
 depends: [
   "ocaml" {>= "4.03.0"}
-  "dune"
+  "dune" {>= "1.2"}
   "mirage-profile" {>= "0.8.0"}
   "lwt" {>= "3.0.0"}
-  "dns"
+  "dns" {=version}
 ]
 build: [
   ["dune" "subst"] {pinned}
@@ -37,6 +37,9 @@ build: [
 dev-repo: "git+https://github.com/mirage/ocaml-dns.git"
 url {
   src:
-    "https://github.com/mirage/ocaml-dns/releases/download/v1.1.1/dns-v1.1.1.tbz"
-  checksum: "md5=42a49a41d3b53567e074b864926d4411"
+    "https://github.com/mirage/ocaml-dns/releases/download/v1.1.3/dns-v1.1.3.tbz"
+  checksum: [
+    "sha256=17a3b507d7c1848f14ba213397bcc5df3967bbb9792ec6c650ea5dd9feb5456a"
+    "sha512=cd13ea4c92c018dc884fcce7eb62d2f3f1ef76c3a51c11bb3fe722d72b90e4070f1d0f939cd9faa93c710a4d2dee9761d89557f8086c9fb4ca75c6f1a467fbf3"
+  ]
 }
