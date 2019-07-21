@@ -29,9 +29,9 @@ case insensitive manner.
 """
 url {
   src:
-    "https://github.com/hannesm/domain-name/releases/download/v0.2.1/domain-name-v0.2.1.tbz"
+    "https://github.com/hannesm/domain-name/releases/download/v0.3.0/domain-name-v0.3.0.tbz"
   checksum: [
-    "sha256=b86ec83dc94a1257f7a7d151adbd0d49fbeaebedb6f650efda4bb0f72af7a1d6"
-    "sha512=f251d04780bf622cf7be305063c55cfa25340938be2080c2989444465ef5c77be9fee9d0db343c17ca970bf90faa2c76b7c400db92ac8c4d2b680da46488c349"
+    "sha256=4dd9ed1bc619886d1adcaff14edfb503dedb77fc0b7a28d88d213aa1c44d6c8a"
+    "sha512=8229766b20a44622d3a94250c6909dbe64269aab6dde8dd13f6b1c027d63e119658fd35b459c6556817ab583bbfdbc5dbea97d3022f590184d70a72ecd7c0a34"
   ]
 }

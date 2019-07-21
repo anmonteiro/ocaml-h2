@@ -21,8 +21,7 @@
     "@opam/httpaf-lwt-unix": "*",
     "@opam/ssl": ">= 0.5.8",
     "@opam/tls-lwt": "*",
-    "@opam/tls-mirage": "*",
-    "@opam/macaddr": ">= 3.0.0 < 4.0.0"
+    "@opam/tls-mirage": "*"
   },
   "devDependencies": {
     "@opam/alcotest": "*",
@@ -45,14 +44,7 @@
         }
       }
     },
-    "@opam/mirage-conduit": {
-      "source": "mirage/ocaml-conduit:mirage-conduit.opam#0ce7ce3",
-      "override": {
-        "dependencies": {
-          "@opam/tls-mirage": "*"
-        }
-      }
-    },
+    "@opam/mirage-conduit": "dune-universe/ocaml-conduit:mirage-conduit.opam#78ab2ac",
     "@opam/nocrypto": "TheLortex/ocaml-nocrypto:nocrypto.opam#8e389a8",
     "@opam/mirage-xen-posix": {
       "source": "no-source:",
