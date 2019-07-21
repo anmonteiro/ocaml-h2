@@ -1,5 +1,5 @@
 {
-  "checksum": "617b5956447c3817b1cc246c8a5b6cec",
+  "checksum": "9196d0027b5d115e05a72b89052f001a",
   "root": "h2@link-dev:./esy.json",
   "node": {
     "yarn-pkg-config@github:esy-ocaml/yarn-pkg-config#cca65f99674ed2d954d28788edeb8c57fada5ed0@d41d8cd9": {
@@ -43,7 +43,7 @@
         "@opam/tls-mirage@github:dune-universe/ocaml-tls:tls-mirage.opam#9761033@d41d8cd9",
         "@opam/tls-lwt@github:dune-universe/ocaml-tls:tls-lwt.opam#9761033@d41d8cd9",
         "@opam/ssl@opam:0.5.9@e04b0c17", "@opam/psq@opam:0.2.0@247756d4",
-        "@opam/mirage-conduit@github:dune-universe/ocaml-conduit:mirage-conduit.opam#78ab2ac@d41d8cd9",
+        "@opam/mirage-conduit@github:mirage/ocaml-conduit:mirage-conduit.opam#05ddf13@d2859b4f",
         "@opam/lwt_ssl@opam:1.1.2@ac833920", "@opam/lwt@opam:4.2.1@08ba7e51",
         "@opam/httpaf-lwt-unix@github:anmonteiro/httpaf:httpaf-lwt-unix.opam#7c5d991@33b6fb1d",
         "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#7c5d991@d41d8cd9",
@@ -2045,22 +2045,22 @@
         "@opam/dune@opam:1.10.0@b15ce221"
       ]
     },
-    "@opam/mirage-conduit@github:dune-universe/ocaml-conduit:mirage-conduit.opam#78ab2ac@d41d8cd9": {
+    "@opam/mirage-conduit@github:mirage/ocaml-conduit:mirage-conduit.opam#05ddf13@d2859b4f": {
       "id":
-        "@opam/mirage-conduit@github:dune-universe/ocaml-conduit:mirage-conduit.opam#78ab2ac@d41d8cd9",
+        "@opam/mirage-conduit@github:mirage/ocaml-conduit:mirage-conduit.opam#05ddf13@d2859b4f",
       "name": "@opam/mirage-conduit",
-      "version":
-        "github:dune-universe/ocaml-conduit:mirage-conduit.opam#78ab2ac",
+      "version": "github:mirage/ocaml-conduit:mirage-conduit.opam#05ddf13",
       "source": {
         "type": "install",
         "source": [
-          "github:dune-universe/ocaml-conduit:mirage-conduit.opam#78ab2ac"
+          "github:mirage/ocaml-conduit:mirage-conduit.opam#05ddf13"
         ]
       },
-      "overrides": [],
+      "overrides": [ { "dependencies": { "@opam/tls-mirage": "*" } } ],
       "dependencies": [
         "ocaml@4.8.0@d41d8cd9", "@opam/xenstore@opam:2.1.0@8b88eea8",
         "@opam/vchan@opam:4.0.3@7ba87bb9",
+        "@opam/tls-mirage@github:dune-universe/ocaml-tls:tls-mirage.opam#9761033@d41d8cd9",
         "@opam/tls@github:dune-universe/ocaml-tls:tls.opam#9761033@d41d8cd9",
         "@opam/sexplib@opam:v0.12.0@7033807f",
         "@opam/ppx_sexp_conv@opam:v0.12.0@6e30d275",

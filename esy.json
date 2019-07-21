@@ -44,7 +44,14 @@
         }
       }
     },
-    "@opam/mirage-conduit": "dune-universe/ocaml-conduit:mirage-conduit.opam#78ab2ac",
+    "@opam/mirage-conduit": {
+      "source": "mirage/ocaml-conduit:mirage-conduit.opam#05ddf13",
+      "override": {
+        "dependencies": {
+          "@opam/tls-mirage": "*"
+        }
+      }
+    },
     "@opam/nocrypto": "TheLortex/ocaml-nocrypto:nocrypto.opam#8e389a8",
     "@opam/mirage-xen-posix": {
       "source": "no-source:",
