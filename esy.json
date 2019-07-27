@@ -20,8 +20,7 @@
     "@opam/httpaf": "*",
     "@opam/httpaf-lwt-unix": "*",
     "@opam/ssl": ">= 0.5.8",
-    "@opam/tls-lwt": "*",
-    "@opam/tls-mirage": "*"
+    "@opam/tls-lwt": "*"
   },
   "devDependencies": {
     "@opam/alcotest": "*",
@@ -53,24 +52,8 @@
       }
     },
     "@opam/nocrypto": "TheLortex/ocaml-nocrypto:nocrypto.opam#8e389a8",
-    "@opam/mirage-xen-posix": {
-      "source": "no-source:",
-      "override": {}
-    },
-    "@opam/mirage-xen-ocaml": {
-      "source": "no-source:",
-      "override": {}
-    },
-    "@opam/mirage-xen": {
-      "source": "no-source:",
-      "override": {}
-    },
-    "@opam/mirage-net-xen": {
-      "source": "no-source:",
-      "override": {}
-    },
-    "@opam/tls": "dune-universe/ocaml-tls:tls.opam#9761033",
-    "@opam/tls-lwt": "dune-universe/ocaml-tls:tls-lwt.opam#9761033",
-    "@opam/tls-mirage": "dune-universe/ocaml-tls:tls-mirage.opam#9761033"
+    "@opam/tls": "hannesm/ocaml-tls:tls.opam#ccd88dc",
+    "@opam/tls-mirage": "hannesm/ocaml-tls:tls-mirage.opam#ccd88dc",
+    "@opam/tls-lwt": "hannesm/ocaml-tls:tls-lwt.opam#ccd88dc"
   }
 }
