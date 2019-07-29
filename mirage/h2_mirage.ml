@@ -111,15 +111,15 @@ end
 module Server (Flow : Mirage_flow_lwt.S) = struct
   include H2_lwt.Server (Make_IO (Flow))
 
-  type flow = Flow.flow
-
   let create_connection_handler ?config ~request_handler ~error_handler flow =
     let request_handler () = request_handler in
     let error_handler () = error_handler in
     create_connection_handler ?config ~request_handler ~error_handler () flow
 end
 
-module type Server_intf = sig
+(* Almost like the `H2_lwt.Server` module type but we don't need the client
+ * address argument in Mirage. It's somewhere else. *)
+module type Server = sig
   open H2
 
   type flow

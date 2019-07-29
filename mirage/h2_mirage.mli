@@ -32,7 +32,7 @@
 
 open H2
 
-module type Server_intf = sig
+module type Server = sig
   type flow
 
   val create_connection_handler
@@ -43,11 +43,10 @@ module type Server_intf = sig
     -> unit Lwt.t
 end
 
-module Server (Flow : Mirage_flow_lwt.S) :
-  Server_intf with type flow = Flow.flow
+module Server (Flow : Mirage_flow_lwt.S) : Server with type flow := Flow.flow
 
 module Server_with_conduit : sig
-  include Server_intf with type flow = Conduit_mirage.Flow.flow
+  include Server with type flow := Conduit_mirage.Flow.flow
 
   type t = Conduit_mirage.Flow.flow -> unit Lwt.t
 
@@ -56,25 +55,5 @@ module Server_with_conduit : sig
     -> (Conduit_mirage.server -> t -> unit Lwt.t) Lwt.t
 end
 
-module Client (Flow : Mirage_flow_lwt.S) : sig
-  type t
-
-  val create_connection
-    :  ?config:Config.t
-    -> ?push_handler:(Request.t
-                      -> (Client_connection.response_handler, unit) result)
-    -> error_handler:Client_connection.error_handler
-    -> Flow.flow
-    -> t Lwt.t
-
-  val request
-    :  t
-    -> Request.t
-    -> error_handler:Client_connection.error_handler
-    -> response_handler:Client_connection.response_handler
-    -> [ `write ] Body.t
-
-  val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
-
-  val shutdown : t -> unit
-end
+module Client (Flow : Mirage_flow_lwt.S) :
+  H2_lwt.Client with type socket := Flow.flow

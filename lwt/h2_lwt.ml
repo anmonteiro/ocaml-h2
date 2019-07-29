@@ -88,33 +88,8 @@ end = struct
       ret
 end
 
-module type IO = sig
-  type socket
-
-  type addr
-
-  val read
-    :  socket
-    -> Bigstringaf.t
-    -> off:int
-    -> len:int
-    -> [ `Eof | `Ok of int ] Lwt.t
-
-  val writev
-    :  socket
-    -> Faraday.bigstring Faraday.iovec list
-    -> [ `Closed | `Ok of int ] Lwt.t
-
-  val shutdown_send : socket -> unit
-
-  val shutdown_receive : socket -> unit
-
-  val close : socket -> unit Lwt.t
-
-  val report_exn : H2.Server_connection.t -> socket -> exn -> unit Lwt.t
-end
-
 module Config = H2.Config
+include H2_lwt_intf
 
 module Server (Io : IO) = struct
   let create_connection_handler
@@ -252,4 +227,6 @@ module Client (Io : IO) = struct
   let ping = Client_connection.ping
 
   let shutdown = Client_connection.shutdown
+
+  let is_closed = Client_connection.is_closed
 end

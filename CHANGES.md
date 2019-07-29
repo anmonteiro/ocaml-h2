@@ -1,6 +1,12 @@
 Unreleased
 --------------
 
+- h2-lwt, h2-lwt-unix, h2-mirage: Refactor interface code through common
+  `H2_lwt_intf` and expose less (internal) types
+  ([#65](https://github.com/anmonteiro/ocaml-h2/pull/65))
+- h2-lwt, h2-lwt-unix, h2-mirage: Expose `Client.is_closed`
+  ([#65](https://github.com/anmonteiro/ocaml-h2/pull/65))
+
 0.3.0 2019-05-04
 --------------
 
