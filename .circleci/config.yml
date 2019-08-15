@@ -38,8 +38,6 @@ opam-steps: &opam-steps
           opam pin add -y httpaf-lwt git+https://github.com/anmonteiro/httpaf#fork
           opam pin add -y httpaf-lwt-unix git+https://github.com/anmonteiro/httpaf#fork
           opam install -y lwt_ssl
-          # For OCaml 4.08
-          opam pin add -y mirage-conduit --dev-repo
           opam install -t --deps-only .
     - run:
         name: 'Clean'
