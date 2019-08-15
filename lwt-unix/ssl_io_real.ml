@@ -51,8 +51,7 @@ struct
           Lwt.fail exn
         | exn ->
           Lwt.async (fun () ->
-              Lwt_ssl.ssl_shutdown ssl >>= fun () ->
-              Lwt_ssl.close ssl);
+              Lwt_ssl.ssl_shutdown ssl >>= fun () -> Lwt_ssl.close ssl);
           Lwt.fail exn)
     >>= fun bytes_read ->
     if bytes_read = 0 then
@@ -69,8 +68,7 @@ struct
             acc + written)
           0
           iovecs
-        >|= fun n ->
-        `Ok n)
+        >|= fun n -> `Ok n)
       (function
         | Unix.Unix_error (Unix.EBADF, "check_descriptor", _) ->
           Lwt.return `Closed

@@ -62,9 +62,7 @@ module Make_IO (Flow : Mirage_flow_lwt.S) :
           `Eof
         | Error error ->
           raise (Failure (Format.asprintf "%a" Flow.pp_error error)))
-      (fun exn ->
-        shutdown flow >>= fun () ->
-        Lwt.fail exn)
+      (fun exn -> shutdown flow >>= fun () -> Lwt.fail exn)
 
   let writev flow iovecs =
     let cstruct_iovecs =
@@ -84,9 +82,7 @@ module Make_IO (Flow : Mirage_flow_lwt.S) :
         | Error other_error ->
           raise
             (Failure (Format.asprintf "%a" Flow.pp_write_error other_error)))
-      (fun exn ->
-        shutdown flow >>= fun () ->
-        Lwt.fail exn)
+      (fun exn -> shutdown flow >>= fun () -> Lwt.fail exn)
 
   let report_exn connection _flow exn =
     (* This needs to handle two cases. The case where the socket is
