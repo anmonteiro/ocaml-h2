@@ -19,7 +19,8 @@
     "@opam/conf-libev": "*",
     "@opam/httpaf": "*",
     "@opam/httpaf-lwt-unix": "*",
-    "@opam/ssl": ">= 0.5.8"
+    "@opam/ssl": ">= 0.5.8",
+    "@opam/dns": "< 4.0.0"
   },
   "devDependencies": {
     "@opam/alcotest": "*",

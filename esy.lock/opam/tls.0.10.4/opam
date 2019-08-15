@@ -55,7 +55,8 @@ conflicts: [
 
 tags: [ "org:mirage"]
 synopsis: "Transport Layer Security purely in OCaml"
-description: """
+description: """\
+
 Transport Layer Security (TLS) is probably the most widely deployed security
 protocol on the Internet. It provides communication privacy to prevent
 eavesdropping, tampering, and message forgery. Furthermore, it optionally
@@ -70,9 +71,9 @@ algorithm, and hash algorithm are negotiated.
 
 Read [further](https://nqsb.io) and our [Usenix Security 2015 paper](https://usenix15.nqsb.io)."""
 url {
-archive: "https://github.com/mirleft/ocaml-tls/releases/download/0.10.3/tls-0.10.3.tbz"
+archive: "https://github.com/mirleft/ocaml-tls/releases/download/0.10.4/tls-0.10.4.tbz"
 checksum: [
-  "sha256=314429b95203b054507beeeba18a58d79489b6a47a3bcac95971bc2b1b49c19c"
-  "sha512=5a49aa720038e85238586240d7d099688544122e741f3d4279ea1927a88ae745ff9442999b85ac33858dd4f322104cc1d0545b902d93c221dff5318306d64a81"
-  ]
+  "sha256=24d5f7200ceb526bc8d1513c72dbe641a15012d3b0bba3387b85aaee9e052317"
+  "sha512=c0e246c3e5e81cb8ba6f171869694d83ae948757098b144009c7e357b3deb722b42393270a20434f1d2c82769ff519c64aa6374c471b04c38d39a5729bf60a21"
+]
 }
