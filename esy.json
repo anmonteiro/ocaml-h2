@@ -6,7 +6,7 @@
   "license": "BSD-3-clause",
   "repository": "git+https://github.com/anmonteiro/ocaml-h2",
   "dependencies": {
-    "ocaml": "4.8.0",
+    "ocaml": "~4.8.1000",
     "@opam/dune": "*",
     "@opam/lwt": "*",
     "@opam/bigstringaf": "*",
@@ -19,8 +19,7 @@
     "@opam/conf-libev": "*",
     "@opam/httpaf": "*",
     "@opam/httpaf-lwt-unix": "*",
-    "@opam/ssl": ">= 0.5.8",
-    "@opam/tls-lwt": "*"
+    "@opam/ssl": ">= 0.5.8"
   },
   "devDependencies": {
     "@opam/alcotest": "*",
@@ -35,25 +34,6 @@
     "@opam/conf-openssl": "esy-packages/esy-openssl#dafe9ad",
     "@opam/httpaf": "anmonteiro/httpaf:httpaf.opam#7c5d991",
     "@opam/httpaf-lwt": "anmonteiro/httpaf:httpaf-lwt.opam#7c5d991",
-    "@opam/httpaf-lwt-unix": {
-      "source": "anmonteiro/httpaf:httpaf-lwt-unix.opam#7c5d991",
-      "override": {
-        "dependencies": {
-          "@opam/tls-lwt": "*"
-        }
-      }
-    },
-    "@opam/mirage-conduit": {
-      "source": "mirage/ocaml-conduit:mirage-conduit.opam#05ddf13",
-      "override": {
-        "dependencies": {
-          "@opam/tls-mirage": "*"
-        }
-      }
-    },
-    "@opam/nocrypto": "TheLortex/ocaml-nocrypto:nocrypto.opam#8e389a8",
-    "@opam/tls": "hannesm/ocaml-tls:tls.opam#ccd88dc",
-    "@opam/tls-mirage": "hannesm/ocaml-tls:tls-mirage.opam#ccd88dc",
-    "@opam/tls-lwt": "hannesm/ocaml-tls:tls-lwt.opam#ccd88dc"
+    "@opam/httpaf-lwt-unix": "anmonteiro/httpaf:httpaf-lwt-unix.opam#7c5d991"
   }
 }
