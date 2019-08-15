@@ -35,13 +35,10 @@ open H2
 (* The function that results from [create_connection_handler] should be passed
    to [Lwt_io.establish_server_with_client_socket]. *)
 module Server : sig
-  val create_connection_handler
-    :  ?config:Config.t
-    -> request_handler:(Unix.sockaddr -> Server_connection.request_handler)
-    -> error_handler:(Unix.sockaddr -> Server_connection.error_handler)
-    -> Unix.sockaddr
-    -> Lwt_unix.file_descr
-    -> unit Lwt.t
+  include
+    H2_lwt.Server
+      with type socket := Lwt_unix.file_descr
+       and type addr := Unix.sockaddr
 
   module TLS : sig
     val create_connection_handler
@@ -71,29 +68,10 @@ module Server : sig
 end
 
 module Client : sig
-  type t
-
-  val create_connection
-    :  ?config:Config.t
-    -> ?push_handler:(Request.t
-                      -> (Client_connection.response_handler, unit) result)
-    -> error_handler:Client_connection.error_handler
-    -> Lwt_unix.file_descr
-    -> t Lwt.t
-
-  val request
-    :  t
-    -> Request.t
-    -> error_handler:Client_connection.error_handler
-    -> response_handler:Client_connection.response_handler
-    -> [ `write ] Body.t
-
-  val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
-
-  val shutdown : t -> unit
+  include H2_lwt.Client with type socket := Lwt_unix.file_descr
 
   module TLS : sig
-    type t
+    include H2_lwt.Client with type socket := Lwt_unix.file_descr
 
     val create_connection
       :  ?client:Tls_io.client
@@ -103,26 +81,10 @@ module Client : sig
       -> error_handler:Client_connection.error_handler
       -> Lwt_unix.file_descr
       -> t Lwt.t
-
-    val request
-      :  t
-      -> Request.t
-      -> error_handler:Client_connection.error_handler
-      -> response_handler:Client_connection.response_handler
-      -> [ `write ] Body.t
-
-    val ping
-      :  t
-      -> ?payload:Bigstringaf.t
-      -> ?off:int
-      -> (unit -> unit)
-      -> unit
-
-    val shutdown : t -> unit
   end
 
   module SSL : sig
-    type t
+    include H2_lwt.Client with type socket := Lwt_unix.file_descr
 
     val create_connection
       :  ?client:Ssl_io.client
@@ -132,21 +94,5 @@ module Client : sig
       -> error_handler:Client_connection.error_handler
       -> Lwt_unix.file_descr
       -> t Lwt.t
-
-    val request
-      :  t
-      -> Request.t
-      -> error_handler:Client_connection.error_handler
-      -> response_handler:Client_connection.response_handler
-      -> [ `write ] Body.t
-
-    val ping
-      :  t
-      -> ?payload:Bigstringaf.t
-      -> ?off:int
-      -> (unit -> unit)
-      -> unit
-
-    val shutdown : t -> unit
   end
 end
