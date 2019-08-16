@@ -99,7 +99,7 @@ jobs:
     environment:
       - TERM: dumb
       - OCAML_VERSION: "4.04.2"
-      - OPAMSOLVERTIMEOUT: "300"
+      - OPAMSOLVERTIMEOUT: "500"
     <<: *opam-steps
   4.05.0:
     docker:
