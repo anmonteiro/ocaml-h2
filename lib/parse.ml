@@ -195,8 +195,7 @@ let parse_priority_frame { Frame.payload_length; stream_id; _ } =
     (* From RFC7540§6.3:
      *   A PRIORITY frame with a length other than 5 octets MUST be treated as
      *   a stream error (Section 5.4.2) of type FRAME_SIZE_ERROR. *)
-    advance payload_length >>| fun () ->
-    stream_error FrameSizeError stream_id
+    advance payload_length >>| fun () -> stream_error FrameSizeError stream_id
   else
     lift (fun priority -> Ok (Frame.Priority priority)) parse_priority
 
@@ -566,8 +565,7 @@ module Reader = struct
         (* After having received a valid connection preface, we can start
          * reading other frames now. *)
         skip_many (parse_frame parse_context <* commit >>| frame_handler)
-        >>| fun () ->
-        Ok ()
+        >>| fun () -> Ok ()
       | Error _ as error ->
         return error
     in

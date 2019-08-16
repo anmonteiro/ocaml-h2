@@ -47,8 +47,8 @@ module type Client = sig
 
   val create_connection
     :  ?config:Config.t
-    -> ?push_handler:(Request.t
-                      -> (Client_connection.response_handler, unit) result)
+    -> ?push_handler:
+         (Request.t -> (Client_connection.response_handler, unit) result)
     -> error_handler:Client_connection.error_handler
     -> socket
     -> t Lwt.t

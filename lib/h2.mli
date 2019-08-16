@@ -109,9 +109,8 @@ module Status : sig
       more details.
 
       In addition to http/af, this type also includes the 421 (Misdirected
-      Request) tag. See
-      {{:https://tools.ietf.org/html/rfc7540#section-9.1.2} RFC7540§9.1.2} for
-      more details. *)
+      Request) tag. See {{:https://tools.ietf.org/html/rfc7540#section-9.1.2}
+      RFC7540§9.1.2} for more details. *)
 
   type server_error = Httpaf.Status.server_error
   (** The 5xx (Server Error) class of status code indicates that the server is
@@ -215,10 +214,9 @@ end
     into one "field-name: field-value" pair, without changing the semantics of
     the message, by appending each subsequent field value to the combined field
     value in order, separated by a comma.
-    {i
-    The order in which header fields with the same field name are received is
-    therefore significant to the interpretation of the combined field value}; a
-    proxy MUST NOT change the order of these field values when forwarding a
+    {i The order in which header fields with the same field name are received
+    is therefore significant to the interpretation of the combined field value};
+    a proxy MUST NOT change the order of these field values when forwarding a
     message.
 
     {i Note.} Unless otherwise specified, all operations preserve header field
@@ -295,15 +293,15 @@ module Headers : sig
   (** [add_multi t assoc] is the same as
 
       {[
-add_list t (List.concat_map assoc ~f:(fun (name, values) -> List.map
-      values ~f:(fun value -> (name, value))))
+        add_list t (List.concat_map assoc ~f:(fun (name, values) -> List.map
+              values ~f:(fun value -> (name, value))))
       ]}
 
       but is implemented more efficiently. For example,
 
       {[
-add_multi t ["name1", ["x", "y"]; "name2", ["p", "q"]] = add_list
-      ["name1", "x"; "name1", "y"; "name2", "p"; "name2", "q"]
+        add_multi t ["name1", ["x", "y"]; "name2", ["p", "q"]] = add_list
+              ["name1", "x"; "name1", "y"; "name2", "p"; "name2", "q"]
       ]} *)
 
   val remove : t -> name -> t
@@ -453,9 +451,8 @@ module Request : sig
       pseudo-header field includes the authority portion of the target URI, and
       should be used instead of the [Host] header field in HTTP/2.
 
-      See
-      {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.3} RFC7540§8.1.2.4}
-      for more details. *)
+      See {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.3}
+      RFC7540§8.1.2.4} for more details. *)
 
   val pp_hum : Format.formatter -> t -> unit
 end
@@ -477,9 +474,8 @@ module Response : sig
       parameters. Unlike the [Response] type in http/af, h2 does not define a
       way for responses to carry reason phrases or protocol version.
 
-      See
-      {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.4} RFC7540§8.1.2.4}
-      for more details. *)
+      See {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.4}
+      RFC7540§8.1.2.4} for more details. *)
 
   val pp_hum : Format.formatter -> t -> unit
 end

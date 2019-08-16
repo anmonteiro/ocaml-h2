@@ -75,8 +75,7 @@ struct
       TCP.close tcp
     | Ok tls_server ->
       log "TLS ok";
-      f tls_server >>= fun () ->
-      TLS.close tls_server
+      f tls_server >>= fun () -> TLS.close tls_server
 
   let tls_init kv =
     X509.certificate kv `Default >|= fun certificate ->
