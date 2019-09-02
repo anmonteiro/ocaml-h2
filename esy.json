@@ -13,14 +13,13 @@
     "@opam/angstrom": "*",
     "@opam/faraday": "*",
     "@opam/psq": "*",
-    "@opam/mirage-conduit": "*",
+    "@opam/conduit-mirage": "*",
     "@opam/faraday-lwt-unix": "*",
     "@opam/lwt_ssl": "*",
     "@opam/conf-libev": "*",
     "@opam/httpaf": "*",
     "@opam/httpaf-lwt-unix": "*",
-    "@opam/ssl": ">= 0.5.8",
-    "@opam/dns": "< 4.0.0"
+    "@opam/ssl": ">= 0.5.8"
   },
   "devDependencies": {
     "@opam/alcotest": "*",
