@@ -1,6 +1,9 @@
 Unreleased
 --------------
 
+- h2-lwt-unix: replace the `dune` file (previously written in OCaml) with a
+  `(select)` form to avoid depending on `ocamlfind`
+  ([#68](https://github.com/anmonteiro/ocaml-h2/pull/68))
 - h2-lwt, h2-lwt-unix, h2-mirage: Refactor interface code through common
   `H2_lwt_intf` and expose less (internal) types
   ([#65](https://github.com/anmonteiro/ocaml-h2/pull/65))
