@@ -1,6 +1,9 @@
 Unreleased
 --------------
 
+- h2-mirage: depend on `mirage-conduit` instead of `conduit-mirage` effectively
+  placing a lower bound of OCaml 4.07 on the next release of h2-mirage
+  ([#67](https://github.com/anmonteiro/ocaml-h2/pull/67))
 - h2-lwt-unix: replace the `dune` file (previously written in OCaml) with a
   `(select)` form to avoid depending on `ocamlfind`
   ([#68](https://github.com/anmonteiro/ocaml-h2/pull/68))
