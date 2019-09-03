@@ -38,9 +38,9 @@ opam-steps: &opam-steps
           opam pin add -y httpaf-lwt git+https://github.com/anmonteiro/httpaf#fork
           opam pin add -y httpaf-lwt-unix git+https://github.com/anmonteiro/httpaf#fork
           opam install -y lwt_ssl
-          # Ignore constraints on OCaml so that it doesn't choke trying to
-          # install h2-mirage
-          opam install -t --deps-only --ignore-constraints-on=ocaml .
+          # Use `--best-effort` so that it doesn't choke trying to install
+          # h2-mirage's deps (OCaml >= 4.07)
+          opam install -t --deps-only --best-effort .
     - run:
         name: 'Clean'
         command: rm -rf ./_build
