@@ -13,8 +13,7 @@ depends: [
   "ocaml" {>= "4.04"}
   "faraday-lwt-unix"
   "h2-lwt" {>= "0.2.0"}
-  "dune" {build}
-  "ocamlfind" {build}
+  "dune"
   "lwt"
 ]
 depopts: ["tls" "lwt_ssl"]

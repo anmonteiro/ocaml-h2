@@ -573,6 +573,10 @@ module Reader = struct
 
   let client_frames preface_handler frame_handler =
     connection_preface_and_frames
+      (* From RFC7540§3.5:
+       *   The server connection preface consists of a potentially empty
+       *   SETTINGS frame (Section 6.5) that MUST be the first frame the server
+       *   sends in the HTTP/2 connection. *)
       settings_preface
       preface_handler
       frame_handler
@@ -580,6 +584,14 @@ module Reader = struct
   let server_frames preface_handler frame_handler =
     connection_preface_and_frames
       (fun parse_context ->
+        (* From RFC7540§3.5:
+         *   The client connection preface starts with a sequence of 24 octets,
+         *   which in hex notation is:
+         *
+         *     0x505249202a20485454502f322e300d0a0d0a534d0d0a0d0a
+         *   That is, the connection preface starts with the string
+         *   PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n). This sequence MUST be followed
+         *   by a SETTINGS frame (Section 6.5), which MAY be empty. *)
         connection_preface *> settings_preface parse_context)
       preface_handler
       frame_handler
