@@ -1,4 +1,4 @@
-version: 2
+version: 2.1
 
 common_cache_key: &common_cache_key
   key: dependency-cache-{{ checksum "../ocaml-version" }}-{{ checksum ".circleci/config.yml" }}-{{ checksum "hpack.opam" }}-{{ checksum "h2.opam" }}-{{ checksum "h2-lwt.opam" }}-{{ checksum "h2-lwt-unix.opam" }}-{{ checksum "h2-mirage.opam" }}
@@ -10,6 +10,10 @@ esy_post_build_cache_key: &esy_post_build_cache_key
   key: esy-post-build-cache-{{ checksum "esy.json" }}-{{ checksum "../esy-checksum" }}-{{ checksum ".circleci/config.yml" }}
 
 opam-steps: &opam-steps
+  parameters:
+    all_tests:
+      type: boolean
+      default: true
   steps:
     - checkout
     - run:
@@ -48,12 +52,24 @@ opam-steps: &opam-steps
         <<: *common_cache_key
         paths:
           - ~/.opam
-    - run:
-        name: 'Test'
-        command: |
-          eval `opam config env`
-          dune build @all
-          dune runtest --no-buffer
+    - when:
+        condition: <<parameters.all_tests>>
+        steps:
+          - run:
+              name: 'Test'
+              command: |
+                eval `opam config env`
+                dune build @all
+                dune runtest --no-buffer
+    - unless:
+        condition: <<parameters.all_tests>>
+        steps:
+          - run:
+              name: 'Test'
+              command: |
+                eval `opam config env`
+                dune build @lwt-unix/all @examples/lwt/all
+                dune runtest --no-buffer
     - run:
         name: 'Slow Tests'
         command: |
@@ -80,6 +96,7 @@ opam-steps: &opam-steps
           kill $(lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
     - run:
         name: 'Check code is formatted with ocamlformat'
+        # TODO: do this based on a param
         command: |
           eval `opam config env`
           case $OCAML_VERSION in
@@ -95,7 +112,7 @@ opam-steps: &opam-steps
         command: git diff --exit-code
 
 jobs:
-  4.04.2:
+  OCaml-404:
     docker:
       - image: ocaml/opam2:debian-10-ocaml-4.04
     environment:
@@ -103,28 +120,28 @@ jobs:
       - OCAML_VERSION: "4.04.2"
       - OPAMSOLVERTIMEOUT: "600"
     <<: *opam-steps
-  4.05.0:
+  OCaml-405:
     docker:
       - image: ocaml/opam2:debian-10-ocaml-4.05
     environment:
       - TERM: dumb
       - OCAML_VERSION: "4.05.0"
     <<: *opam-steps
-  4.06.1:
+  OCaml-406:
     docker:
       - image: ocaml/opam2:debian-10-ocaml-4.06
     environment:
       - TERM: dumb
       - OCAML_VERSION: "4.06.1"
     <<: *opam-steps
-  4.07.1:
+  OCaml-407:
     docker:
       - image: ocaml/opam2:debian-10-ocaml-4.07
     environment:
       - TERM: dumb
       - OCAML_VERSION: "4.07.1"
     <<: *opam-steps
-  4.08.1:
+  OCaml-408:
     docker:
       - image: ocaml/opam2:debian-10-ocaml-4.08
     environment:
@@ -189,27 +206,30 @@ workflows:
   version: 2
   build-deploy:
     jobs:
-      - 4.04.2:
+      - OCaml-404:
+          all_tests: false
           filters:
             branches:
               ignore:
                 - gh-pages
-      - 4.05.0:
+      - OCaml-405:
+          all_tests: false
           filters:
             branches:
               ignore:
                 - gh-pages
-      - 4.06.1:
+      - OCaml-406:
+          all_tests: false
           filters:
             branches:
               ignore:
                 - gh-pages
-      - 4.07.1:
+      - OCaml-407:
           filters:
             branches:
               ignore:
                 - gh-pages
-      - 4.08.1:
+      - OCaml-408:
           filters:
             branches:
               ignore:
