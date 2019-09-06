@@ -537,6 +537,15 @@ module Reader = struct
     | Ok ({ frame_payload = Frame.Settings settings_list; _ } as frame) ->
       Ok (frame, settings_list)
     | Ok _ ->
+      (* FIXME(anmonteiro): this is not always an invalid preface. Section
+       * 9.2.1 should be taken into account here:
+       *
+       * From RFC7540§9.2.1:
+       *   An endpoint MAY immediately terminate an HTTP/2 connection that does
+       *   not meet these TLS requirements with a connection error (Section
+       *   5.4.1) of type INADEQUATE_SECURITY.
+       *)
+
       (* From RFC7540§3.5:
        *   Clients and servers MUST treat an invalid connection preface as a
        *   connection error (Section 5.4.1) of type PROTOCOL_ERROR. A GOAWAY
