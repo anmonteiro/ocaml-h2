@@ -27,6 +27,7 @@ opam-steps: &opam-steps
     - run:
         name: "Initialize opam"
         command: |
+          sudo apt-get update
           sudo apt-get install -y m4
           opam init --auto-setup --dot-profile=~/.bash_profile
           opam remote add ocamlorg https://opam.ocaml.org || true
