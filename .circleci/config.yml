@@ -27,6 +27,7 @@ opam-steps: &opam-steps
     - run:
         name: "Initialize opam"
         command: |
+          sudo apt-get update
           sudo apt-get install -y m4
           opam init --auto-setup --dot-profile=~/.bash_profile
           opam remote add ocamlorg https://opam.ocaml.org || true
@@ -148,6 +149,13 @@ jobs:
       - TERM: dumb
       - OCAML_VERSION: "4.08.1"
     <<: *opam-steps
+  OCaml-409:
+    docker:
+      - image: ocaml/opam2:debian-10-ocaml-4.09
+    environment:
+      - TERM: dumb
+      - OCAML_VERSION: "4.09.0"
+    <<: *opam-steps
   esy:
     docker:
       - image: circleci/node:12.8
@@ -228,6 +236,11 @@ workflows:
               ignore:
                 - gh-pages
       - OCaml-408:
+          filters:
+            branches:
+              ignore:
+                - gh-pages
+      - OCaml-409:
           filters:
             branches:
               ignore:
