@@ -1,7 +1,7 @@
 opam-version: "2.0"
 maintainer: "Spiros Eliopoulos <spiros@inhabitedtype.com>"
 authors: [ "Spiros Eliopoulos <spiros@inhabitedtype.com>" ]
-license: "BSD-3-Clause"
+license: "BSD-3-clause"
 homepage: "https://github.com/inhabitedtype/bigstringaf"
 bug-reports: "https://github.com/inhabitedtype/bigstringaf/issues"
 dev-repo: "git+https://github.com/inhabitedtype/bigstringaf.git"
@@ -11,9 +11,9 @@ build: [
   ["dune" "runtest" "-p" name] {with-test}
 ]
 depends: [
-  "dune" {>= "1.0"}
+  "dune"
   "alcotest" {with-test}
-  "base-bigarray"
+  "bigarray-compat"
   "ocaml" {>= "4.03.0"}
 ]
 depopts: [
@@ -37,6 +37,6 @@ Bigstrings and other string-like types.
 So here they are. Go crazy.
 """
 url {
-  src: "https://github.com/inhabitedtype/bigstringaf/archive/0.5.3.tar.gz"
-  checksum: "md5=a8ee1ea3cff80d1e2b840a2781965fa8"
+  src: "https://github.com/inhabitedtype/bigstringaf/archive/0.6.0.tar.gz"
+  checksum: "md5=390382a1ac34e129f7b7f49540d94c9a"
 }
