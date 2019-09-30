@@ -232,7 +232,7 @@ let handle_headers t ~end_stream reqd active_stream headers =
    *   receives a HEADERS frame that causes its advertised concurrent stream
    *   limit to be exceeded MUST treat this as a stream error (Section 5.4.2)
    *   of type PROTOCOL_ERROR or REFUSED_STREAM. *)
-  if t.current_client_streams + 1 > t.settings.max_concurrent_streams then
+  if t.current_client_streams + 1 > t.config.max_concurrent_streams then
     if t.unacked_settings > 0 then
       (* From RFC7540§8.1.4:
        *   The REFUSED_STREAM error code can be included in a RST_STREAM frame
