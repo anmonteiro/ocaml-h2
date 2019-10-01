@@ -816,6 +816,70 @@ module Server_connection_tests = struct
         "Expected state machine to issue a write operation after seeing \
          headers."
 
+  let trailers_request_handler reqd =
+    let response = Response.create `OK in
+    (* Send the response for / *)
+    let response_body = Reqd.respond_with_streaming reqd response in
+    Body.write_string response_body "somedata";
+    Body.flush response_body (fun () ->
+        Reqd.send_trailer_headers reqd Headers.(add empty "foo" "bar");
+        Body.close_writer response_body)
+
+  let test_trailers () =
+    let t = create ~error_handler trailers_request_handler in
+    handle_preface t;
+    let headers, _ = header_and_continuation_frames in
+    let headers =
+      { headers with
+        Frame.frame_header =
+          { headers.frame_header with
+            flags = Flags.(default_flags |> set_end_header |> set_end_stream)
+          }
+      }
+    in
+    write_frames t [ headers ];
+    match next_write_operation t with
+    | `Write iovecs ->
+      let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
+      Alcotest.(check (list int))
+        "Next write operation surfaces writes for HEADERS / DATA"
+        List.(map Frame.FrameType.serialize Frame.FrameType.[ Headers; Data ])
+        List.(
+          map
+            (fun { Frame.frame_header; _ } ->
+              Frame.FrameType.serialize frame_header.frame_type)
+            frames);
+      let iovec_len = IOVec.lengthv iovecs in
+      report_write_result t (`Ok iovec_len);
+      (match next_write_operation t with
+      | `Write iovecs ->
+        let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
+        let frame = List.hd frames in
+        Alcotest.(check int)
+          "Next write operation surfaces the trailers HEADERS frame"
+          Frame.FrameType.(serialize frame.frame_header.frame_type)
+          Frame.FrameType.(serialize Headers);
+        let iovec_len = IOVec.lengthv iovecs in
+        report_write_result t (`Ok iovec_len);
+        Alcotest.check
+          write_operation
+          "Writer yields"
+          `Yield
+          (next_write_operation t);
+        Alcotest.check
+          read_operation
+          "Reader wants to read"
+          `Read
+          (next_read_operation t)
+      | _ ->
+        Alcotest.fail
+          "Expected state machine to issue a write operation after seeing  (*\n\
+          \       headers.")
+    | _ ->
+      Alcotest.fail
+        "Expected state machine to issue a write operation after seeing \
+         headers."
+
   (* TODO: test for trailer headers. *)
   (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
   let suite =
@@ -852,6 +916,7 @@ module Server_connection_tests = struct
     ; "server push", `Quick, test_server_push
     ; "CONNECT method", `Quick, test_connect
     ; "CONNECT method (malformed)", `Quick, test_connect_malformed
+    ; "trailers", `Quick, test_trailers
     ]
 end
 
