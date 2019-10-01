@@ -231,6 +231,19 @@ let respond_with_bigstring t response bstr =
       "h2.Reqd.respond_with_bigstring: invalid state, currently handling error";
   unsafe_respond_with_data t response (`Bigstring bstr)
 
+let send_trailer_headers t headers =
+  match t.state with
+  | Active (HalfClosed _, stream) ->
+    let frame_info =
+      Writer.make_frame_info
+        ~max_frame_size:t.max_frame_size
+        ~flags:(Flags.default_flags |> Flags.set_end_stream)
+        t.id in
+    Writer.write_trailer_headers t.writer stream.encoder frame_info headers;
+    Stream.finish_stream t Finished
+  | _ ->
+    failwith "h2.Reqd.send_trailer_headers: invalid state, can be called only after respond_with_streaming"
+
 let send_streaming_response ~flush_headers_immediately t s response =
   s.wait_for_first_flush <- not flush_headers_immediately;
   match s.response_state with

@@ -504,6 +504,8 @@ module Reqd : sig
       From {{:https://tools.ietf.org/html/rfc7540#section-8.1} RFC7540§8.1}:
       An HTTP request/response exchange fully consumes a single stream. *)
 
+  val send_trailer_headers : t -> Headers.t -> unit
+
   val respond_with_string : t -> Response.t -> string -> unit
 
   val respond_with_bigstring : t -> Response.t -> Bigstringaf.t -> unit

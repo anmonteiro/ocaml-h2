@@ -531,6 +531,17 @@ module Writer = struct
       ~has_priority
       faraday
 
+  let write_trailer_headers t hpack_encoder ?priority frame_info headers =
+    let faraday = Faraday.of_bigstring t.headers_block_buffer in
+    encode_headers hpack_encoder faraday headers;
+    let has_priority = match priority with Some _ -> true | None -> false in
+    chunk_header_block_fragments
+      t
+      frame_info
+      ~write_frame:(write_headers_frame ?priority)
+      ~has_priority
+      faraday
+  
   let write_rst_stream t frame_info e =
     write_rst_stream_frame t.encoder frame_info e
 
