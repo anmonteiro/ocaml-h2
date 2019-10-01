@@ -102,12 +102,15 @@ module Server_connection_tests = struct
       `Close
       (next_read_operation t)
 
-  let preface =
+  let preface ?(settings = []) () =
     let writer = Serialize.Writer.create 0x400 in
-    Serialize.Writer.write_connection_preface writer [];
+    Serialize.Writer.write_connection_preface writer settings;
     Faraday.serialize_to_string (Serialize.Writer.faraday writer)
 
-  let handle_preface t =
+  let empty_preface = preface ()
+
+  let handle_preface ?settings t =
+    let preface = preface ?settings () in
     let preface_len = String.length preface in
     let preface = read t (bs_of_string preface) ~off:0 ~len:preface_len in
     Alcotest.(check int)
@@ -304,7 +307,7 @@ module Server_connection_tests = struct
          malformed CONTINUATION frame."
 
   let test_read_frame_size_error () =
-    let max_length = String.length preface in
+    let max_length = String.length (preface ()) in
     let config = { Config.default with read_buffer_size = max_length } in
     let t = create ~config ~error_handler default_request_handler in
     handle_preface t;
@@ -354,7 +357,7 @@ module Server_connection_tests = struct
       (Reader.next t.reader)
 
   let test_read_frame_size_error_priority_frame () =
-    let max_length = String.length preface in
+    let max_length = String.length empty_preface in
     let config = { Config.default with read_buffer_size = max_length } in
     let t = create ~config ~error_handler default_request_handler in
     handle_preface t;
@@ -402,13 +405,13 @@ module Server_connection_tests = struct
     let headers, _ = header_and_continuation_frames in
     let frame_wire = Test_common.serialize_frame headers in
     let frame_length = Bigstringaf.length frame_wire in
-    let preface_length = String.length preface in
+    let preface_length = String.length empty_preface in
     let preface_and_headers =
       Bigstringaf.create (frame_length + preface_length)
     in
     let preface_headers_length = Bigstringaf.length preface_and_headers in
     Bigstringaf.blit_from_string
-      preface
+      empty_preface
       ~src_off:0
       preface_and_headers
       ~dst_off:0
@@ -816,6 +819,26 @@ module Server_connection_tests = struct
         "Expected state machine to issue a write operation after seeing \
          headers."
 
+  let test_client_max_concurrent_streams () =
+    let t = create ~error_handler default_request_handler in
+    (* From RFC7540§5.1.2: [...] clients specify the maximum number of
+     * concurrent streams the server can initiate, and servers specify the
+     * maximum number of concurrent streams the client can initiate.
+     *
+     * Note: in this test, the client is saying the server is not allowed to
+     * initiate streams. The client, however, is. *)
+    handle_preface ~settings:[ MaxConcurrentStreams, 0 ] t;
+    let headers, _ = header_and_continuation_frames in
+    let headers =
+      { headers with
+        Frame.frame_header =
+          { headers.frame_header with
+            flags = Flags.(default_flags |> set_end_header |> set_end_stream)
+          }
+      }
+    in
+    write_frames_and_check_response t [ headers ]
+
   (* TODO: test for trailer headers. *)
   (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
   let suite =
@@ -852,6 +875,9 @@ module Server_connection_tests = struct
     ; "server push", `Quick, test_server_push
     ; "CONNECT method", `Quick, test_connect
     ; "CONNECT method (malformed)", `Quick, test_connect_malformed
+    ; ( "Client sends 0 max concurrent streams"
+      , `Quick
+      , test_client_max_concurrent_streams )
     ]
 end
 

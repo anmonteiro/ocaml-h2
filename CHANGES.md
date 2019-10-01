@@ -12,6 +12,9 @@ Unreleased
   ([#65](https://github.com/anmonteiro/ocaml-h2/pull/65))
 - h2-lwt, h2-lwt-unix, h2-mirage: Expose `Client.is_closed`
   ([#65](https://github.com/anmonteiro/ocaml-h2/pull/65))
+- h2: Don't count peer max concurrent streams based on what the endpoint
+  receives; the endpoint is responsible for selecting it
+  ([#71](https://github.com/anmonteiro/ocaml-h2/pull/71))
 
 0.3.0 2019-05-04
 --------------
