@@ -152,7 +152,10 @@ let remove t name =
     | [] ->
       if not seen then raise Local else []
     | ({ name = n'; _ } as nv') :: s' ->
-      if CI.equal n n' then loop s' n true else nv' :: loop s' n false
+      if CI.equal n n' then
+        loop s' n true
+      else
+        nv' :: loop s' n seen
   in
   try loop t name false with Local -> t
 

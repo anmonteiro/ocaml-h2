@@ -1,9 +1,11 @@
 open H2
 
 module Headers_tests = struct
+  let check = Alcotest.(check (list (pair string string)))
+
   let test_headers_roundtrip_ordering () =
     let headers_list = [ "a", "1"; "b", "2"; "c", "3" ] in
-    Alcotest.(check (list (pair string string)))
+    check
       "to_list / of_list"
       Headers.(to_list (of_list headers_list))
       headers_list;
@@ -26,7 +28,34 @@ module Headers_tests = struct
       Headers.(get hs "foo")
       (Some "other")
 
-  let suite = [ "roundtripping", `Quick, test_headers_roundtrip_ordering ]
+  let test_remove () =
+    check
+      "remove leading element"
+      [ "c", "d" ]
+      (Headers.remove (Headers.of_list [ "a", "b"; "c", "d" ]) "a"
+      |> Headers.to_list);
+    check
+      "remove trailing element"
+      [ "c", "d" ]
+      (Headers.remove (Headers.of_list [ "c", "d"; "a", "b" ]) "a"
+      |> Headers.to_list);
+    check
+      "remove trailing element"
+      [ "c", "d"; "e", "f" ]
+      (Headers.remove (Headers.of_list [ "c", "d"; "e", "f"; "a", "b" ]) "a"
+      |> Headers.to_list);
+    check
+      "remove trailing element"
+      [ "c", "d"; "e", "f"; "g", "h" ]
+      (Headers.remove
+         (Headers.of_list [ "c", "d"; "e", "f"; "a", "b"; "g", "h" ])
+         "a"
+      |> Headers.to_list)
+
+  let suite =
+    [ "roundtripping", `Quick, test_headers_roundtrip_ordering
+    ; "test remove", `Quick, test_remove
+    ]
 end
 
 let () = Alcotest.run "ocaml-h2 unit tests" [ "headers", Headers_tests.suite ]
