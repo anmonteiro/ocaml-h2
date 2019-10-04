@@ -15,6 +15,8 @@ Unreleased
 - h2: Don't count peer max concurrent streams based on what the endpoint
   receives; the endpoint is responsible for selecting it
   ([#71](https://github.com/anmonteiro/ocaml-h2/pull/71))
+- h2: Fix bug in `Headers.remove` that prevented removing the last header pair
+  ([#73](https://github.com/anmonteiro/ocaml-h2/pull/73))
 
 0.3.0 2019-05-04
 --------------
