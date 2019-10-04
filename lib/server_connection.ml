@@ -246,7 +246,7 @@ let handle_headers t ~end_stream reqd active_stream headers =
     else
       report_stream_error t reqd.Stream.id Error.ProtocolError
   else (
-    reqd.state <- Stream.(Active (Open FullHeaders, active_stream));
+    reqd.state <- Active (Open FullHeaders, active_stream);
     (* From RFC7540§5.1.2:
      *   Streams that are in the "open" state or in either of the "half-closed"
      *   states count toward the maximum number of streams that an endpoint is
@@ -592,7 +592,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
     Scheduler.deduct_inflow t.streams payload_length;
     match Scheduler.get_node t.streams stream_id with
     | Some (Stream { descriptor; _ } as stream) ->
-      (match descriptor.Stream.state with
+      (match descriptor.state with
       | Active (Open (ActiveMessage request_info), active_stream) ->
         let request_body = Reqd.request_body descriptor in
         request_info.request_body_bytes <-
@@ -1020,12 +1020,12 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
     report_connection_error t Error.ProtocolError
   else
     match Scheduler.find t.streams stream_id with
-    | Some respd ->
-      (match respd.Stream.state with
+    | Some stream ->
+      (match stream.state with
       | Active (Open (PartialHeaders partial_headers), active_stream) ->
         handle_headers_block
           t
-          respd
+          stream
           active_stream
           partial_headers
           flags
@@ -1036,7 +1036,7 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
         ->
         handle_trailer_headers
           t
-          respd
+          stream
           active_stream
           partial_headers
           flags

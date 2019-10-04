@@ -32,17 +32,6 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
-(* If we ever drop support for OCaml < 4.06 we can use a variant of the
- * following, and remove all the function forwarding.
- *
- * From https://caml.inria.fr/pub/docs/manual-ocaml/extn.html#sec249:
- *
- *   Prior to OCaml 4.06, there were a number of restrictions: one could only
- *   remove types and modules at the outermost level (not inside submodules),
- *   and in the case of with type the definition had to be another type
- *   constructor with the same type parameters. *)
-(* include (Httpaf.Status : Status with type informational := [ | `Continue ]) *)
-
 (* From RFC7540§8.1.1:
  *   HTTP/2 removes support for the 101 (Switching Protocols) informational
  *   status code ([RFC7231], Section 6.2.2). *)
