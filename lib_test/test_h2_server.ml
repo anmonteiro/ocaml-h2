@@ -127,6 +127,96 @@ module Server_connection_tests = struct
         "Expected state machine to issue a write operation after seeing the \
          connection preface."
 
+  let create_and_handle_preface
+      ?settings ?error_handler ?config request_handler
+    =
+    let t = create ?config ?error_handler request_handler in
+    handle_preface ?settings t;
+    t
+
+  let read_string t str =
+    let len = String.length str in
+    let input = Bigstringaf.of_string str ~off:0 ~len in
+    let c = read t input ~off:0 ~len in
+    Alcotest.(check int) "read consumes all input" len c
+
+  let request_to_string ?body request =
+    let has_body = match body with None -> false | Some _ -> true in
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    let writer = Serialize.Writer.create 0x400 in
+    let frame_info =
+      Writer.make_frame_info
+        ~flags:
+          (if has_body then
+             Flags.default_flags
+          else
+            Flags.(default_flags |> set_end_stream))
+        1l
+    in
+    Serialize.Writer.write_request_headers
+      writer
+      hpack_encoder
+      frame_info
+      request;
+    Faraday.serialize_to_string (Serialize.Writer.faraday writer)
+
+  let read_request t request =
+    let request_string = request_to_string request in
+    read_string t request_string
+
+  let response_to_string t ?body response =
+    let has_body = match body with None -> false | Some _ -> true in
+    let writer = Serialize.Writer.create 0x400 in
+    let frame_info =
+      Writer.make_frame_info
+        ~flags:
+          (if has_body then
+             Flags.default_flags
+          else
+            Flags.(default_flags |> set_end_stream))
+        1l
+    in
+    Serialize.Writer.write_response_headers
+      writer
+      t.hpack_encoder
+      frame_info
+      response;
+    (match body with
+    | None ->
+      ()
+    | Some body ->
+      Serialize.Writer.write_data
+        writer
+        { frame_info with flags = Flags.(default_flags |> set_end_stream) }
+        body);
+    Faraday.serialize_to_string (Serialize.Writer.faraday writer)
+
+  let write_string t ?(msg = "frames written") str =
+    let len = String.length str in
+    Alcotest.(check (option string))
+      msg
+      (Some str)
+      (next_write_operation t |> Write_operation.to_write_as_string);
+    report_write_result t (`Ok len)
+
+  let write_response t ?body response =
+    let response_string = response_to_string t ?body response in
+    write_string t ~msg:"Response written" response_string
+
+  let ready_to_read t =
+    Alcotest.check
+      read_operation
+      "Reader wants to read"
+      `Read
+      (next_read_operation t)
+
+  let writer_yields t =
+    Alcotest.check
+      write_operation
+      "Writer yields"
+      `Yield
+      (next_write_operation t)
+
   let error_handler ?request:_ error handle =
     let message =
       match error with
@@ -140,8 +230,7 @@ module Server_connection_tests = struct
     Body.close_writer body
 
   let test_reading_malformed_frame ?(is_failure = false) wire () =
-    let t = create ~error_handler default_request_handler in
-    handle_preface t;
+    let t = create_and_handle_preface ~error_handler default_request_handler in
     let len = String.length wire in
     let bs = Bigstringaf.of_string ~off:0 ~len wire in
     let c = read_eof t bs ~off:0 ~len in
@@ -200,8 +289,7 @@ module Server_connection_tests = struct
     headers, continuation
 
   let test_send_frame_after_padded_frame () =
-    let t = create ~error_handler default_request_handler in
-    handle_preface t;
+    let t = create_and_handle_preface ~error_handler default_request_handler in
     let headers, continuation = header_and_continuation_frames in
     let padding = Bigstringaf.of_string ~off:0 ~len:10 "0123456789" in
     let headers_wire = Test_common.serialize_frame ~padding headers in
@@ -241,30 +329,18 @@ module Server_connection_tests = struct
         Frame.(frame.frame_header.frame_type |> FrameType.serialize);
       let iovec_len = IOVec.lengthv iovecs in
       report_write_result conn (`Ok iovec_len);
-      Alcotest.check
-        write_operation
-        "Writer yields"
-        `Yield
-        (next_write_operation conn);
-      Alcotest.check
-        read_operation
-        "Reader wants to read"
-        `Read
-        (next_read_operation conn)
+      writer_yields conn;
+      ready_to_read conn
     | _ ->
       Alcotest.fail
         "Expected state machine to issue a write operation after seeing \
          headers."
 
-  let write_frames_and_check_response conn frames =
-    write_frames conn frames;
-    check_response conn
-
   let test_continuation_frame () =
-    let t = create ~error_handler default_request_handler in
-    handle_preface t;
+    let t = create_and_handle_preface ~error_handler default_request_handler in
     let headers, continuation = header_and_continuation_frames in
-    write_frames_and_check_response t [ headers; continuation ];
+    write_frames t [ headers; continuation ];
+    write_response t (Response.create `OK);
     let new_headers =
       { headers with
         frame_header =
@@ -274,11 +350,11 @@ module Server_connection_tests = struct
           }
       }
     in
-    write_frames_and_check_response t [ new_headers ]
+    write_frames t [ new_headers ];
+    check_response t
 
   let test_continuation_frame_another_stream () =
-    let t = create ~error_handler default_request_handler in
-    handle_preface t;
+    let t = create_and_handle_preface ~error_handler default_request_handler in
     let headers, continuation = header_and_continuation_frames in
     let continuation =
       { continuation (* continuation header on a different stream *) with
@@ -309,8 +385,9 @@ module Server_connection_tests = struct
   let test_read_frame_size_error () =
     let max_length = String.length (preface ()) in
     let config = { Config.default with read_buffer_size = max_length } in
-    let t = create ~config ~error_handler default_request_handler in
-    handle_preface t;
+    let t =
+      create_and_handle_preface ~config ~error_handler default_request_handler
+    in
     let hpack_encoder = Hpack.Encoder.create 4096 in
     let headers =
       { Frame.frame_header =
@@ -359,8 +436,9 @@ module Server_connection_tests = struct
   let test_read_frame_size_error_priority_frame () =
     let max_length = String.length empty_preface in
     let config = { Config.default with read_buffer_size = max_length } in
-    let t = create ~config ~error_handler default_request_handler in
-    handle_preface t;
+    let t =
+      create_and_handle_preface ~config ~error_handler default_request_handler
+    in
     let frame_header_wire =
       "000025020000000001" |> string_of_hex |> bs_of_string
     in
@@ -465,8 +543,7 @@ module Server_connection_tests = struct
       Alcotest.fail "Expected frame to parse successfully."
 
   let test_open_existing_stream () =
-    let t = create ~error_handler default_request_handler in
-    handle_preface t;
+    let t = create_and_handle_preface ~error_handler default_request_handler in
     let priority =
       { Frame.frame_header =
           { payload_length = 0
@@ -511,8 +588,7 @@ module Server_connection_tests = struct
     Reqd.respond_with_string reqd (Response.create `OK) "Some data"
 
   let test_dependent_stream () =
-    let t = create ~error_handler data_request_handler in
-    handle_preface t;
+    let t = create_and_handle_preface ~error_handler data_request_handler in
     let hpack_encoder = Hpack.Encoder.create 4096 in
     let headers =
       { Frame.frame_header =
@@ -608,30 +684,14 @@ module Server_connection_tests = struct
     Reqd.respond_with_string pushed_reqd response "Hello"
 
   let test_server_push () =
-    let t = create ~error_handler server_push_request_handler in
-    handle_preface t;
-    let hpack_encoder = Hpack.Encoder.create 4096 in
-    let headers =
-      { Frame.frame_header =
-          { payload_length = 0
-          ; stream_id = 1l
-          ; flags = Flags.(default_flags |> set_end_header |> set_end_stream)
-          ; frame_type = Headers
-          }
-      ; frame_payload =
-          Frame.Headers
-            ( None
-            , encode_headers
-                hpack_encoder
-                Headers.(
-                  of_list [ ":method", "GET"; ":scheme", "https"; ":path", "/" ])
-            )
-      }
+    let t =
+      create_and_handle_preface ~error_handler server_push_request_handler
     in
+    let request = Request.create ~scheme:"https" `GET "/" in
     (* This calls the request handler. We then expect to receive at least 3
      * frames: 1 HEADERS frame for the response, a PUSH_PROMISE frame for the
      * pushed request and its respective HEADERS frame. *)
-    write_frames t [ headers ];
+    read_request t request;
     match next_write_operation t with
     | `Write iovecs ->
       let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
@@ -663,16 +723,8 @@ module Server_connection_tests = struct
           frame.frame_header.stream_id;
         let iovec_len = IOVec.lengthv iovecs in
         report_write_result t (`Ok iovec_len);
-        Alcotest.check
-          write_operation
-          "Writer yields"
-          `Yield
-          (next_write_operation t);
-        Alcotest.check
-          read_operation
-          "Reader wants to read"
-          `Read
-          (next_read_operation t)
+        writer_yields t;
+        ready_to_read t
       | _ ->
         Alcotest.fail
           "Expected state machine to issue a write operation after seeing \
@@ -695,8 +747,7 @@ module Server_connection_tests = struct
 
   (* Testing for https://github.com/inhabitedtype/angstrom/pull/166 *)
   let test_reading_just_header wire () =
-    let t = create ~error_handler default_request_handler in
-    handle_preface t;
+    let t = create_and_handle_preface ~error_handler default_request_handler in
     let wire = bs_of_string wire in
     let wire_length = Bigstringaf.length wire in
     let c = read t wire ~off:0 ~len:wire_length in
@@ -706,8 +757,7 @@ module Server_connection_tests = struct
       "Reader wants more input to advance and report the stream error"
       `Read
       (Reader.next t.reader);
-    let t = create ~error_handler default_request_handler in
-    handle_preface t;
+    let t = create_and_handle_preface ~error_handler default_request_handler in
     let c = read_eof t wire ~off:0 ~len:wire_length in
     (* Difference between this test and the one above is `read_eof` vs `read` *)
     Alcotest.(check int)
@@ -729,45 +779,21 @@ module Server_connection_tests = struct
       Body.write_string body "";
       Body.close_writer body
     in
-    let t = create ~error_handler default_request_handler in
-    handle_preface t;
-    let hpack_encoder = Hpack.Encoder.create 4096 in
-    let headers =
-      { Frame.frame_header =
-          { payload_length = 0
-          ; stream_id = 1l
-          ; flags = Flags.(default_flags |> set_end_stream |> set_end_header)
-          ; frame_type = Headers
-          }
-      ; frame_payload =
-          Frame.Headers
-            ( None
-            , encode_headers
-                hpack_encoder
-                Headers.(
-                  of_list [ ":method", "CONNECT"; ":authority", "foo.com:8080" ])
-            )
-      }
+    let t = create_and_handle_preface ~error_handler default_request_handler in
+    let request =
+      Request.create
+        ~headers:Headers.(of_list [ ":authority", "foo.com:8080" ])
+        ~scheme:"https"
+        `CONNECT
+        "/"
     in
-    write_frames t [ headers ];
-    match next_write_operation t with
-    | `Write iovecs ->
-      let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
-      let frame = List.hd frames in
-      Alcotest.(check int)
-        "Next write operation is a HEADERS frame"
-        (Frame.FrameType.serialize Headers)
-        Frame.(frame.frame_header.frame_type |> FrameType.serialize);
-      let iovec_len = IOVec.lengthv iovecs in
-      report_write_result t (`Ok iovec_len);
-      Alcotest.(check bool)
-        "error handler was not called"
-        false
-        !error_handler_called
-    | _ ->
-      Alcotest.fail
-        "Expected state machine to issue a write operation after seeing \
-         headers."
+    read_request t request;
+    write_response t (Response.create `OK);
+    writer_yields t;
+    Alcotest.(check bool)
+      "error handler was not called"
+      false
+      !error_handler_called
 
   let test_connect_malformed () =
     let error_handler_called = ref false in
@@ -778,28 +804,13 @@ module Server_connection_tests = struct
       Body.write_string body "";
       Body.close_writer body
     in
-    let t = create ~error_handler default_request_handler in
-    handle_preface t;
-    let hpack_encoder = Hpack.Encoder.create 4096 in
-    let headers =
-      { Frame.frame_header =
-          { payload_length = 0
-          ; stream_id = 1l
-          ; flags = Flags.(default_flags |> set_end_stream |> set_end_header)
-          ; frame_type = Headers
-          }
-      ; frame_payload =
-          Frame.Headers
-            ( None
-            , encode_headers
-                hpack_encoder
-                Headers.(
-                  of_list
-                    [ ":method", "CONNECT"; ":scheme", "https"; ":path", "/" ])
-            )
-      }
-    in
-    write_frames t [ headers ];
+    let t = create_and_handle_preface ~error_handler default_request_handler in
+    (* CONNECT is malformed if it doesn't include the `:authority`
+     * pseudo-header. Additionally, the `:scheme` and `:path` pseudo-headers
+     * must be omitted, but we take care of that when serializing. See
+     * RFC7540§8.3. *)
+    let request = Request.create ~scheme:"https" `CONNECT "/" in
+    read_request t request;
     match next_write_operation t with
     | `Write iovecs ->
       let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
@@ -820,24 +831,52 @@ module Server_connection_tests = struct
          headers."
 
   let test_client_max_concurrent_streams () =
-    let t = create ~error_handler default_request_handler in
     (* From RFC7540§5.1.2: [...] clients specify the maximum number of
      * concurrent streams the server can initiate, and servers specify the
      * maximum number of concurrent streams the client can initiate.
      *
      * Note: in this test, the client is saying the server is not allowed to
      * initiate streams. The client, however, is. *)
-    handle_preface ~settings:[ MaxConcurrentStreams, 0 ] t;
-    let headers, _ = header_and_continuation_frames in
-    let headers =
-      { headers with
-        Frame.frame_header =
-          { headers.frame_header with
-            flags = Flags.(default_flags |> set_end_header |> set_end_stream)
-          }
-      }
+    let t =
+      create_and_handle_preface
+        ~settings:[ MaxConcurrentStreams, 0 ]
+        ~error_handler
+        default_request_handler
     in
-    write_frames_and_check_response t [ headers ]
+    let request = Request.create ~scheme:"https" `GET "/" in
+    read_request t request;
+    write_response t (Response.create `OK)
+
+  let streaming_handler ?(flush = false) response writes reqd =
+    let request_body = Reqd.request_body reqd in
+    Body.close_reader request_body;
+    let body =
+      Reqd.respond_with_streaming
+        ~flush_headers_immediately:flush
+        reqd
+        response
+    in
+    let rec write writes =
+      match writes with
+      | [] ->
+        Body.close_writer body
+      | w :: ws ->
+        Body.write_string body w;
+        Body.flush body (fun () -> write ws)
+    in
+    write writes
+
+  let test_empty_fixed_streaming_response () =
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let response =
+      Response.create `OK ~headers:(Headers.of_list [ "content-length", "0" ])
+    in
+    let t =
+      create_and_handle_preface ~error_handler (streaming_handler response [])
+    in
+    read_request t request;
+    write_response t ~body:"" response;
+    writer_yields t
 
   (* TODO: test for trailer headers. *)
   (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
@@ -878,6 +917,9 @@ module Server_connection_tests = struct
     ; ( "Client sends 0 max concurrent streams"
       , `Quick
       , test_client_max_concurrent_streams )
+    ; ( "empty fixed streaming response"
+      , `Quick
+      , test_empty_fixed_streaming_response )
     ]
 end
 
