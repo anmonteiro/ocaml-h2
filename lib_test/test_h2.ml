@@ -52,9 +52,38 @@ module Headers_tests = struct
          "a"
       |> Headers.to_list)
 
+  let test_replace () =
+    check
+      "replace leading element"
+      [ "a", "x"; "c", "d" ]
+      (Headers.replace (Headers.of_list [ "a", "b"; "c", "d" ]) "a" "x"
+      |> Headers.to_list);
+    check
+      "replace trailing element"
+      [ "c", "d"; "a", "x" ]
+      (Headers.replace (Headers.of_list [ "c", "d"; "a", "b" ]) "a" "x"
+      |> Headers.to_list);
+    check
+      "replace trailing element"
+      [ "c", "d"; "e", "f"; "a", "x" ]
+      (Headers.replace
+         (Headers.of_list [ "c", "d"; "e", "f"; "a", "b" ])
+         "a"
+         "x"
+      |> Headers.to_list);
+    check
+      "replace trailing element"
+      [ "c", "d"; "e", "f"; "a", "x"; "g", "h" ]
+      (Headers.replace
+         (Headers.of_list [ "c", "d"; "e", "f"; "a", "b"; "g", "h" ])
+         "a"
+         "x"
+      |> Headers.to_list)
+
   let suite =
     [ "roundtripping", `Quick, test_headers_roundtrip_ordering
     ; "test remove", `Quick, test_remove
+    ; "test replace", `Quick, test_replace
     ]
 end
 
