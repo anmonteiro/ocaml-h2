@@ -66,14 +66,18 @@ module Headers_tests = struct
     check
       "replace trailing element"
       [ "c", "d"; "e", "f"; "a", "x" ]
-      (Headers.replace (Headers.of_list [ "c", "d"; "e", "f"; "a", "b" ]) "a" "x"
+      (Headers.replace
+         (Headers.of_list [ "c", "d"; "e", "f"; "a", "b" ])
+         "a"
+         "x"
       |> Headers.to_list);
     check
       "replace trailing element"
       [ "c", "d"; "e", "f"; "a", "x"; "g", "h" ]
       (Headers.replace
          (Headers.of_list [ "c", "d"; "e", "f"; "a", "b"; "g", "h" ])
-         "a" "x"
+         "a"
+         "x"
       |> Headers.to_list)
 
   let suite =
