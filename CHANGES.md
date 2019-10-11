@@ -17,6 +17,8 @@ Unreleased
   ([#71](https://github.com/anmonteiro/ocaml-h2/pull/71))
 - h2: Fix bug in `Headers.remove` that prevented removing the last header pair
   ([#73](https://github.com/anmonteiro/ocaml-h2/pull/73))
+- h2: Fix bug in `Headers.replace` that prevented replacing the last header
+  pair ([#76](https://github.com/anmonteiro/ocaml-h2/pull/76))
 
 0.3.0 2019-05-04
 --------------

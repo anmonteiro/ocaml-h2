@@ -142,7 +142,7 @@ let replace t ?(sensitive = false) name value =
         else
           nv :: loop t n nv true
       else
-        nv' :: loop t n nv false
+        nv' :: loop t n nv seen
   in
   try loop t name { name; value; sensitive } false with Local -> t
 
