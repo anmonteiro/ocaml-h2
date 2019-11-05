@@ -43,7 +43,7 @@ module type Server = sig
     -> unit Lwt.t
 end
 
-module Server (Flow : Mirage_flow_lwt.S) : Server with type flow := Flow.flow
+module Server (Flow : Mirage_flow.S) : Server with type flow := Flow.flow
 
 module Server_with_conduit : sig
   include Server with type flow := Conduit_mirage.Flow.flow
@@ -55,5 +55,5 @@ module Server_with_conduit : sig
     -> (Conduit_mirage.server -> t -> unit Lwt.t) Lwt.t
 end
 
-module Client (Flow : Mirage_flow_lwt.S) :
+module Client (Flow : Mirage_flow.S) :
   H2_lwt.Client with type socket := Flow.flow

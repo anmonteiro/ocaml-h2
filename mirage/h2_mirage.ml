@@ -32,7 +32,7 @@
 
 open Lwt.Infix
 
-module Make_IO (Flow : Mirage_flow_lwt.S) :
+module Make_IO (Flow : Mirage_flow.S) :
   H2_lwt.IO with type socket = Flow.flow and type addr = unit = struct
   type socket = Flow.flow
 
@@ -104,7 +104,7 @@ module Make_IO (Flow : Mirage_flow_lwt.S) :
     Lwt.return_unit
 end
 
-module Server (Flow : Mirage_flow_lwt.S) = struct
+module Server (Flow : Mirage_flow.S) = struct
   include H2_lwt.Server (Make_IO (Flow))
 
   let create_connection_handler ?config ~request_handler ~error_handler flow =
@@ -142,4 +142,4 @@ module Server_with_conduit = struct
     Lwt.return listen
 end
 
-module Client (Flow : Mirage_flow_lwt.S) = H2_lwt.Client (Make_IO (Flow))
+module Client (Flow : Mirage_flow.S) = H2_lwt.Client (Make_IO (Flow))
