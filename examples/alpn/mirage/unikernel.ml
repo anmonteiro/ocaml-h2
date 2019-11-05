@@ -20,9 +20,9 @@
  *)
 open Lwt.Infix
 
-module type HTTP = Httpaf_mirage.Server_intf
+module type HTTP = Httpaf_mirage.Server
 
-module type HTTP2 = H2_mirage.Server_intf
+module type HTTP2 = H2_mirage.Server
 
 module Dispatch (Http : HTTP) (Https : HTTP) (Http2 : HTTP2) = struct
   let redirect =
@@ -45,10 +45,10 @@ module Dispatch (Http : HTTP) (Https : HTTP) (Http2 : HTTP2) = struct
 end
 
 module Make
-    (S : Mirage_stack_lwt.V4)
-    (KEYS : Mirage_types_lwt.KV_RO)
-    (C : Mirage_types_lwt.CONSOLE)
-    (Clock : Mirage_types_lwt.PCLOCK) =
+    (S : Mirage_stack.V4)
+    (KEYS : Mirage_kv.RO)
+    (C : Mirage_console.S)
+    (Clock : Mirage_clock.PCLOCK) =
 struct
   module X509 = Tls_mirage.X509 (KEYS) (Clock)
   module TCP = S.TCPV4
@@ -98,7 +98,7 @@ struct
             | Error () ->
               Lwt_io.eprintlf
                 "Unable to fetch session data. Did the handshake fail?"
-            | Ok { alpn_protocol; _ } ->
+            | Ok { Tls.Core.alpn_protocol; _ } ->
               (match alpn_protocol with
               | None ->
                 (* Unable to negotiate a protocol *)

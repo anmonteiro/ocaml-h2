@@ -1,9 +1,9 @@
 open Lwt.Infix
 open H2
 
-module type HTTP2 = H2_mirage.Server_intf
+module type HTTP2 = H2_mirage.Server
 
-module Dispatch (C : Mirage_types_lwt.CONSOLE) (Http2 : HTTP2) = struct
+module Dispatch (C : Mirage_console.S) (Http2 : HTTP2) = struct
   let log c fmt = Printf.ksprintf (C.log c) fmt
 
   let get_content c path =
@@ -42,8 +42,8 @@ end
 
 (** Server boilerplate *)
 module Make
-    (C : Mirage_types_lwt.CONSOLE)
-    (Clock : Mirage_types_lwt.PCLOCK)
+    (C : Mirage_console.S)
+    (Clock : Mirage_clock.PCLOCK)
     (Http2 : HTTP2) =
 struct
   module D = Dispatch (C) (Http2)
