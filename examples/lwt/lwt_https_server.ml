@@ -39,10 +39,10 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
       (* let response_body = Reqd.respond_with_streaming request_descriptor
          response in *)
 
-      (* let rec respond () = Body.schedule_read request_body ~on_eof:(fun ()
-         -> Body.close_writer response_body) ~on_read:(fun request_data ~off
-         ~len -> Body.write_bigstring response_body request_data ~off ~len;
-         respond ()) in respond () *)
+      (* let rec respond () = Body.schedule_read request_body ~on_eof:(fun () ->
+         Body.close_writer response_body) ~on_read:(fun request_data ~off ~len
+         -> Body.write_bigstring response_body request_data ~off ~len; respond
+         ()) in respond () *)
       Reqd.respond_with_string request_descriptor response "ANTOINO"
     | `POST, "/foo" ->
       set_interval

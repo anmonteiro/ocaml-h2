@@ -46,9 +46,9 @@ module Encoder : sig
   type t
 
   val create : int -> t
-  (** [create capacity] initializes an encoder with a dynamic table with
-      maximum size [capacity]. This size is an approximation of the memory
-      overhead in bytes.
+  (** [create capacity] initializes an encoder with a dynamic table with maximum
+      size [capacity]. This size is an approximation of the memory overhead in
+      bytes.
 
       See {{:https://tools.ietf.org/html/rfc7541#section-4.1} RFC7541§4.1} for
       more details. *)

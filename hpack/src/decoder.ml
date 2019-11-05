@@ -102,7 +102,7 @@ let get_indexed_field table index =
     || (* From RFC7541§2.3.3:
         *   Indices strictly greater than the sum of the lengths of both tables
         *   MUST be treated as a decoding error. *)
-       index > static_table_size + dynamic_table_size
+    index > static_table_size + dynamic_table_size
   then
     Error Decoding_error
   else if index <= static_table_size then

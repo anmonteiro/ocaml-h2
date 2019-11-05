@@ -252,7 +252,6 @@ let valid_headers ?(is_request = true) t =
           let pseudo_did_end = !pseudo_ended in
           if (not is_pseudo) && not pseudo_did_end then
             pseudo_ended := true;
-
           (* From RFC7540§8.1.2:
            *   [...] header field names MUST be converted to lowercase
            *   prior to their encoding in HTTP/2. A request or response
@@ -280,7 +279,7 @@ let valid_headers ?(is_request = true) t =
               *   contains a pseudo-header field that appears in a header block
               *   after a regular header field MUST be treated as malformed
               *   (Section 8.1.2.6). *)
-             (is_pseudo && pseudo_did_end))
+          (is_pseudo && pseudo_did_end))
         (to_hpack_list t)
     in
     not invalid
@@ -347,15 +346,13 @@ let trailers_valid t =
             *   Pseudo-header fields MUST NOT appear in trailers. Endpoints
             *   MUST treat a request or response that contains undefined or
             *   invalid pseudo-header fields as malformed (Section 8.1.2.6). *)
-           Pseudo.is_pseudo name)
+        Pseudo.is_pseudo name)
       t
   in
   not invalid
 
 let pp_hum fmt t =
-  let pp_elem fmt (name, value) =
-    Format.fprintf fmt "@[(%S %S)@]" name value
-  in
+  let pp_elem fmt (name, value) = Format.fprintf fmt "@[(%S %S)@]" name value in
   Format.fprintf fmt "@[(";
   Format.pp_print_list pp_elem fmt (to_list t);
   Format.fprintf fmt ")@]"

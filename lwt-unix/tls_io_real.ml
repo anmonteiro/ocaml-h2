@@ -115,9 +115,7 @@ let make_client ?client socket =
   | None ->
     X509_lwt.authenticator `No_authentication_I'M_STUPID
     >>= fun authenticator ->
-    let config =
-      Tls.Config.client ~authenticator ~alpn_protocols:[ "h2" ] ()
-    in
+    let config = Tls.Config.client ~authenticator ~alpn_protocols:[ "h2" ] () in
     Tls_lwt.Unix.client_of_fd config socket
 
 (* This function does not perform error handling and will therefore crash a

@@ -155,11 +155,9 @@ let decode cases =
         (List.length decoded_headers);
       List.iter2
         (fun h1 h2 ->
-          Alcotest.(
-            check header_testable "Headers are decoded correctly" h1 h2))
+          Alcotest.(check header_testable "Headers are decoded correctly" h1 h2))
         headers
         decoded_headers;
-
       (* roundtripping *)
       let encoded = encode_headers encoder decoded_headers in
       let decoded_headers' = decode_headers decoder2 size encoded in
@@ -169,11 +167,9 @@ let decode cases =
         (List.length decoded_headers);
       List.iter2
         (fun h1 h2 ->
-          Alcotest.(
-            check header_testable "Headers are decoded correctly" h1 h2))
+          Alcotest.(check header_testable "Headers are decoded correctly" h1 h2))
         decoded_headers'
         decoded_headers;
-
       (* Now check that the `encoded_again` payload is smaller than the `encoded`
        * payload. Indexing has happened! *)
       let enc', dec' =
@@ -189,12 +185,10 @@ let decode cases =
         "encoded_again payload is smaller or equal than encoded"
         true
         (String.length enc' <= String.length encoded);
-
       (* And check roundtripping again for good measure. *)
       List.iter2
         (fun h1 h2 ->
-          Alcotest.(
-            check header_testable "Headers are decoded correctly" h1 h2))
+          Alcotest.(check header_testable "Headers are decoded correctly" h1 h2))
         dec'
         headers)
     cases
@@ -253,7 +247,6 @@ let test_evicting_table_size_0 () =
     "Encodes to non-zero hex"
     true
     (String.length encoded_headers > 0);
-
   (* From RFC7541§6.3: Dynamic Table Size Update
    *   A dynamic table size update signals a change to the size of the dynamic
    *   table.
@@ -308,7 +301,6 @@ let () =
   | Unix.Unix_error (Unix.EEXIST, _, _) ->
     ());
   encode_raw_data fixtures_dir raw_data;
-
   (* Now, test decoding what we just encoded + roundtripping *)
   let fixtures = read_fixtures fixtures_dir in
   let suites = gen_suites fixtures in

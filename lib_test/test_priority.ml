@@ -28,8 +28,7 @@ let node =
 
 let default_error_handler ?request:_ _err _handle = ()
 
-let new_p w =
-  { Priority.exclusive = false; stream_dependency = 0l; weight = w }
+let new_p w = { Priority.exclusive = false; stream_dependency = 0l; weight = w }
 
 let test_reqd stream_id =
   Stream.create
@@ -88,7 +87,6 @@ let test_reprioritize () =
   add_stream root (test_reqd 1l);
   add_stream root (test_reqd 3l);
   add_stream root (test_reqd 5l);
-
   (* change the weight of stream 1 *)
   let new_priority = { Priority.default_priority with weight = 100 } in
   let (Stream stream1 as stream1_node) =
@@ -106,7 +104,6 @@ let test_reprioritize () =
     "Stream 3 still has default weight"
     Priority.default_priority
     stream3.priority;
-
   (* Add stream 7 that depends on 1 *)
   let stream7 = test_reqd 7l in
   let stream7_priority =
@@ -146,7 +143,6 @@ let test_reprioritize_exclusive () =
   add_stream root (test_reqd 1l);
   add_stream root (test_reqd 3l);
   add_stream root (test_reqd 5l);
-
   (* Add stream 7 that exclusively depends on 0 *)
   let stream7 = test_reqd 7l in
   let stream7_priority =
@@ -240,7 +236,6 @@ let test_reprioritize_to_dependency () =
     "Stream 0 has a single child, stream 7"
     1
     (List.length root_children);
-
   (* reprioritize stream 1 to have 7 as the new parent *)
   reprioritize_stream root ~priority:(depend_on 7l) stream1_node;
   Alcotest.check
@@ -301,7 +296,6 @@ let test_reprioritize_to_dependency_exclusive () =
     "Stream 0 has a single child, stream 7"
     1
     (List.length root_children);
-
   (* reprioritize stream 1 to have 7 as the new parent with exclusive priority *)
   let (Stream stream1 as stream1_node) =
     Scheduler.get_node root 1l |> opt_exn

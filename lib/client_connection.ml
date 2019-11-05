@@ -49,8 +49,7 @@ end)
 module Queue = struct
   include Queue
 
-  let take_opt t =
-    match is_empty t with true -> None | false -> Some (take t)
+  let take_opt t = match is_empty t with true -> None | false -> Some (take t)
 end
 
 type error =
@@ -211,9 +210,7 @@ let handle_push_promise_headers t respd headers =
   | `Valid (meth, path, scheme) ->
     let meth = Httpaf.Method.of_string meth in
     (match
-       ( meth
-       , Headers.get_pseudo headers "authority"
-       , Message.body_length headers )
+       meth, Headers.get_pseudo headers "authority", Message.body_length headers
      with
     | (#Httpaf.Method.standard as meth), _, _
       when not Httpaf.Method.(is_cacheable meth && is_safe meth) ->
@@ -330,7 +327,6 @@ let handle_response_headers t respd ~end_stream active_request headers =
         (* Deliver EOF to the response body, as the handler might be waiting
          * on it to act. *)
         Body.close_reader response_body;
-
         (* From RFC7540§5.1:
          *   [...] an endpoint receiving an END_STREAM flag causes the stream
          *   state to become "half-closed (remote)". *)
@@ -417,11 +413,7 @@ let handle_headers_block
          *   treat a request or response that contains undefined or invalid
          *   pseudo-header fields as malformed (Section 8.1.2.6). *)
         let message = "Pseudo-header fields must not appear in trailers" in
-        set_error_and_handle
-          t
-          respd
-          (`Malformed_response message)
-          ProtocolError
+        set_error_and_handle t respd (`Malformed_response message) ProtocolError
     (* From RFC7540§4.3:
      *   A decoding error in a header block MUST be treated as a connection
      *   error (Section 5.4.1) of type COMPRESSION_ERROR. *)
@@ -501,7 +493,6 @@ let process_trailer_headers t respd active_response frame_header headers_block =
     active_response.Respd.trailers_parser <- Some partial_headers;
     if not Flags.(test_end_header flags) then
       t.receiving_headers_for_stream <- Some stream_id;
-
     (* trailer headers: RFC7230§4.4 *)
     handle_trailer_headers t respd partial_headers flags headers_block
 
@@ -537,8 +528,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
          *   (local)", "open", or "half-closed (remote)" state. *)
         report_connection_error t Error.ProtocolError
       | Active
-          ((Open WaitingForPeer | HalfClosed WaitingForPeer), active_request)
-        ->
+          ((Open WaitingForPeer | HalfClosed WaitingForPeer), active_request) ->
         handle_first_response_bytes
           t
           stream
@@ -625,8 +615,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
       in
       response_info.response_body_bytes <-
         Int64.(add response_body_bytes (of_int (Bigstringaf.length bstr)));
-      if not Scheduler.(allowed_to_receive t.streams stream payload_length)
-      then
+      if not Scheduler.(allowed_to_receive t.streams stream payload_length) then
         (* From RFC7540§6.9:
          *  A receiver MAY respond with a stream error (Section 5.4.2) or
          *  connection error (Section 5.4.1) of type FLOW_CONTROL_ERROR if it
@@ -642,7 +631,6 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
            * length to include any padding bytes that the frame might have
            * included - which were ignored at parse time). *)
           send_window_update t t.streams payload_length;
-
           (* From RFC7540§8.1.2.6:
            *   A request or response is also malformed if the value of a
            *   content-length header field does not equal the sum of the
@@ -708,7 +696,6 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
      * a time limit. *)
     | _ ->
       send_window_update t t.streams payload_length;
-
       (* From RFC7540§6.1:
        *   If a DATA frame is received whose stream is not in "open" or
        *   "half-closed (local)" state, the recipient MUST respond with a
@@ -793,7 +780,6 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *   stream that might have been sent by the peer prior to the arrival
        *   of the RST_STREAM. *)
       Stream.finish_stream respd (ResetByThem error_code);
-
       (* From RFC7540§5.4.2:
        *   To avoid looping, an endpoint MUST NOT send a RST_STREAM in response
        *   to a RST_STREAM frame.
@@ -913,8 +899,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
     | Some error ->
       report_error t error
 
-let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block
-  =
+let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block =
   let { Frame.flags; _ } = frame_header in
   (* From RFC7540§6.6:
    *   The PUSH_PROMISE frame (type=0x5) is used to notify the peer endpoint in
@@ -1028,7 +1013,6 @@ let process_goaway_frame t _frame payload =
   let len = Bigstringaf.length debug_data in
   let bytes = Bytes.create len in
   Bigstringaf.unsafe_blit_to_bytes debug_data ~src_off:0 bytes ~dst_off:0 ~len;
-
   (* TODO(anmonteiro): I think we need to allow lower numbered streams to
    * complete. *)
   shutdown_rw t
@@ -1254,7 +1238,6 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
   let settings = Settings.settings_for_the_connection t.settings in
   (* Send the client connection preface *)
   Writer.write_connection_preface t.writer settings;
-
   (* If a higher value for initial window size is configured, add more
    * tokens to the connection (we have no streams at this point). *)
   (if
@@ -1303,7 +1286,6 @@ let request t request ~error_handler ~response_handler =
             ; wakeup_writer = wakeup_stream
             } ));
   wakeup_writer t;
-
   (* Closing the request body puts the stream in the half-closed (local) state.
    * This is handled by {!Respd.flush_request_body}, which transitions the
    * state once it verifies that there's no more data to send for the
@@ -1354,8 +1336,7 @@ let next_read_operation t =
        *   not affect processing of other streams. *)
       `Read)
 
-let read t bs ~off ~len =
-  Reader.read_with_more t.reader bs ~off ~len Incomplete
+let read t bs ~off ~len = Reader.read_with_more t.reader bs ~off ~len Incomplete
 
 let read_eof t bs ~off ~len =
   Reader.read_with_more t.reader bs ~off ~len Complete

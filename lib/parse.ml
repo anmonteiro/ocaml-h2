@@ -209,9 +209,7 @@ let parse_rst_stream_frame { Frame.payload_length; stream_id; _ } =
      *   treat this as a connection error (Section 5.4.1) of type
      *   PROTOCOL_ERROR. *)
     advance payload_length >>| fun () ->
-    connection_error
-      ProtocolError
-      "RST_STREAM must be associated with a stream"
+    connection_error ProtocolError "RST_STREAM must be associated with a stream"
   else if payload_length != 4 then
     (* From RFC7540§6.4:
      *   A RST_STREAM frame with a length other than 4 octets MUST be treated
@@ -306,9 +304,7 @@ let parse_push_promise_frame frame_header =
              *   A receiver MUST treat the receipt of a PUSH_PROMISE that
              *   promises an illegal stream identifier (Section 5.1.1) as a
              *   connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
-            connection_error
-              ProtocolError
-              "PUSH must not promise stream id 0x0"
+            connection_error ProtocolError "PUSH must not promise stream id 0x0"
           else if Stream_identifier.is_request promised_stream_id then
             (* From RFC7540§6.6:
              *   A receiver MUST treat the receipt of a PUSH_PROMISE that
@@ -453,7 +449,6 @@ let parse_frame parse_context =
   (* If we're parsing a new frame, we didn't yet send a stream error on it *)
   parse_context.did_report_stream_error <- false;
   parse_context.frame_header <- Some frame_header;
-
   (* Payload could be 0 (e.g. empty SETTINGS frame). This always succeeds. *)
   Angstrom.Unsafe.peek 0 (fun bs ~off:_ ~len:_ ->
       (* h2 does unbuffered parsing and the bigarray we read input from is
@@ -553,15 +548,13 @@ module Reader = struct
     | Error e ->
       Error (`Error e)
 
-  let connection_preface_and_frames
-      preface_parser preface_handler frame_handler
+  let connection_preface_and_frames preface_parser preface_handler frame_handler
     =
     let parse_context = create_parse_context () in
     let parser =
       preface_parser parse_context <* commit >>= function
       | Ok (frame, settings_list) ->
         preface_handler frame settings_list;
-
         (* After having received a valid connection preface, we can start
          * reading other frames now. *)
         skip_many (parse_frame parse_context <* commit >>| frame_handler)

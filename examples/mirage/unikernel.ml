@@ -41,10 +41,7 @@ module Dispatch (C : Mirage_console.S) (Http2 : HTTP2) = struct
 end
 
 (** Server boilerplate *)
-module Make
-    (C : Mirage_console.S)
-    (Clock : Mirage_clock.PCLOCK)
-    (Http2 : HTTP2) =
+module Make (C : Mirage_console.S) (Clock : Mirage_clock.PCLOCK) (Http2 : HTTP2) =
 struct
   module D = Dispatch (C) (Http2)
 

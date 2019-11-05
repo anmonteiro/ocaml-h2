@@ -34,9 +34,8 @@ open H2
 open Lwt.Infix
 
 module Io :
-  H2_lwt.IO
-    with type socket = Lwt_unix.file_descr
-     and type addr = Unix.sockaddr = struct
+  H2_lwt.IO with type socket = Lwt_unix.file_descr and type addr = Unix.sockaddr =
+struct
   type socket = Lwt_unix.file_descr
 
   type addr = Unix.sockaddr

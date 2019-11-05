@@ -207,7 +207,6 @@ module Make (Streamd : StreamDescriptor) = struct
               PriorityQueue.add k p_node pq)
             stream.children
             new_children;
-
         (* From RFC7540§5.3.1:
          *   An exclusive flag allows for the insertion of a new level of
          *   dependencies. The exclusive flag causes the stream to become the
@@ -284,7 +283,6 @@ module Make (Streamd : StreamDescriptor) = struct
           (* The root node cannot be dependent on any other streams, so we
            * don't need to worry about it creating cycles. *)
           ());
-
         (* From RFC7540§5.3.1:
          *   When assigning a dependency on another stream, the stream is added
          *   as a new dependency of the parent stream. *)
@@ -403,7 +401,6 @@ module Make (Streamd : StreamDescriptor) = struct
             p.children <- PriorityQueue.add id i_node children')
           else (
             implicitly_close_idle_stream i.descriptor max_seen_ids;
-
             (* XXX(anmonteiro): we may not want to remove from the tree right
              * away. *)
             p.children <- children');
@@ -460,8 +457,7 @@ module Make (Streamd : StreamDescriptor) = struct
 
   let check_flow flow growth flow' =
     (* Check for overflow on 32-bit systems. *)
-    flow' > growth == (flow > 0)
-    && flow' <= Settings.WindowSize.max_window_size
+    flow' > growth == (flow > 0) && flow' <= Settings.WindowSize.max_window_size
 
   let add_flow : type a. a node -> int -> bool =
    fun t growth ->

@@ -80,8 +80,7 @@ module Make_IO (Flow : Mirage_flow.S) :
         | Error `Closed ->
           `Closed
         | Error other_error ->
-          raise
-            (Failure (Format.asprintf "%a" Flow.pp_write_error other_error)))
+          raise (Failure (Format.asprintf "%a" Flow.pp_write_error other_error)))
       (fun exn -> shutdown flow >>= fun () -> Lwt.fail exn)
 
   let report_exn connection _flow exn =
@@ -151,7 +150,7 @@ module type Client = sig
 end
 
 module Client (Flow : Mirage_flow.S) = struct
-    type flow = Flow.flow
+  type flow = Flow.flow
 
-    include H2_lwt.Client (Make_IO (Flow))
+  include H2_lwt.Client (Make_IO (Flow))
 end
