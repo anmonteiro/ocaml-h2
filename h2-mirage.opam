@@ -15,7 +15,7 @@ depends: [
   "h2-lwt" {>= "0.2.0"}
   "dune"
   "lwt"
-  "conduit-mirage"
+  "conduit-mirage" {>= "2.0.2"}
   "mirage-flow" {>= "2.0.0"}
   "cstruct"
 ]

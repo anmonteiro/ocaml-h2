@@ -19,6 +19,9 @@ Unreleased
   ([#73](https://github.com/anmonteiro/ocaml-h2/pull/73))
 - h2: Fix bug in `Headers.replace` that prevented replacing the last header
   pair ([#76](https://github.com/anmonteiro/ocaml-h2/pull/76))
+- h2-mirage: Adapt to Mirage 3.7 interfaces. `h2_mirage` now requires
+  `conduit-mirage` >= 2.0.2 and `mirage-flow` >= 2.0.0
+  ([#77](https://github.com/anmonteiro/ocaml-h2/pull/77))
 
 0.3.0 2019-05-04
 --------------
