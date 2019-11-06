@@ -351,11 +351,7 @@ let lookup_token_index name =
     | _ ->
       -1)
   | 18 ->
-    (match name.[0] with
-    | 'p' when name = "proxy-authenticate" ->
-      47
-    | _ ->
-      -1)
+    (match name.[0] with 'p' when name = "proxy-authenticate" -> 47 | _ -> -1)
   | 19 ->
     (match name.[0] with
     | 'c' when name = "content-disposition" ->

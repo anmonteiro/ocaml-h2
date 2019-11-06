@@ -148,7 +148,6 @@ let transfer_to_writer t writer ~max_frame_size ~max_bytes stream_id =
   | `Close ->
     if t.write_final_data_frame then (
       t.write_final_data_frame <- false;
-
       (* Note: we don't need to check if we're flow-controlled here.
        *
        * From RFC7540§6.9.1:

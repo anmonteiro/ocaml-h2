@@ -59,5 +59,4 @@ let () =
         Client.SSL.request connection request ~error_handler ~response_handler
       in
       Body.close_writer request_body;
-
       response_received )

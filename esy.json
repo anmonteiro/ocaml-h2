@@ -14,6 +14,7 @@
     "@opam/faraday": "*",
     "@opam/psq": "*",
     "@opam/conduit-mirage": "*",
+    "@opam/mirage-flow": "*",
     "@opam/faraday-lwt-unix": "*",
     "@opam/lwt_ssl": "*",
     "@opam/conf-libev": "*",

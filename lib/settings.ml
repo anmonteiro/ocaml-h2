@@ -114,8 +114,7 @@ let check_value ~is_client = function
       Some
         Error.(
           ConnectionError
-            ( ProtocolError
-            , "Server must not try to enable SETTINGS_ENABLE_PUSH" ))
+            (ProtocolError, "Server must not try to enable SETTINGS_ENABLE_PUSH"))
     else
       None
   | InitialWindowSize, v when WindowSize.is_window_overflow v ->
@@ -140,8 +139,7 @@ let check_value ~is_client = function
     Some
       Error.(
         ConnectionError
-          ( ProtocolError
-          , "Max frame size must be in the 16384 - 16777215 range" ))
+          (ProtocolError, "Max frame size must be in the 16384 - 16777215 range"))
   | _ ->
     None
 
@@ -191,16 +189,14 @@ let settings_for_the_connection settings =
   in
   let settings_list =
     if
-      settings.max_concurrent_streams
-      <> default_settings.max_concurrent_streams
+      settings.max_concurrent_streams <> default_settings.max_concurrent_streams
     then
       (MaxConcurrentStreams, settings.max_concurrent_streams) :: settings_list
     else
       settings_list
   in
   let settings_list =
-    if settings.initial_window_size <> default_settings.initial_window_size
-    then
+    if settings.initial_window_size <> default_settings.initial_window_size then
       (InitialWindowSize, settings.initial_window_size) :: settings_list
     else
       settings_list

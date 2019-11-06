@@ -192,7 +192,6 @@ let _report_error t ?response_body exn error_code =
     (match response_body with
     | Some response_body ->
       Body.close_reader response_body;
-
       (* do we even need to execute this read? `close_reader` already does it. *)
       Body.execute_read response_body
     | None ->

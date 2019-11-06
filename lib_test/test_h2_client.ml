@@ -21,10 +21,7 @@ module Client_connection_tests = struct
         | `Error (Error.ConnectionError (e, msg)) ->
           Format.sprintf "ConnectionError: %ld %S" (Error.serialize e) msg
         | `Error (Error.StreamError (stream_id, e)) ->
-          Format.sprintf
-            "StreamError on %ld: %ld"
-            stream_id
-            (Error.serialize e)
+          Format.sprintf "StreamError on %ld: %ld" stream_id (Error.serialize e)
         | `Close ->
           "Close"
       in
@@ -148,9 +145,7 @@ module Client_connection_tests = struct
       hpack_encoder
       frame_info
       response;
-    let headers_wire =
-      Faraday.serialize_to_bigstring (Writer.faraday writer)
-    in
+    let headers_wire = Faraday.serialize_to_bigstring (Writer.faraday writer) in
     let headers_length = Bigstringaf.length headers_wire in
     let read_headers = read t ~off:0 ~len:headers_length headers_wire in
     Alcotest.(check int)
@@ -377,10 +372,7 @@ module Client_connection_tests = struct
       error_handler_called := true;
       match error with
       | `Protocol_error ->
-        Alcotest.(check pass)
-          "Stream error handler gets a protocol error"
-          ()
-          ()
+        Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
       | _ ->
         Alcotest.fail "Expected stream error handler to pass"
     in
@@ -689,10 +681,7 @@ module Client_connection_tests = struct
       error_handler_called := true;
       match error with
       | `Protocol_error ->
-        Alcotest.(check pass)
-          "Stream error handler gets a protocol error"
-          ()
-          ()
+        Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
       | _ ->
         Alcotest.fail "Expected stream error handler to pass"
     in
@@ -797,10 +786,7 @@ module Client_connection_tests = struct
       "Read the entire ping frame of the response"
       ping_length
       read_ping;
-    Alcotest.(check bool)
-      "First ping handler called"
-      true
-      !ping_handler1_called;
+    Alcotest.(check bool) "First ping handler called" true !ping_handler1_called;
     Alcotest.(check bool)
       "Only the first ping handler called"
       false
@@ -830,10 +816,7 @@ module Client_connection_tests = struct
       error_handler_called := true;
       match error with
       | `Protocol_error ->
-        Alcotest.(check pass)
-          "Stream error handler gets a protocol error"
-          ()
-          ()
+        Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
       | _ ->
         Alcotest.fail "Expected stream error handler to pass"
     in
@@ -873,7 +856,6 @@ module Client_connection_tests = struct
       "Stream level error handler called"
       true
       !error_handler_called;
-
     (* Don't loop *)
     Alcotest.(check write_operation)
       "Writer yields, i.e. don't send an RST_STREAM frame in response to one"
@@ -883,9 +865,7 @@ module Client_connection_tests = struct
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
-    ; ( "invalid connection preface from the server"
-      , `Quick
-      , test_invalid_preface )
+    ; "invalid connection preface from the server", `Quick, test_invalid_preface
     ; "simple GET request", `Quick, test_simple_get_request
     ; "data larger than declared", `Quick, test_data_larger_than_reported
     ; ( "stream error handler gets called on stream-level protocol errors"

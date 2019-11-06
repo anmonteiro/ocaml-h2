@@ -9,6 +9,7 @@ parens-ite = false
 infix-precedence = parens
 break-infix-before-func = false
 sequence-style = terminator
+sequence-blank-line = compact
 indicate-multiline-delimiters = no
 ocp-indent-compat = true
 wrap-comments = true

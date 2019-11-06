@@ -210,8 +210,7 @@ let frame_payload_of_json frame_type json =
   | Headers ->
     let priority = priority_of_json json in
     let fragment =
-      Json.(
-        json |> member "header_block_fragment" |> to_string |> bs_of_string)
+      Json.(json |> member "header_block_fragment" |> to_string |> bs_of_string)
     in
     Headers (priority, fragment)
   | Priority ->
@@ -240,8 +239,7 @@ let frame_payload_of_json frame_type json =
     Settings settings
   | PushPromise ->
     let fragment =
-      Json.(
-        json |> member "header_block_fragment" |> to_string |> bs_of_string)
+      Json.(json |> member "header_block_fragment" |> to_string |> bs_of_string)
     in
     let promised_stream_id =
       Json.(json |> member "promised_stream_id" |> to_int |> Int32.of_int)
@@ -260,8 +258,7 @@ let frame_payload_of_json frame_type json =
       Json.(json |> member "last_stream_id" |> to_int |> Int32.of_int)
     in
     let debug_data =
-      Json.(
-        json |> member "additional_debug_data" |> to_string |> bs_of_string)
+      Json.(json |> member "additional_debug_data" |> to_string |> bs_of_string)
     in
     GoAway (last_stream_id, Error.parse error_code, debug_data)
   | WindowUpdate ->
@@ -271,8 +268,7 @@ let frame_payload_of_json frame_type json =
     WindowUpdate window_size_increment
   | Continuation ->
     let fragment =
-      Json.(
-        json |> member "header_block_fragment" |> to_string |> bs_of_string)
+      Json.(json |> member "header_block_fragment" |> to_string |> bs_of_string)
     in
     Continuation fragment
   | Unknown _ ->

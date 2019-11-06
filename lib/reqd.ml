@@ -100,11 +100,9 @@ let create_active_stream
 
 let request t =
   match t.state with
-  | Idle | Active (Open (WaitingForPeer | PartialHeaders _ | FullHeaders), _)
-    ->
+  | Idle | Active (Open (WaitingForPeer | PartialHeaders _ | FullHeaders), _) ->
     assert false
-  | Active
-      ((Open (ActiveMessage { request; _ }) | HalfClosed { request; _ }), _)
+  | Active ((Open (ActiveMessage { request; _ }) | HalfClosed { request; _ }), _)
   | Reserved ({ request; _ }, _) ->
     request
   | Closed _ ->
@@ -112,8 +110,7 @@ let request t =
 
 let request_body t =
   match t.state with
-  | Idle | Active (Open (WaitingForPeer | PartialHeaders _ | FullHeaders), _)
-    ->
+  | Idle | Active (Open (WaitingForPeer | PartialHeaders _ | FullHeaders), _) ->
     assert false
   | Active
       ( ( Open (ActiveMessage { request_body; _ })
@@ -186,7 +183,6 @@ let send_fixed_response t s response data =
         t.id
     in
     Writer.write_response_headers t.writer s.encoder frame_info response;
-
     (* From RFC7540§8.1:
      *   An HTTP request/response exchange fully consumes a single stream.
      *   [...] A response starts with a HEADERS frame and ends with a frame
@@ -209,7 +205,6 @@ let unsafe_respond_with_data t response data =
     send_fixed_response t stream response data
   | Reserved (request_info, stream) ->
     send_fixed_response t stream response data;
-
     (* From RFC7540§8.1:
      *   reserved (local): [...] In this state, only the following transitions
      *   are possible: The endpoint can send a HEADERS frame. This causes the
@@ -373,10 +368,7 @@ let _report_error ?request t s exn error_code =
     in
     t.error_handler ?request exn (fun headers ->
         let response = Response.create ~headers status in
-        unsafe_respond_with_streaming
-          ~flush_headers_immediately:true
-          t
-          response)
+        unsafe_respond_with_streaming ~flush_headers_immediately:true t response)
   | Waiting, `Exn _ ->
     (* XXX(seliopou): Decide what to do in this unlikely case. There is an
      * outstanding call to the [error_handler], but an intervening exception

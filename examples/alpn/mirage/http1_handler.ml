@@ -20,9 +20,9 @@ let redirect_error_handler
 
 let request_handler : 'a Reqd.t -> unit =
  fun request_descriptor ->
-  let request = Reqd.request request_descriptor in
+  let { Request.headers; _ } = Reqd.request request_descriptor in
   let response_content_type =
-    match Headers.get request.headers "Content-Type" with
+    match Headers.get headers "Content-Type" with
     | Some request_content_type ->
       request_content_type
     | None ->

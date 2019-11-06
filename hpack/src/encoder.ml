@@ -186,11 +186,10 @@ let[@inline] is_sensitive token value =
       *   An encoder might also choose not to index values for header fields
       *   that are considered to be highly valuable or sensitive to recovery,
       *   such as the Cookie or Authorization header fields. *)
-     Static_table.TokenIndices.(
-       token == authorization || (token == cookie && String.length value < 20))
+  Static_table.TokenIndices.(
+    token == authorization || (token == cookie && String.length value < 20))
 
-let encode
-    ({ lookup_table; next_seq; _ } as encoder) { name; value; sensitive }
+let encode ({ lookup_table; next_seq; _ } as encoder) { name; value; sensitive }
   =
   let token = Static_table.lookup_token_index name in
   let token_found_in_static_table = token <> -1 in
@@ -298,7 +297,6 @@ let[@inline] encode_string t s =
      *   The number of octets used to encode the string literal, encoded as an
      *   integer with a 7-bit prefix (see Section 5.1). *)
     encode_int t 0 7 string_length;
-
     (* From RFC7541§5.2:
      *   The encoded data of the string literal. If H is '0', then the encoded
      *   data is the raw octets of the string literal. If H is '1', then the
@@ -309,7 +307,6 @@ let[@inline] encode_string t s =
      *   The number of octets used to encode the string literal, encoded as an
      *   integer with a 7-bit prefix (see Section 5.1). *)
     encode_int t 128 7 huffman_length;
-
     (* From RFC7541§5.2:
      *   The encoded data of the string literal. If H is '0', then the encoded
      *   data is the raw octets of the string literal. If H is '1', then the
@@ -332,7 +329,6 @@ let encode_header encoder t ({ name; value; _ } as header) =
        *   (see Section 5.2). A value 0 is used in place of the 4-bit index,
        *   followed by the header field name. *)
       encode_string t name;
-
     (* From RFC7541§6.2.2: Literal Header Field without Indexing
      *   Either form of header field name representation is followed by the
      *   header field value represented as a string literal (see

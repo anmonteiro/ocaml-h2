@@ -75,7 +75,6 @@ end = struct
 
   let put t ~f =
     compress t;
-
     (* XXX: dinosaure wants a comment here. *)
     assert (t.off = 0);
     f t.buffer ~off:(t.off + t.len) ~len:(Bigstringaf.length t.buffer - t.len)
@@ -216,7 +215,6 @@ module Client (Io : IO) = struct
     in
     read_loop ();
     write_loop ();
-
     Lwt.async (fun () ->
         Lwt.join [ read_loop_exited; write_loop_exited ] >>= fun () ->
         Io.close socket);
