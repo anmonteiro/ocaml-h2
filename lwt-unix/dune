@@ -6,15 +6,17 @@
   h2
   h2-lwt
   lwt.unix
+  lwt
+  bigarray-compat
   (select
    ssl_io.ml
    from
-   (lwt_ssl -> ssl_io_real.ml)
+   (bigstringaf lwt_ssl ssl faraday -> ssl_io_real.ml)
    (-> ssl_io_dummy.ml))
   (select
    tls_io.ml
    from
-   (tls.lwt -> tls_io_real.ml)
+   (cstruct nocrypto.lwt tls.lwt -> tls_io_real.ml)
    (-> tls_io_dummy.ml)))
  (modules h2_lwt_unix tls_io ssl_io)
  (flags

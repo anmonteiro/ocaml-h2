@@ -1,5 +1,5 @@
 (executables
- (libraries bigstringaf h2 alcotest test_common)
+ (libraries bigstringaf h2 alcotest test_common fmt)
  (modules test_h2 test_h2_client test_h2_server test_priority)
  (names test_h2 test_h2_client test_h2_server test_priority))
 

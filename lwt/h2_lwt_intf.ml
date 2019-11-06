@@ -14,7 +14,7 @@ module type IO = sig
 
   val writev
     :  socket
-    -> Faraday.bigstring Faraday.iovec list
+    -> Bigstringaf.t Faraday.iovec list
     -> [ `Closed | `Ok of int ] Lwt.t
 
   val shutdown_send : socket -> unit

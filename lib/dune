@@ -1,4 +1,5 @@
 (library
  (name h2)
  (public_name h2)
- (libraries angstrom faraday bigstringaf httpaf result psq hpack))
+ (libraries angstrom faraday bigstringaf httpaf result psq hpack
+   bigarray-compat))

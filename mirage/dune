@@ -1,4 +1,5 @@
 (library
  (name h2_mirage)
  (public_name h2-mirage)
- (libraries h2 h2-lwt lwt mirage-flow conduit-mirage cstruct))
+ (libraries h2 h2-lwt lwt mirage-flow conduit-mirage cstruct bigstringaf fmt
+   faraday))
