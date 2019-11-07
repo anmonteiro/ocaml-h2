@@ -1,6 +1,6 @@
 (executable
  (name test)
- (libraries angstrom hpack yojson hex alcotest faraday fmt))
+ (libraries angstrom hpack yojson hex alcotest faraday fmt stdlib-shims))
 
 (include_subdirs unqualified)
 
