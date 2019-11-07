@@ -1,6 +1,6 @@
 (executables
  (names lwt_echo_server2 lwt_https_server lwt_get lwt_post)
- (libraries h2 httpaf h2-lwt-unix lwt lwt.unix bigstringaf))
+ (libraries h2 httpaf h2-lwt-unix lwt lwt.unix bigstringaf bigarray-compat))
 
 (alias
  (name examples)
