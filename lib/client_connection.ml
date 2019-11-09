@@ -315,13 +315,12 @@ let handle_response_headers t respd ~end_stream active_request headers =
         Respd.create_active_response response response_body
       in
       respd.state <-
-        Stream.(
-          Active
-            ( (if is_open respd then
-                 Open new_response_state
-              else
-                HalfClosed new_response_state)
-            , active_request ));
+        Active
+          ( (if Stream.is_open respd then
+               Open new_response_state
+            else
+              HalfClosed new_response_state)
+          , active_request );
       active_request.response_handler response response_body;
       if end_stream then (
         (* Deliver EOF to the response body, as the handler might be waiting
@@ -376,7 +375,7 @@ let handle_headers t ~end_stream respd headers =
       | Open _ ->
         respd.state <- Active (Open FullHeaders, active_request)
       | HalfClosed _ ->
-        respd.state <- Active (Stream.(HalfClosed FullHeaders), active_request));
+        respd.state <- Active (HalfClosed FullHeaders, active_request));
       handle_response_headers t respd ~end_stream active_request headers
     | _ ->
       (* Unreachable. This function is only invoked if the stream is active. *)
@@ -605,7 +604,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
   Scheduler.deduct_inflow t.streams payload_length;
   match Scheduler.get_node t.streams stream_id with
   | Some (Stream { descriptor; _ } as stream) ->
-    (match descriptor.Stream.state with
+    (match descriptor.state with
     | Active
         ( ( Open (ActiveMessage response_info)
           | HalfClosed (ActiveMessage response_info) )
@@ -1092,7 +1091,7 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
   match Scheduler.find t.streams stream_id with
   | Some stream ->
-    (match stream.Stream.state with
+    (match stream.state with
     | Active
         ( ( Open (PartialHeaders partial_headers)
           | HalfClosed (PartialHeaders partial_headers) )
