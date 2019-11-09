@@ -176,7 +176,7 @@ let write_rst_stream_frame t info e =
     }
   in
   write_frame_header t header;
-  BE.write_uint32 t (Error.serialize e)
+  BE.write_uint32 t (Error.ErrorCode.serialize e)
 
 let write_settings_frame t info settings =
   let rec write_settings_payload = function
@@ -263,7 +263,7 @@ let write_go_away_frame t info stream_id error_code debug_data =
   in
   write_frame_header t header;
   BE.write_uint32 t stream_id;
-  BE.write_uint32 t (Error.serialize error_code);
+  BE.write_uint32 t (Error.ErrorCode.serialize error_code);
   schedule_bigstring t ~off:0 ~len:debug_data_len debug_data
 
 let write_window_update_frame t info window_size =

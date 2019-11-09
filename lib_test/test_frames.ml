@@ -107,7 +107,9 @@ let frame_testable =
         | Priority priority ->
           priority_to_yojson (Some priority)
         | RSTStream error_code ->
-          [ "error_code", `Int (Error.serialize error_code |> Int32.to_int) ]
+          [ ( "error_code"
+            , `Int (Error.ErrorCode.serialize error_code |> Int32.to_int) )
+          ]
         | Settings settings_list ->
           [ ( "settings"
             , `List
@@ -123,7 +125,8 @@ let frame_testable =
         | Ping data ->
           [ "opaque_data", `String (bs_to_string data) ]
         | GoAway (stream_identifier, error_code, debug_data) ->
-          [ "error_code", `Int (Error.serialize error_code |> Int32.to_int)
+          [ ( "error_code"
+            , `Int (Error.ErrorCode.serialize error_code |> Int32.to_int) )
           ; "additional_debug_data", `String (bs_to_string debug_data)
           ; "last_stream_id", `Int (Int32.to_int stream_identifier)
           ]
@@ -219,7 +222,7 @@ let frame_payload_of_json frame_type json =
     let error_code =
       Json.(json |> member "error_code" |> to_int |> Int32.of_int)
     in
-    RSTStream (Error.parse error_code)
+    RSTStream (Error.ErrorCode.parse error_code)
   | Settings ->
     let settings =
       List.map
@@ -260,7 +263,7 @@ let frame_payload_of_json frame_type json =
     let debug_data =
       Json.(json |> member "additional_debug_data" |> to_string |> bs_of_string)
     in
-    GoAway (last_stream_id, Error.parse error_code, debug_data)
+    GoAway (last_stream_id, Error.ErrorCode.parse error_code, debug_data)
   | WindowUpdate ->
     let window_size_increment =
       Json.(json |> member "window_size_increment" |> to_int)
@@ -352,7 +355,7 @@ let error_suites =
             Alcotest.(check int32)
               "Expected Error Code"
               expected_error
-              (Error.serialize e)) )
+              (Error.ErrorCode.serialize e)) )
   in
   List.map
     (fun (_, files) -> "Error tests", List.map gen_suite files)

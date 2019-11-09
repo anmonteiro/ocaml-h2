@@ -52,12 +52,7 @@ module Queue = struct
   let take_opt t = match is_empty t with true -> None | false -> Some (take t)
 end
 
-type error =
-  [ `Malformed_response of string
-  | `Invalid_response_body_length of Response.t
-  | `Protocol_error
-  | `Exn of exn
-  ]
+type error = Respd.error
 
 type response_handler = Response.t -> [ `read ] Body.t -> unit
 
@@ -140,7 +135,7 @@ let report_error t = function
        *   terminating. After sending the GOAWAY frame for an error condition,
        *   the endpoint MUST close the TCP connection. *)
       let debug_data =
-        if String.length data == 0 then
+        if String.length data = 0 then
           Bigstringaf.empty
         else
           Bigstringaf.of_string ~off:0 ~len:(String.length data) data
@@ -157,8 +152,8 @@ let report_error t = function
           else
             t.current_stream_id)
         error;
-      if error <> Error.NoError then
-        t.error_handler `Protocol_error;
+      if error <> Error.ErrorCode.NoError then
+        t.error_handler (`Protocol_error (error, data));
       Writer.flush t.writer (fun () ->
           (* XXX: We need to allow lower numbered streams to complete before
            * shutting down. *)
@@ -168,7 +163,7 @@ let report_error t = function
   | StreamError (stream_id, error) ->
     (match Scheduler.find t.streams stream_id with
     | Some respd ->
-      Respd.report_error respd `Protocol_error error
+      Respd.report_error respd (`Protocol_error (error, "")) error
     | None ->
       if not (was_closed_or_implicitly_closed t stream_id) then
         (* Possible if the stream was going to enter the Idle state (first time
@@ -184,7 +179,7 @@ let report_connection_error t ?(additional_debug_data = "") error =
 let report_stream_error t stream_id error =
   report_error t (StreamError (stream_id, error))
 
-let shutdown t = report_connection_error t Error.NoError
+let shutdown t = report_connection_error t Error.ErrorCode.NoError
 
 let set_error_and_handle t stream error error_code =
   Respd.report_error stream error error_code;
@@ -193,7 +188,10 @@ let set_error_and_handle t stream error error_code =
 let report_exn t exn =
   if not (is_shutdown t) then
     let additional_debug_data = Printexc.to_string exn in
-    report_connection_error t ~additional_debug_data Error.InternalError
+    report_connection_error
+      t
+      ~additional_debug_data
+      Error.ErrorCode.InternalError
 
 let handle_push_promise_headers t respd headers =
   (* From RFC7540§8.2.2:
@@ -206,7 +204,7 @@ let handle_push_promise_headers t respd headers =
      *   If a client receives a PUSH_PROMISE that does not include a complete
      *   and valid set of header fields [...] it MUST respond with a stream
      *   error (Section 5.4.2) of type PROTOCOL_ERROR. *)
-    report_stream_error t respd.Stream.id Error.ProtocolError
+    report_stream_error t respd.Stream.id Error.ErrorCode.ProtocolError
   | `Valid (meth, path, scheme) ->
     let meth = Httpaf.Method.of_string meth in
     (match
@@ -214,7 +212,7 @@ let handle_push_promise_headers t respd headers =
      with
     | (#Httpaf.Method.standard as meth), _, _
       when not Httpaf.Method.(is_cacheable meth && is_safe meth) ->
-      report_stream_error t respd.id Error.ProtocolError
+      report_stream_error t respd.id Error.ErrorCode.ProtocolError
     | _, _, `Fixed len when Int64.compare len 0L != 0 ->
       (* From RFC7540§8.2:
        *   Clients that receive a promised request that is not cacheable,
@@ -232,14 +230,14 @@ let handle_push_promise_headers t respd headers =
        *
        * Note: the intersection of safe and cacheable are the GET and HEAD
        * methods. *)
-      report_stream_error t respd.id Error.ProtocolError
+      report_stream_error t respd.id Error.ErrorCode.ProtocolError
     (* From RFC7540§8.2:
      *   The server MUST include a value in the :authority pseudo-header field
      *   for which the server is authoritative (see Section 10.1). A client
      *   MUST treat a PUSH_PROMISE for which the server is not authoritative as
      *   a stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
     | _, None, _ | _, _, `Error _ ->
-      report_stream_error t respd.id Error.ProtocolError
+      report_stream_error t respd.id Error.ErrorCode.ProtocolError
     | _ ->
       let request = Request.create ~scheme ~headers meth path in
       (match t.push_handler request with
@@ -265,7 +263,7 @@ let handle_push_promise_headers t respd headers =
          *   Recipients of PUSH_PROMISE frames can choose to reject promised
          *   streams by returning a RST_STREAM referencing the promised stream
          *   identifier back to the sender of the PUSH_PROMISE. *)
-        Stream.reset_stream respd Error.Cancel))
+        Stream.reset_stream respd Error.ErrorCode.Cancel))
 
 let handle_response_headers t respd ~end_stream active_request headers =
   (* From RFC7540§8.1.2.6:
@@ -357,9 +355,9 @@ let handle_headers t ~end_stream respd headers =
        *
        * Note: if there are pending SETTINGS to acknowledge, assume there was a
        * race condition and let the client retry. *)
-      report_stream_error t respd.Stream.id Error.RefusedStream
+      report_stream_error t respd.Stream.id Error.ErrorCode.RefusedStream
     else
-      report_stream_error t respd.Stream.id Error.ProtocolError
+      report_stream_error t respd.Stream.id Error.ErrorCode.ProtocolError
   else (
     (* From RFC7540§5.1.2:
      *   Streams that are in the "open" state or in either of the "half-closed"
@@ -417,12 +415,12 @@ let handle_headers_block
      *   A decoding error in a header block MUST be treated as a connection
      *   error (Section 5.4.1) of type COMPRESSION_ERROR. *)
     | Done (_, Error _) | Partial _ ->
-      report_connection_error t Error.CompressionError
+      report_connection_error t Error.ErrorCode.CompressionError
     | Fail (_, _, message) ->
       report_connection_error
         t
         ~additional_debug_data:message
-        Error.CompressionError)
+        Error.ErrorCode.CompressionError)
   else
     partial_headers.parse_state <- parse_state'
 
@@ -503,7 +501,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
     (* From RFC7540§5.3.1:
      *   A stream cannot depend on itself. An endpoint MUST treat this as a
      *   stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
-    report_stream_error t stream_id Error.ProtocolError
+    report_stream_error t stream_id Error.ErrorCode.ProtocolError
   | _ ->
     (match Scheduler.get_node t.streams stream_id with
     | None ->
@@ -518,14 +516,14 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
         Stream_identifier.(
           stream_id >= t.current_stream_id && is_request stream_id)
       then
-        report_stream_error t stream_id Error.StreamClosed
+        report_stream_error t stream_id Error.ErrorCode.StreamClosed
     | Some (Scheduler.Stream { descriptor; _ } as stream) ->
       (match descriptor.state with
       | Idle ->
         (* From RFC7540§6.2:
          *   HEADERS frames can be sent on a stream in the "idle", "reserved
          *   (local)", "open", or "half-closed (remote)" state. *)
-        report_connection_error t Error.ProtocolError
+        report_connection_error t Error.ErrorCode.ProtocolError
       | Active
           ((Open WaitingForPeer | HalfClosed WaitingForPeer), active_request) ->
         handle_first_response_bytes
@@ -557,7 +555,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
          *   closed: [...] An endpoint that receives any frame other than
          *   PRIORITY after receiving a RST_STREAM MUST treat that as a
          *   stream error (Section 5.4.2) of type STREAM_CLOSED. *)
-        report_stream_error t stream_id Error.StreamClosed
+        report_stream_error t stream_id Error.ErrorCode.StreamClosed
       (* From RFC7540§5.1:
        *   reserved (local): [...] Receiving any type of frame other than
        *   RST_STREAM, PRIORITY, or WINDOW_UPDATE on a stream in this state
@@ -568,7 +566,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
          *   Similarly, an endpoint that receives any frames after receiving
          *   a frame with the END_STREAM flag set MUST treat that as a
          *   connection error (Section 5.4.1) of type STREAM_CLOSED [...]. *)
-        report_connection_error t Error.StreamClosed))
+        report_connection_error t Error.ErrorCode.StreamClosed))
 
 let send_window_update
     : type a. t -> a Scheduler.PriorityTreeNode.node -> int -> unit
@@ -619,7 +617,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
          *  A receiver MAY respond with a stream error (Section 5.4.2) or
          *  connection error (Section 5.4.1) of type FLOW_CONTROL_ERROR if it
          *  is unable to accept a frame. *)
-        report_stream_error t stream_id Error.FlowControlError
+        report_stream_error t stream_id Error.ErrorCode.FlowControlError
       else (
         Scheduler.deduct_inflow stream payload_length;
         match Message.body_length response.headers with
@@ -673,7 +671,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
        *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
        *   a stream in this state MUST be treated as a connection error
        *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-      report_connection_error t Error.ProtocolError
+      report_connection_error t Error.ErrorCode.ProtocolError
     (* This is technically in the half-closed (local) state *)
     | Closed { reason = ResetByUs NoError; _ } ->
       (* From RFC7540§6.9:
@@ -699,14 +697,14 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
        *   If a DATA frame is received whose stream is not in "open" or
        *   "half-closed (local)" state, the recipient MUST respond with a
        *   stream error (Section 5.4.2) of type STREAM_CLOSED. *)
-      report_stream_error t stream_id Error.StreamClosed)
+      report_stream_error t stream_id Error.ErrorCode.StreamClosed)
   | None ->
     if not (was_closed_or_implicitly_closed t stream_id) then
       (* From RFC7540§5.1:
        *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
        *   a stream in this state MUST be treated as a connection error
        *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-      report_connection_error t Error.ProtocolError
+      report_connection_error t Error.ErrorCode.ProtocolError
 
 let on_close_stream t id ~active closed =
   if active then
@@ -724,7 +722,7 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
     (* From RFC7540§5.3.1:
      *   A stream cannot depend on itself. An endpoint MUST treat this as a
      *   stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
-    report_stream_error t stream_id Error.ProtocolError
+    report_stream_error t stream_id Error.ErrorCode.ProtocolError
   else
     match Scheduler.get_node t.streams stream_id with
     | Some stream ->
@@ -761,7 +759,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *   state. If a RST_STREAM frame identifying an idle stream is
        *   received, the recipient MUST treat this as a connection error
        *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-      report_connection_error t Error.ProtocolError
+      report_connection_error t Error.ErrorCode.ProtocolError
     | _ ->
       (* From RFC7540§6.4:
        *   The RST_STREAM frame fully terminates the referenced stream and
@@ -786,7 +784,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *   Note: the {!Respd.report_error} function does not send an RST_STREAM
        *   frame for streams in the closed state. So we close the stream before
        *   reporting the error. *)
-      set_error_and_handle t respd `Protocol_error error_code)
+      set_error_and_handle t respd (`Protocol_error (error_code, "")) error_code)
   | None ->
     (* We might have removed the stream from the hash table. If its stream
      * id is smaller than or equal to the max client stream id we've generated,
@@ -800,7 +798,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *
        * Note:
        *   If we didn't find the stream in the hash table it must be "idle". *)
-      report_connection_error t Error.ProtocolError
+      report_connection_error t Error.ErrorCode.ProtocolError
 
 let process_settings_frame t { Frame.frame_header; _ } settings =
   let open Scheduler in
@@ -814,7 +812,10 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       let additional_debug_data =
         "Received SETTINGS with ACK but no ACK was pending"
       in
-      report_connection_error t ~additional_debug_data Error.ProtocolError)
+      report_connection_error
+        t
+        ~additional_debug_data
+        Error.ErrorCode.ProtocolError)
   else
     match Settings.check_settings_list ~is_client:true settings with
     | None ->
@@ -873,7 +874,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
                   (Format.sprintf
                      "Window size for stream would exceed %d"
                      Settings.WindowSize.max_window_size)
-                Error.FlowControlError)
+                Error.ErrorCode.FlowControlError)
           | MaxFrameSize, x ->
             t.settings.max_frame_size <- x;
             Scheduler.iter
@@ -935,7 +936,10 @@ let process_push_promise_frame
      *   PUSH_PROMISE frame as a connection error (Section 5.4.1) of type
      *   PROTOCOL_ERROR. *)
     let additional_debug_data = "Push is not enabled for the connection" in
-    report_connection_error t ~additional_debug_data Error.ProtocolError
+    report_connection_error
+      t
+      ~additional_debug_data
+      Error.ErrorCode.ProtocolError
   else if not Stream_identifier.(promised_stream_id > t.max_pushed_stream_id)
   then
     (* From RFC7540§6.6:
@@ -947,14 +951,20 @@ let process_push_promise_frame
     let additional_debug_data =
       "Illegal stream identifier promised by PUSH_PROMISE"
     in
-    report_connection_error t ~additional_debug_data Error.ProtocolError
+    report_connection_error
+      t
+      ~additional_debug_data
+      Error.ErrorCode.ProtocolError
   else
     let send_connection_error () =
       let additional_debug_data =
         "Received PUSH_PROMISE on a stream that is neither open nor \
          half-closed (local)"
       in
-      report_connection_error t ~additional_debug_data Error.ProtocolError
+      report_connection_error
+        t
+        ~additional_debug_data
+        Error.ErrorCode.ProtocolError
     in
     t.max_pushed_stream_id <- promised_stream_id;
     match Scheduler.find t.streams stream_id with
@@ -984,7 +994,10 @@ let process_ping_frame t { Frame.frame_header; _ } payload =
     | None ->
       (* server is ACKing a PING that we didn't send? *)
       let additional_debug_data = "Unexpected PING acknowledgement" in
-      report_connection_error t ~additional_debug_data Error.ProtocolError
+      report_connection_error
+        t
+        ~additional_debug_data
+        Error.ErrorCode.ProtocolError
   else
     (* From RFC7540§6.7:
      *   Receivers of a PING frame that does not include an ACK flag MUST send
@@ -1042,9 +1055,9 @@ let add_window_increment
         (Printf.sprintf
            "Window size for stream would exceed %d"
            Settings.WindowSize.max_window_size)
-      Error.FlowControlError
+      Error.ErrorCode.FlowControlError
   else
-    report_stream_error t stream_id Error.FlowControlError
+    report_stream_error t stream_id Error.ErrorCode.FlowControlError
 
 let process_window_update_frame t { Frame.frame_header; _ } window_increment =
   let open Scheduler in
@@ -1065,7 +1078,7 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
          *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
          *   a stream in this state MUST be treated as a connection error
          *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-        report_connection_error t Error.ProtocolError
+        report_connection_error t Error.ErrorCode.ProtocolError
       | Active _
       (* From RFC7540§5.1:
        *   reserved (local): [...] A PRIORITY or WINDOW_UPDATE frame MAY be
@@ -1085,7 +1098,7 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
          *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
          *   a stream in this state MUST be treated as a connection error
          *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-        report_connection_error t Error.ProtocolError
+        report_connection_error t Error.ErrorCode.ProtocolError
 
 let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
@@ -1113,14 +1126,14 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
        *   the remote peer. These frames can be ignored, except where they
        *   modify connection state (such as the state maintained for header
        *   compression (Section 4.3) or flow control). *)
-      report_connection_error t Error.ProtocolError)
+      report_connection_error t Error.ErrorCode.ProtocolError)
   | None ->
     (* From RFC7540§6.10:
      *   A CONTINUATION frame MUST be preceded by a HEADERS, PUSH_PROMISE or
      *   CONTINUATION frame without the END_HEADERS flag set. A recipient that
      *   observes violation of this rule MUST respond with a connection error
      *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-    report_connection_error t Error.ProtocolError
+    report_connection_error t Error.ErrorCode.ProtocolError
 
 (* Unlike e.g. http/af's current Client implementation (Oneshot) where a new
  * connection is created per request, we create a single connection where all
@@ -1175,7 +1188,7 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
           ~additional_debug_data:
             "HEADERS or PUSH_PROMISE without the END_HEADERS flag set must be \
              followed by a CONTINUATION frame for the same stream"
-          Error.ProtocolError
+          Error.ErrorCode.ProtocolError
       | _ ->
         (match frame_payload with
         | Headers (priority, headers_block) ->

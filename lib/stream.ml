@@ -71,9 +71,9 @@ type closed_reason =
    *   if it receives frames on a closed stream after more than a round-trip
    *   time. This behavior is permitted to deal with misbehaving
    *   implementations. *)
-  | ResetByUs of Error.error_code
+  | ResetByUs of Error.ErrorCode.t
   (* Received an RST_STREAM frame from the peer. *)
-  | ResetByThem of Error.error_code
+  | ResetByThem of Error.ErrorCode.t
 
 type closed =
   { reason : closed_reason
@@ -100,7 +100,7 @@ type ('state, 'error_code, 'error_handler) stream =
   { id : Stream_identifier.t
   ; writer : Serialize.Writer.t
   ; error_handler : 'error_handler
-  ; mutable error_code : 'error_code * Error.error_code option
+  ; mutable error_code : 'error_code * Error.ErrorCode.t option
   ; mutable state : 'state
         (* The largest frame payload we're allowed to write. *)
   ; mutable max_frame_size : int

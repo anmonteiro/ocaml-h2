@@ -199,7 +199,7 @@ let parse_priority_frame { Frame.payload_length; stream_id; _ } =
   else
     lift (fun priority -> Ok (Frame.Priority priority)) parse_priority
 
-let parse_error_code = lift Error.parse BE.any_int32
+let parse_error_code = lift Error.ErrorCode.parse BE.any_int32
 
 let parse_rst_stream_frame { Frame.payload_length; stream_id; _ } =
   if Stream_identifier.is_connection stream_id then
@@ -491,7 +491,7 @@ module Reader = struct
       `Error of Error.t
     | (* Just the error code, need to puzzle back connection or stream info *)
       `ErrorCode of
-      Error.error_code
+      Error.ErrorCode.t
     ]
 
   type 'error parse_state =
@@ -536,16 +536,16 @@ module Reader = struct
     parse_frame parse_context >>| function
     | Ok ({ frame_payload = Frame.Settings settings_list; _ } as frame) ->
       Ok (frame, settings_list)
-    | Ok _ ->
-      (* FIXME(anmonteiro): this is not always an invalid preface. Section
-       * 9.2.1 should be taken into account here:
-       *
-       * From RFC7540§9.2.1:
+    | Ok { frame_payload = Frame.GoAway (_, error_code, debug_data); _ } ->
+      (* From RFC7540§9.2.1:
        *   An endpoint MAY immediately terminate an HTTP/2 connection that does
        *   not meet these TLS requirements with a connection error (Section
        *   5.4.1) of type INADEQUATE_SECURITY.
        *)
-
+      Error
+        (`Error
+          Error.(ConnectionError (error_code, Bigstringaf.to_string debug_data)))
+    | Ok _ ->
       (* From RFC7540§3.5:
        *   Clients and servers MUST treat an invalid connection preface as a
        *   connection error (Section 5.4.1) of type PROTOCOL_ERROR. A GOAWAY
@@ -617,7 +617,7 @@ module Reader = struct
        * payload length declared in a frame header is larger than the
        * underlying buffer can fit. *)
       if t.parse_context.remaining_bytes_to_skip > 0 then
-        t.parse_state <- Fail (`ErrorCode Error.FrameSizeError)
+        t.parse_state <- Fail (`ErrorCode Error.ErrorCode.FrameSizeError)
       else
         t.parse_state <- Partial continue;
       committed
@@ -675,7 +675,7 @@ module Reader = struct
               }
         ; _
         }
-      , Error.FrameSizeError )
+      , Error.ErrorCode.FrameSizeError )
     | { frame_header = Some { Frame.stream_id = 0x0l; _ }; _ }, _
     | { frame_header = None; _ }, _ ->
       (* From RFC7540§4.2:
@@ -718,9 +718,9 @@ module Reader = struct
            *   frame exceeds the size defined in SETTINGS_MAX_FRAME_SIZE,
            *   exceeds any limit defined for the frame type, or is too small to
            *   contain mandatory frame data. *)
-          Error.FrameSizeError
+          Error.ErrorCode.FrameSizeError
         | _ ->
-          Error.ProtocolError
+          Error.ErrorCode.ProtocolError
       in
       next_from_error t ~msg:(fail_to_string marks msg) error_code
 end

@@ -19,9 +19,15 @@ module Client_connection_tests = struct
         | `Read ->
           "Read"
         | `Error (Error.ConnectionError (e, msg)) ->
-          Format.sprintf "ConnectionError: %ld %S" (Error.serialize e) msg
+          Format.sprintf
+            "ConnectionError: %ld %S"
+            (Error.ErrorCode.serialize e)
+            msg
         | `Error (Error.StreamError (stream_id, e)) ->
-          Format.sprintf "StreamError on %ld: %ld" stream_id (Error.serialize e)
+          Format.sprintf
+            "StreamError on %ld: %ld"
+            stream_id
+            (Error.ErrorCode.serialize e)
         | `Close ->
           "Close"
       in
@@ -240,7 +246,7 @@ module Client_connection_tests = struct
     let error_handler error =
       error_handler_called := true;
       match error with
-      | `Protocol_error ->
+      | `Protocol_error _ ->
         Alcotest.(check pass)
           "Error handler is called with a protocol error"
           ()
@@ -258,6 +264,47 @@ module Client_connection_tests = struct
       "There was a connection error of type PROTOCOL_ERROR"
       (`Error
         Error.(ConnectionError (ProtocolError, "Invalid connection preface")))
+      (Reader.next t.reader);
+    Alcotest.check
+      read_operation
+      "Reader issues a `Close operation"
+      `Close
+      (next_read_operation t);
+    Alcotest.(check bool) "Error handler got called" true !error_handler_called
+
+  let test_inadequate_security () =
+    let error_handler_called = ref false in
+    let error_handler error =
+      error_handler_called := true;
+      match error with
+      | `Protocol_error _ ->
+        Alcotest.(check pass)
+          "Error handler is called with a protocol error"
+          ()
+          ()
+      | _ ->
+        Alcotest.fail "Expected error handler to be called with protocol error"
+    in
+    let t = create ?config:None ?push_handler:None ~error_handler in
+    let _, lenv = flush_pending_writes t in
+    report_write_result t (`Ok lenv);
+    let goaway_frame =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 0l
+          ; flags = Flags.default_flags
+          ; frame_type = GoAway
+          }
+      ; frame_payload =
+          Frame.GoAway
+            (0l, InadequateSecurity, Bigstringaf.of_string ~off:0 ~len:4 "fail")
+      }
+    in
+    read_frames t [ goaway_frame ];
+    Alcotest.check
+      read_operation
+      "There was a connection error of type InadequateSecurity"
+      (`Error Error.(ConnectionError (InadequateSecurity, "fail")))
       (Reader.next t.reader);
     Alcotest.check
       read_operation
@@ -371,7 +418,7 @@ module Client_connection_tests = struct
     let stream_level_error_handler error =
       error_handler_called := true;
       match error with
-      | `Protocol_error ->
+      | `Protocol_error _ ->
         Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
       | _ ->
         Alcotest.fail "Expected stream error handler to pass"
@@ -665,7 +712,7 @@ module Client_connection_tests = struct
     Alcotest.(check bool)
       "Next write operation is an RST_STREAM frame with the Cancel error"
       true
-      (Frame.RSTStream Error.Cancel = frame.frame_payload)
+      (Frame.RSTStream Error.ErrorCode.Cancel = frame.frame_payload)
 
   let test_stream_error_on_idle_stream () =
     let t =
@@ -680,7 +727,7 @@ module Client_connection_tests = struct
     let stream_level_error_handler error =
       error_handler_called := true;
       match error with
-      | `Protocol_error ->
+      | `Protocol_error _ ->
         Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
       | _ ->
         Alcotest.fail "Expected stream error handler to pass"
@@ -815,7 +862,7 @@ module Client_connection_tests = struct
     let stream_level_error_handler error =
       error_handler_called := true;
       match error with
-      | `Protocol_error ->
+      | `Protocol_error _ ->
         Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
       | _ ->
         Alcotest.fail "Expected stream error handler to pass"
@@ -848,7 +895,7 @@ module Client_connection_tests = struct
           ; flags = Flags.default_flags
           ; frame_type = RSTStream
           }
-      ; frame_payload = Frame.RSTStream Error.ProtocolError
+      ; frame_payload = Frame.RSTStream Error.ErrorCode.ProtocolError
       }
     in
     read_frames t [ rst_stream ];
@@ -866,6 +913,9 @@ module Client_connection_tests = struct
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
     ; "invalid connection preface from the server", `Quick, test_invalid_preface
+    ; ( "invalid connection preface from the server in the form of goaway frame"
+      , `Quick
+      , test_inadequate_security )
     ; "simple GET request", `Quick, test_simple_get_request
     ; "data larger than declared", `Quick, test_data_larger_than_reported
     ; ( "stream error handler gets called on stream-level protocol errors"

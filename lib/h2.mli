@@ -566,6 +566,76 @@ module Reqd : sig
   val try_with : t -> (unit -> unit) -> (unit, exn) result
 end
 
+(** {2 Errors} *)
+module Error : sig
+  module ErrorCode : sig
+    type t =
+      (* From RFC7540§7:
+       *   NO_ERROR (0x0): The associated condition is not a result of an
+       *   error. *)
+      | NoError
+      (* From RFC7540§7:
+       *   PROTOCOL_ERROR (0x1): The endpoint detected an unspecific protocol
+       *   error. This error is for use when a more specific error code is not
+       *   available. *)
+      | ProtocolError
+      (* From RFC7540§7:
+       *   INTERNAL_ERROR (0x2): The endpoint encountered an unexpected internal
+       *   error. *)
+      | InternalError
+      (* From RFC7540§7:
+       *   FLOW_CONTROL_ERROR (0x3): The endpoint detected that its peer violated
+       *   the flow-control protocol. *)
+      | FlowControlError
+      (* From RFC7540§7:
+       *   SETTINGS_TIMEOUT (0x4): The endpoint sent a SETTINGS frame but did not
+       *   receive a response in a timely manner. *)
+      | SettingsTimeout
+      (* From RFC7540§7:
+       *   STREAM_CLOSED (0x5): The endpoint received a frame after a stream was
+       *   half-closed. *)
+      | StreamClosed
+      (* From RFC7540§7:
+       *   FRAME_SIZE_ERROR (0x6): The endpoint received a frame with an invalid
+       *   size. *)
+      | FrameSizeError
+      (* From RFC7540§7:
+       *   REFUSED_STREAM (0x7): The endpoint refused the stream prior to
+       *   performing any application processing (see Section 8.1.4 for
+       *   details). *)
+      | RefusedStream
+      (* From RFC7540§7:
+       *   CANCEL (0x8): Used by the endpoint to indicate that the stream is no
+       *   longer needed. *)
+      | Cancel
+      (* From RFC7540§7:
+       *   COMPRESSION_ERROR (0x9): The endpoint is unable to maintain the header
+       *   compression context for the connection. *)
+      | CompressionError
+      (* From RFC7540§7:
+       *   CONNECT_ERROR (0xa): The connection established in response to a
+       *   CONNECT request (Section 8.3) was reset or abnormally closed. *)
+      | ConnectError
+      (* From RFC7540§7:
+       *   ENHANCE_YOUR_CALM (0xb): The endpoint detected that its peer is
+       *   exhibiting a behavior that might be generating excessive load. *)
+      | EnhanceYourCalm
+      (* From RFC7540§7:
+       *   INADEQUATE_SECURITY (0xc): The underlying transport has properties
+       *   that do not meet minimum security requirements (see Section 9.2). *)
+      | InadequateSecurity
+      (* From RFC7540§7:
+       *   HTTP_1_1_REQUIRED (0xd): The endpoint requires that HTTP/1.1 be used
+       *   instead of HTTP/2. *)
+      | HTTP11Required
+      (* From RFC7540§7:
+       *   Unknown or unsupported error codes MUST NOT trigger any special
+       *   behavior. These MAY be treated by an implementation as being
+       *   equivalent to INTERNAL_ERROR. *)
+      | UnknownErrorCode of int32
+  end
+end
+
 (** {2 HTTP/2 Configuration} *)
 module Config : sig
   type t =
@@ -685,7 +755,7 @@ module Client_connection : sig
   type error =
     [ `Malformed_response of string
     | `Invalid_response_body_length of Response.t
-    | `Protocol_error
+    | `Protocol_error of Error.ErrorCode.t * string
     | `Exn of exn
     ]
 
