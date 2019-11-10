@@ -30,13 +30,13 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
-type nothing = [ `Tls_not_available ]
+type descriptor = [ `Tls_not_available ]
 
 module Io :
   H2_lwt.IO
-    with type socket = Lwt_unix.file_descr * nothing
+    with type socket = Lwt_unix.file_descr * descriptor
      and type addr = Unix.sockaddr = struct
-  type socket = Lwt_unix.file_descr * nothing
+  type socket = Lwt_unix.file_descr * descriptor
 
   type addr = Unix.sockaddr
 
@@ -52,10 +52,6 @@ module Io :
 
   let report_exn _connection _ _exn = Lwt.fail_with "Tls not available"
 end
-
-type client = nothing
-
-type server = nothing
 
 let[@ocaml.warning "-21"] make_client ?client:_ =
   failwith "TLS not available";

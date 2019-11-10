@@ -42,7 +42,7 @@ module Server : sig
 
   module TLS : sig
     val create_connection_handler
-      :  ?server:Tls_io.server
+      :  ?server:Tls_io.descriptor
       -> ?certfile:string
       -> ?keyfile:string
       -> ?config:Config.t
@@ -55,7 +55,7 @@ module Server : sig
 
   module SSL : sig
     val create_connection_handler
-      :  ?server:Ssl_io.server
+      :  ?server:Ssl_io.descriptor
       -> ?certfile:string
       -> ?keyfile:string
       -> ?config:Config.t
@@ -74,7 +74,7 @@ module Client : sig
     include H2_lwt.Client with type socket := Lwt_unix.file_descr
 
     val create_connection
-      :  ?client:Tls_io.client
+      :  ?client:Tls_io.descriptor
       -> ?config:Config.t
       -> ?push_handler:
            (Request.t -> (Client_connection.response_handler, unit) result)
@@ -87,7 +87,7 @@ module Client : sig
     include H2_lwt.Client with type socket := Lwt_unix.file_descr
 
     val create_connection
-      :  ?client:Ssl_io.client
+      :  ?client:Ssl_io.descriptor
       -> ?config:Config.t
       -> ?push_handler:
            (Request.t -> (Client_connection.response_handler, unit) result)

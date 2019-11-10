@@ -111,9 +111,7 @@ struct
     Lwt.return_unit
 end
 
-type client = Lwt_ssl.socket
-
-type server = Lwt_ssl.socket
+type descriptor = Lwt_ssl.socket
 
 let make_client ?client socket =
   match client with

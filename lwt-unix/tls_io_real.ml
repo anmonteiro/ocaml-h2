@@ -32,13 +32,13 @@
 
 open Lwt.Infix
 
-let _ = Nocrypto_entropy_lwt.initialize ()
+type descriptor = Tls_lwt.Unix.t
 
 module Io :
   H2_lwt.IO
-    with type socket = Lwt_unix.file_descr * Tls_lwt.Unix.t
+    with type socket = Lwt_unix.file_descr * descriptor
      and type addr = Unix.sockaddr = struct
-  type socket = Lwt_unix.file_descr * Tls_lwt.Unix.t
+  type socket = Lwt_unix.file_descr * descriptor
 
   type addr = Unix.sockaddr
 
@@ -103,10 +103,6 @@ module Io :
       H2.Server_connection.report_exn connection exn);
     Lwt.return_unit
 end
-
-type client = Tls_lwt.Unix.t
-
-type server = Tls_lwt.Unix.t
 
 let make_client ?client socket =
   match client with
