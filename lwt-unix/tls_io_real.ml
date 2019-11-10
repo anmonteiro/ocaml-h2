@@ -32,17 +32,15 @@
 
 open Lwt.Infix
 
-let _ = Nocrypto_entropy_lwt.initialize ()
+type descriptor = Tls_lwt.Unix.t
 
 module Io :
-  H2_lwt.IO
-    with type socket = Lwt_unix.file_descr * Tls_lwt.Unix.t
-     and type addr = Unix.sockaddr = struct
-  type socket = Lwt_unix.file_descr * Tls_lwt.Unix.t
+  H2_lwt.IO with type socket = descriptor and type addr = Unix.sockaddr = struct
+  type socket = descriptor
 
   type addr = Unix.sockaddr
 
-  let read (_, tls) bigstring ~off ~len =
+  let read tls bigstring ~off ~len =
     Lwt.catch
       (fun () -> Tls_lwt.Unix.read_bytes tls bigstring off len)
       (function
@@ -57,7 +55,7 @@ module Io :
     else
       Lwt.return (`Ok bytes_read)
 
-  let writev (_, tls) iovecs =
+  let writev tls iovecs =
     Lwt.catch
       (fun () ->
         let cstruct_iovecs =
@@ -74,13 +72,13 @@ module Io :
         | exn ->
           Lwt.fail exn)
 
-  let shutdown_send (_, tls) = ignore (Tls_lwt.Unix.close_tls tls)
+  let shutdown_send tls = ignore (Tls_lwt.Unix.close_tls tls)
 
-  let shutdown_receive (_, tls) = ignore (Tls_lwt.Unix.close_tls tls)
+  let shutdown_receive tls = ignore (Tls_lwt.Unix.close_tls tls)
 
-  let close (_, tls) = Tls_lwt.Unix.close tls
+  let close = Tls_lwt.Unix.close
 
-  let report_exn connection (socket, _) exn =
+  let report_exn connection tls exn =
     (* This needs to handle two cases. The case where the socket is
      * still open and we can gracefully respond with an error, and the
      * case where the client has already left. The second case is more
@@ -96,17 +94,13 @@ module Io :
      *   not required for the initiator of the close to wait for the
      *   responding close_notify alert before closing the read side of
      *   the connection. *)
-    (match Lwt_unix.state socket with
-    | Aborted _ | Closed ->
+    (match Tls_lwt.Unix.epoch tls with
+    | `Error ->
       H2.Server_connection.shutdown connection
-    | Opened ->
+    | `Ok _ ->
       H2.Server_connection.report_exn connection exn);
     Lwt.return_unit
 end
-
-type client = Tls_lwt.Unix.t
-
-type server = Tls_lwt.Unix.t
 
 let make_client ?client socket =
   match client with

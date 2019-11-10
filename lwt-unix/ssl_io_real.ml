@@ -32,12 +32,11 @@
 
 open Lwt.Infix
 
-let () = Ssl.init ()
+type descriptor = Lwt_ssl.socket
 
 module Io :
-  H2_lwt.IO with type socket = Lwt_ssl.socket and type addr = Unix.sockaddr =
-struct
-  type socket = Lwt_ssl.socket
+  H2_lwt.IO with type socket = descriptor and type addr = Unix.sockaddr = struct
+  type socket = descriptor
 
   type addr = Unix.sockaddr
 
@@ -110,10 +109,6 @@ struct
       H2.Server_connection.report_exn connection exn);
     Lwt.return_unit
 end
-
-type client = Lwt_ssl.socket
-
-type server = Lwt_ssl.socket
 
 let make_client ?client socket =
   match client with
