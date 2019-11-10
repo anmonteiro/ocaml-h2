@@ -124,7 +124,7 @@ module Server = struct
           ~request_handler
           ~error_handler
           client_addr
-          (socket, tls_server)
+          tls_server
   end
 
   module SSL = struct
@@ -162,11 +162,7 @@ module Client = struct
       let make_tls_client = Tls_io.make_client ?client in
       fun socket ->
         make_tls_client socket >>= fun tls_client ->
-        create_connection
-          ~config
-          ?push_handler
-          ~error_handler
-          (socket, tls_client)
+        create_connection ~config ?push_handler ~error_handler tls_client
   end
 
   module SSL = struct

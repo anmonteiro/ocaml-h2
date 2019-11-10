@@ -33,10 +33,8 @@
 type descriptor = [ `Tls_not_available ]
 
 module Io :
-  H2_lwt.IO
-    with type socket = Lwt_unix.file_descr * descriptor
-     and type addr = Unix.sockaddr = struct
-  type socket = Lwt_unix.file_descr * descriptor
+  H2_lwt.IO with type socket = descriptor and type addr = Unix.sockaddr = struct
+  type socket = descriptor
 
   type addr = Unix.sockaddr
 
