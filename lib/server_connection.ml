@@ -183,7 +183,7 @@ let report_exn t exn =
     report_connection_error
       t
       ~additional_debug_data
-      Error.ErrorCode.InternalError
+      Error_code.InternalError
 
 let on_close_stream t id ~active closed =
   if active then
@@ -209,7 +209,7 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
      *   [...] A server that is unable to establish a new stream identifier can
      *   send a GOAWAY frame so that the client is forced to open a new
      *   connection for new streams. *)
-    report_connection_error t Error.ErrorCode.NoError;
+    report_connection_error t Error_code.NoError;
     Error `Stream_ids_exhausted)
   else
     let pushed_stream_id = Int32.add max_pushed_stream_id 2l in
@@ -245,9 +245,9 @@ let handle_headers t ~end_stream reqd active_stream headers =
        *
        * Note: if there are pending SETTINGS to acknowledge, assume there was a
        * race condition and let the client retry. *)
-      report_stream_error t reqd.Stream.id Error.ErrorCode.RefusedStream
+      report_stream_error t reqd.Stream.id Error_code.RefusedStream
     else
-      report_stream_error t reqd.Stream.id Error.ErrorCode.ProtocolError
+      report_stream_error t reqd.Stream.id Error_code.ProtocolError
   else (
     reqd.state <- Active (Open FullHeaders, active_stream);
     (* From RFC7540§5.1.2:
@@ -364,12 +364,12 @@ let handle_headers_block
      *   A decoding error in a header block MUST be treated as a connection
      *   error (Section 5.4.1) of type COMPRESSION_ERROR. *)
     | Done (_, Error _) | Partial _ ->
-      report_connection_error t Error.ErrorCode.CompressionError
+      report_connection_error t Error_code.CompressionError
     | Fail (_, _, message) ->
       report_connection_error
         t
         ~additional_debug_data:message
-        Error.ErrorCode.CompressionError)
+        Error_code.CompressionError)
   else
     partial_headers.parse_state <- parse_state'
 
@@ -385,7 +385,7 @@ let open_stream t frame_header ?priority headers_block =
      *   reserved. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
-    report_connection_error t Error.ErrorCode.ProtocolError
+    report_connection_error t Error_code.ProtocolError
   else
     (* From RFC7540§6.2:
      *   The HEADERS frame (type=0x1) is used to open a stream (Section 5.1),
@@ -496,7 +496,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
      *   identifiers. [...] An endpoint that receives an unexpected
      *   stream identifier MUST respond with a connection error
      *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-    report_connection_error t Error.ErrorCode.ProtocolError
+    report_connection_error t Error_code.ProtocolError
   else
     match priority with
     | Some { Priority.stream_dependency; _ }
@@ -504,7 +504,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
       (* From RFC7540§5.3.1:
        *   A stream cannot depend on itself. An endpoint MUST treat this as a
        *   stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
-      report_stream_error t stream_id Error.ErrorCode.ProtocolError
+      report_stream_error t stream_id Error_code.ProtocolError
     | _ ->
       (match Scheduler.find t.streams stream_id with
       | None ->
@@ -540,7 +540,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
            *   closed: [...] An endpoint that receives any frame other than
            *   PRIORITY after receiving a RST_STREAM MUST treat that as a
            *   stream error (Section 5.4.2) of type STREAM_CLOSED. *)
-          report_stream_error t stream_id Error.ErrorCode.StreamClosed
+          report_stream_error t stream_id Error_code.StreamClosed
         (* From RFC7540§5.1:
          *   reserved (local): [...] Receiving any type of frame other than
          *   RST_STREAM, PRIORITY, or WINDOW_UPDATE on a stream in this state
@@ -551,7 +551,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
            *   Similarly, an endpoint that receives any frames after receiving
            *   a frame with the END_STREAM flag set MUST treat that as a
            *   connection error (Section 5.4.1) of type STREAM_CLOSED [...]. *)
-          report_connection_error t Error.ErrorCode.StreamClosed))
+          report_connection_error t Error_code.StreamClosed))
 
 let send_window_update
     : type a. t -> a Scheduler.PriorityTreeNode.node -> int -> unit
@@ -585,7 +585,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
      *   identifiers. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
-    report_connection_error t Error.ErrorCode.ProtocolError
+    report_connection_error t Error_code.ProtocolError
   else (
     (* From RFC7540§6.9:
      *   A receiver that receives a flow-controlled frame MUST always account
@@ -610,7 +610,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
            *  A receiver MAY respond with a stream error (Section 5.4.2) or
            *  connection error (Section 5.4.1) of type FLOW_CONTROL_ERROR if it
            *  is unable to accept a frame. *)
-          report_stream_error t stream_id Error.ErrorCode.FlowControlError
+          report_stream_error t stream_id Error_code.FlowControlError
         else (
           Scheduler.deduct_inflow stream payload_length;
           match Message.body_length request.headers with
@@ -665,7 +665,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
          *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
          *   a stream in this state MUST be treated as a connection error
          *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-        report_connection_error t Error.ErrorCode.ProtocolError
+        report_connection_error t Error_code.ProtocolError
       (* This is technically in the half-closed (local) state *)
       | Closed { reason = ResetByUs NoError; _ } ->
         (* From RFC7540§6.9:
@@ -691,14 +691,14 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
          *   If a DATA frame is received whose stream is not in "open" or
          *   "half-closed (local)" state, the recipient MUST respond with a
          *   stream error (Section 5.4.2) of type STREAM_CLOSED. *)
-        report_stream_error t stream_id Error.ErrorCode.StreamClosed)
+        report_stream_error t stream_id Error_code.StreamClosed)
     | None ->
       if not (was_closed_or_implicitly_closed t stream_id) then
         (* From RFC7540§5.1:
          *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
          *   a stream in this state MUST be treated as a connection error
          *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-        report_connection_error t Error.ErrorCode.ProtocolError)
+        report_connection_error t Error_code.ProtocolError)
 
 let process_priority_frame t { Frame.frame_header; _ } priority =
   let { Frame.stream_id; _ } = frame_header in
@@ -709,12 +709,12 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
      *   identifiers. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
-    report_connection_error t Error.ErrorCode.ProtocolError
+    report_connection_error t Error_code.ProtocolError
   else if Stream_identifier.(stream_id === stream_dependency) then
     (* From RFC7540§5.3.1:
      *   A stream cannot depend on itself. An endpoint MUST treat this as a
      *   stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
-    report_stream_error t stream_id Error.ErrorCode.ProtocolError
+    report_stream_error t stream_id Error_code.ProtocolError
   else
     match Scheduler.get_node t.streams stream_id with
     | Some stream ->
@@ -753,7 +753,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
      *   identifiers. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
-    report_connection_error t Error.ErrorCode.ProtocolError
+    report_connection_error t Error_code.ProtocolError
   else
     match Scheduler.find t.streams stream_id with
     | Some reqd ->
@@ -764,7 +764,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
          *   state. If a RST_STREAM frame identifying an idle stream is
          *   received, the recipient MUST treat this as a connection error
          *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-        report_connection_error t Error.ErrorCode.ProtocolError
+        report_connection_error t Error_code.ProtocolError
       | _ ->
         (* From RFC7540§6.4:
          *   The RST_STREAM frame fully terminates the referenced stream and
@@ -796,7 +796,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
          * Note:
          *   If we didn't find the stream in the hash table it must be
          *   "idle". *)
-        report_connection_error t Error.ErrorCode.ProtocolError
+        report_connection_error t Error_code.ProtocolError
 
 let process_settings_frame t { Frame.frame_header; _ } settings =
   let open Scheduler in
@@ -813,7 +813,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       report_connection_error
         t
         ~additional_debug_data
-        Error.ErrorCode.ProtocolError)
+        Error_code.ProtocolError)
   else
     match Settings.check_settings_list settings with
     | None ->
@@ -872,7 +872,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
                   (Format.sprintf
                      "Window size for stream would exceed %d"
                      Settings.WindowSize.max_window_size)
-                Error.ErrorCode.FlowControlError)
+                Error_code.FlowControlError)
           | MaxFrameSize, x ->
             (* XXX: We're probably not abiding entirely by this. If we get a
              * MAX_FRAME_SIZE setting we'd need to reallocate the read buffer?
@@ -966,9 +966,9 @@ let add_window_increment
         (Printf.sprintf
            "Window size for stream would exceed %d"
            Settings.WindowSize.max_window_size)
-      Error.ErrorCode.FlowControlError
+      Error_code.FlowControlError
   else
-    report_stream_error t stream_id Error.ErrorCode.FlowControlError
+    report_stream_error t stream_id Error_code.FlowControlError
 
 let process_window_update_frame t { Frame.frame_header; _ } window_increment =
   let open Scheduler in
@@ -989,7 +989,7 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
          *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
          *   a stream in this state MUST be treated as a connection error
          *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-        report_connection_error t Error.ErrorCode.ProtocolError
+        report_connection_error t Error_code.ProtocolError
       | Active _
       (* From RFC7540§5.1:
        *   reserved (local): [...] A PRIORITY or WINDOW_UPDATE frame MAY be
@@ -1013,7 +1013,7 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
          *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
          *   a stream in this state MUST be treated as a connection error
          *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
-        report_connection_error t Error.ErrorCode.ProtocolError
+        report_connection_error t Error_code.ProtocolError
 
 let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
@@ -1023,7 +1023,7 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
      *   identifiers. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
-    report_connection_error t Error.ErrorCode.ProtocolError
+    report_connection_error t Error_code.ProtocolError
   else
     match Scheduler.find t.streams stream_id with
     | Some stream ->
@@ -1057,14 +1057,14 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
          *   the remote peer. These frames can be ignored, except where they
          *   modify connection state (such as the state maintained for header
          *   compression (Section 4.3) or flow control). *)
-        report_connection_error t Error.ErrorCode.ProtocolError)
+        report_connection_error t Error_code.ProtocolError)
     | None ->
       (* From RFC7540§6.10:
        *   A CONTINUATION frame MUST be preceded by a HEADERS, PUSH_PROMISE or
        *   CONTINUATION frame without the END_HEADERS flag set. A recipient
        *   that observes violation of this rule MUST respond with a connection
        *   error (Section 5.4.1) of type PROTOCOL_ERROR. *)
-      report_connection_error t Error.ErrorCode.ProtocolError
+      report_connection_error t Error_code.ProtocolError
 
 let default_error_handler ?request:_ error handle =
   let message =
@@ -1141,7 +1141,7 @@ let create
           ~additional_debug_data:
             "HEADERS or PUSH_PROMISE without the END_HEADERS flag set must be \
              followed by a CONTINUATION frame for the same stream"
-          Error.ErrorCode.ProtocolError
+          Error_code.ProtocolError
       | _ ->
         (match frame_payload with
         | Headers (priority, headers_block) ->
@@ -1162,7 +1162,7 @@ let create
           report_connection_error
             t
             ~additional_debug_data:"Client cannot push"
-            Error.ErrorCode.ProtocolError
+            Error_code.ProtocolError
         | Ping data ->
           process_ping_frame t frame data
         | GoAway (last_stream_id, error, debug_data) ->

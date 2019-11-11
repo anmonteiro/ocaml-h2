@@ -21,13 +21,13 @@ module Client_connection_tests = struct
         | `Error (Error.ConnectionError (e, msg)) ->
           Format.sprintf
             "ConnectionError: %ld %S"
-            (Error.ErrorCode.serialize e)
+            (Error_code.serialize e)
             msg
         | `Error (Error.StreamError (stream_id, e)) ->
           Format.sprintf
             "StreamError on %ld: %ld"
             stream_id
-            (Error.ErrorCode.serialize e)
+            (Error_code.serialize e)
         | `Close ->
           "Close"
       in
@@ -712,7 +712,7 @@ module Client_connection_tests = struct
     Alcotest.(check bool)
       "Next write operation is an RST_STREAM frame with the Cancel error"
       true
-      (Frame.RSTStream Error.ErrorCode.Cancel = frame.frame_payload)
+      (Frame.RSTStream Error_code.Cancel = frame.frame_payload)
 
   let test_stream_error_on_idle_stream () =
     let t =
@@ -895,7 +895,7 @@ module Client_connection_tests = struct
           ; flags = Flags.default_flags
           ; frame_type = RSTStream
           }
-      ; frame_payload = Frame.RSTStream Error.ErrorCode.ProtocolError
+      ; frame_payload = Frame.RSTStream Error_code.ProtocolError
       }
     in
     read_frames t [ rst_stream ];

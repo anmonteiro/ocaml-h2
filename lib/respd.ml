@@ -40,7 +40,7 @@ open Stream
 type error =
   [ `Malformed_response of string
   | `Invalid_response_body_length of Response.t
-  | `Protocol_error of Error.ErrorCode.t * string
+  | `Protocol_error of Error_code.t * string
   | `Exn of exn
   ]
 

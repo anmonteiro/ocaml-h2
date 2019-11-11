@@ -199,7 +199,7 @@ let parse_priority_frame { Frame.payload_length; stream_id; _ } =
   else
     lift (fun priority -> Ok (Frame.Priority priority)) parse_priority
 
-let parse_error_code = lift Error.ErrorCode.parse BE.any_int32
+let parse_error_code = lift Error_code.parse BE.any_int32
 
 let parse_rst_stream_frame { Frame.payload_length; stream_id; _ } =
   if Stream_identifier.is_connection stream_id then
@@ -490,8 +490,8 @@ module Reader = struct
     | (* Full error information *)
       `Error of Error.t
     | (* Just the error code, need to puzzle back connection or stream info *)
-      `ErrorCode of
-      Error.ErrorCode.t
+      `Error_code of
+      Error_code.t
     ]
 
   type 'error parse_state =
@@ -617,7 +617,7 @@ module Reader = struct
        * payload length declared in a frame header is larger than the
        * underlying buffer can fit. *)
       if t.parse_context.remaining_bytes_to_skip > 0 then
-        t.parse_state <- Fail (`ErrorCode Error.ErrorCode.FrameSizeError)
+        t.parse_state <- Fail (`Error_code Error_code.FrameSizeError)
       else
         t.parse_state <- Partial continue;
       committed
@@ -675,7 +675,7 @@ module Reader = struct
               }
         ; _
         }
-      , Error.ErrorCode.FrameSizeError )
+      , Error_code.FrameSizeError )
     | { frame_header = Some { Frame.stream_id = 0x0l; _ }; _ }, _
     | { frame_header = None; _ }, _ ->
       (* From RFC7540§4.2:
@@ -707,7 +707,7 @@ module Reader = struct
         `Read
     | Fail (`Error e) ->
       `Error e
-    | Fail (`ErrorCode error_code) ->
+    | Fail (`Error_code error_code) ->
       next_from_error t error_code
     | Fail (`Parse (marks, msg)) ->
       let error_code =
@@ -718,9 +718,9 @@ module Reader = struct
            *   frame exceeds the size defined in SETTINGS_MAX_FRAME_SIZE,
            *   exceeds any limit defined for the frame type, or is too small to
            *   contain mandatory frame data. *)
-          Error.ErrorCode.FrameSizeError
+          Error_code.FrameSizeError
         | _ ->
-          Error.ErrorCode.ProtocolError
+          Error_code.ProtocolError
       in
       next_from_error t ~msg:(fail_to_string marks msg) error_code
 end

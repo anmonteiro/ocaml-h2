@@ -20,13 +20,13 @@ module Server_connection_tests = struct
         | `Error (Error.ConnectionError (e, msg)) ->
           Format.sprintf
             "ConnectionError: %ld %S"
-            (Error.ErrorCode.serialize e)
+            (Error_code.serialize e)
             msg
         | `Error (Error.StreamError (stream_id, e)) ->
           Format.sprintf
             "StreamError on %ld: %ld"
             stream_id
-            (Error.ErrorCode.serialize e)
+            (Error_code.serialize e)
         | `Close ->
           "Close"
       in
