@@ -180,10 +180,7 @@ let set_error_and_handle ?request t stream error error_code =
 let report_exn t exn =
   if not (is_closed t) then
     let additional_debug_data = Printexc.to_string exn in
-    report_connection_error
-      t
-      ~additional_debug_data
-      Error_code.InternalError
+    report_connection_error t ~additional_debug_data Error_code.InternalError
 
 let on_close_stream t id ~active closed =
   if active then
@@ -810,10 +807,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       let additional_debug_data =
         "Received SETTINGS with ACK but no ACK was pending"
       in
-      report_connection_error
-        t
-        ~additional_debug_data
-        Error_code.ProtocolError)
+      report_connection_error t ~additional_debug_data Error_code.ProtocolError)
   else
     match Settings.check_settings_list settings with
     | None ->

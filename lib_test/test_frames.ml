@@ -107,8 +107,7 @@ let frame_testable =
         | Priority priority ->
           priority_to_yojson (Some priority)
         | RSTStream error_code ->
-          [ ( "error_code"
-            , `Int (Error_code.serialize error_code |> Int32.to_int) )
+          [ "error_code", `Int (Error_code.serialize error_code |> Int32.to_int)
           ]
         | Settings settings_list ->
           [ ( "settings"
@@ -125,8 +124,7 @@ let frame_testable =
         | Ping data ->
           [ "opaque_data", `String (bs_to_string data) ]
         | GoAway (stream_identifier, error_code, debug_data) ->
-          [ ( "error_code"
-            , `Int (Error_code.serialize error_code |> Int32.to_int) )
+          [ "error_code", `Int (Error_code.serialize error_code |> Int32.to_int)
           ; "additional_debug_data", `String (bs_to_string debug_data)
           ; "last_stream_id", `Int (Int32.to_int stream_identifier)
           ]

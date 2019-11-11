@@ -19,10 +19,7 @@ module Client_connection_tests = struct
         | `Read ->
           "Read"
         | `Error (Error.ConnectionError (e, msg)) ->
-          Format.sprintf
-            "ConnectionError: %ld %S"
-            (Error_code.serialize e)
-            msg
+          Format.sprintf "ConnectionError: %ld %S" (Error_code.serialize e) msg
         | `Error (Error.StreamError (stream_id, e)) ->
           Format.sprintf
             "StreamError on %ld: %ld"

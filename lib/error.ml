@@ -30,7 +30,6 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
-
 (* From RFC7540§5.4:
  *   HTTP/2 framing permits two classes of error:
  *
@@ -40,4 +39,3 @@
 type t =
   | ConnectionError of Error_code.t * string
   | StreamError of Stream_identifier.t * Error_code.t
-

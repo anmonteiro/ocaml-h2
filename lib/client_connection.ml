@@ -188,10 +188,7 @@ let set_error_and_handle t stream error error_code =
 let report_exn t exn =
   if not (is_shutdown t) then
     let additional_debug_data = Printexc.to_string exn in
-    report_connection_error
-      t
-      ~additional_debug_data
-      Error_code.InternalError
+    report_connection_error t ~additional_debug_data Error_code.InternalError
 
 let handle_push_promise_headers t respd headers =
   (* From RFC7540§8.2.2:
@@ -812,10 +809,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       let additional_debug_data =
         "Received SETTINGS with ACK but no ACK was pending"
       in
-      report_connection_error
-        t
-        ~additional_debug_data
-        Error_code.ProtocolError)
+      report_connection_error t ~additional_debug_data Error_code.ProtocolError)
   else
     match Settings.check_settings_list ~is_client:true settings with
     | None ->
@@ -936,10 +930,7 @@ let process_push_promise_frame
      *   PUSH_PROMISE frame as a connection error (Section 5.4.1) of type
      *   PROTOCOL_ERROR. *)
     let additional_debug_data = "Push is not enabled for the connection" in
-    report_connection_error
-      t
-      ~additional_debug_data
-      Error_code.ProtocolError
+    report_connection_error t ~additional_debug_data Error_code.ProtocolError
   else if not Stream_identifier.(promised_stream_id > t.max_pushed_stream_id)
   then
     (* From RFC7540§6.6:
@@ -951,20 +942,14 @@ let process_push_promise_frame
     let additional_debug_data =
       "Illegal stream identifier promised by PUSH_PROMISE"
     in
-    report_connection_error
-      t
-      ~additional_debug_data
-      Error_code.ProtocolError
+    report_connection_error t ~additional_debug_data Error_code.ProtocolError
   else
     let send_connection_error () =
       let additional_debug_data =
         "Received PUSH_PROMISE on a stream that is neither open nor \
          half-closed (local)"
       in
-      report_connection_error
-        t
-        ~additional_debug_data
-        Error_code.ProtocolError
+      report_connection_error t ~additional_debug_data Error_code.ProtocolError
     in
     t.max_pushed_stream_id <- promised_stream_id;
     match Scheduler.find t.streams stream_id with
@@ -994,10 +979,7 @@ let process_ping_frame t { Frame.frame_header; _ } payload =
     | None ->
       (* server is ACKing a PING that we didn't send? *)
       let additional_debug_data = "Unexpected PING acknowledgement" in
-      report_connection_error
-        t
-        ~additional_debug_data
-        Error_code.ProtocolError
+      report_connection_error t ~additional_debug_data Error_code.ProtocolError
   else
     (* From RFC7540§6.7:
      *   Receivers of a PING frame that does not include an ACK flag MUST send
