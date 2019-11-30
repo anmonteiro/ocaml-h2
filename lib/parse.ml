@@ -541,7 +541,11 @@ module Reader = struct
        *   An endpoint MAY immediately terminate an HTTP/2 connection that does
        *   not meet these TLS requirements with a connection error (Section
        *   5.4.1) of type INADEQUATE_SECURITY.
-       *)
+       *
+       *   Note: we are liberal on purpose in this branch instead of only
+       *   accepting an error of type `INADEQUATE_SECURITY`. If an endpoint is
+       *   sending us a `GOAWAY` frame we probably did something wrong and
+       *   deserve to know what that is. *)
       Error
         (`Error
           Error.(ConnectionError (error_code, Bigstringaf.to_string debug_data)))
