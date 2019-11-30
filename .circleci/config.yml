@@ -97,7 +97,6 @@ opam-steps: &opam-steps
           kill $(lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
     - run:
         name: 'Check code is formatted with ocamlformat'
-        # TODO: do this based on a param
         command: |
           eval `opam config env`
           dune build @fmt --auto-promote
