@@ -17,10 +17,11 @@ build: [
 ]
 depends: [
   "ocaml" {>= "4.03.0"}
-  "dune" {>= "1.0"}
+  "dune"
   "bigarray-compat"
   "alcotest" {with-test}
 ]
+conflicts: [ "js_of_ocaml" {<"3.5.0"} ]
 synopsis: "Access C-like structures directly from OCaml"
 description: """
 Cstruct is a library and syntax extension to make it easier to access C-like
@@ -28,9 +29,9 @@ structures directly from OCaml.  It supports both reading and writing to these
 structures, and they are accessed via the `Bigarray` module."""
 url {
   src:
-    "https://github.com/mirage/ocaml-cstruct/releases/download/v5.0.0/cstruct-v5.0.0.tbz"
+    "https://github.com/mirage/ocaml-cstruct/releases/download/v5.1.1/cstruct-v5.1.1.tbz"
   checksum: [
-    "sha256=eb8a4e4438ca4ab59e9d98ca70177edd8b590136fe7a200fe8e5bf69051e80fc"
-    "sha512=414c2c780200252b5ebf16dd4fd1db28ffa483dba5be1c0092e08327d1d870f688c6f671892dcd8bbcf579f56e3d27b345ec0a96209fb25c0a984825b2e144f5"
+    "sha256=55d1f42cb85f7872fee499c5ed382aea17b06d55d1709e071d1ba85c7a09fef3"
+    "sha512=c3aa9a5a9125a1d022506a76fd7cdf32b21edcdc9df1202d8a9f382d02a28a33fea9a958f79e9302907ade1fce3f166b620c320aed6486e3efcc9a7464379cab"
   ]
 }

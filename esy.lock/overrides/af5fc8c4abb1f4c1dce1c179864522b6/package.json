@@ -3,9 +3,14 @@
   "version": "0.1.0",
   "description": "Mirror of OpenSSL",
   "license": "Apache 2.0",
-  "source": "https://github.com/openssl/openssl/archive/OpenSSL_1_1_1c.tar.gz#eb59b090bd757e30b676fb5e80c25ddb5a2f9511",
+  "source": "https://github.com/openssl/openssl/archive/OpenSSL_1_1_1d.tar.gz#df0ee4811c87c209ebadb4e6b203d1e560d00f9a",
   "override": {
     "build": [
+      [
+        "bash",
+        "-c",
+        "#{os == 'windows' ? 'patch -p1 < openssl-1.1.1d-mingw.patch' : 'true'}"
+      ],
       [
         "bash",
         "-c",
@@ -41,7 +46,7 @@
       }
     },
     "dependencies": {
-      "@opam/conf-autoconf": "esy-packages/esy-autoconf:package.json#ea58671",
+      "@opam/conf-autoconf": "esy-packages/esy-autoconf:package.json#fb93edf",
       "@opam/conf-pkg-config": "*"
     }
   }

@@ -5,7 +5,7 @@
 #include <openssl/err.h>
 
 int main(int arc, char *argv[])
-{ 
+{
     /* Load the human readable error strings for libcrypto */
     ERR_load_crypto_strings();
 
@@ -13,7 +13,7 @@ int main(int arc, char *argv[])
     OpenSSL_add_all_algorithms();
 
     /* Load config file, and other important initialisation */
-    OPENSSL_config(NULL);
+    CONF_modules_load(NULL, NULL, 0);
 
     printf("OpenSSL successfully initialized.\n");
 

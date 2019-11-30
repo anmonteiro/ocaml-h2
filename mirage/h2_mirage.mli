@@ -32,6 +32,9 @@
 
 open H2
 
+(* Note: could theoretically be `H2_lwt.Server with type socket := flow and
+ * type addr := unit` but the signature for `create_connection_handler` takes
+ * one less arg in Mirage (client address). *)
 module type Server = sig
   type flow
 
