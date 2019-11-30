@@ -3,6 +3,8 @@ Unreleased
 
 - h2, h2-lwt, h2-lwt-unix, h2-mirage: Remove support for versions of OCaml
   lower than 4.06 ([#74](https://github.com/anmonteiro/ocaml-h2/pull/74))
+- h2: Expose more information in client error handlers when initiating a
+  connection ([#80](https://github.com/anmonteiro/ocaml-h2/pull/80))
 
 0.4.0 2019-11-05
 --------------
@@ -28,8 +30,6 @@ Unreleased
 - h2-mirage: Adapt to Mirage 3.7 interfaces. `h2_mirage` now requires
   `conduit-mirage` >= 2.0.2 and `mirage-flow` >= 2.0.0
   ([#77](https://github.com/anmonteiro/ocaml-h2/pull/77))
-- h2: Expose more information in client error handlers when initiating a
-  connection ([#80](https://github.com/anmonteiro/ocaml-h2/pull/80))
 
 0.3.0 2019-05-04
 --------------
