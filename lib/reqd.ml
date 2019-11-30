@@ -349,7 +349,7 @@ let close_stream t =
        *   without error by sending a RST_STREAM with an error code of NO_ERROR
        *   after sending a complete response (i.e., a frame with the END_STREAM
        *   flag). *)
-      reset_stream t Error.NoError
+      reset_stream t Error_code.NoError
     | Active (HalfClosed _, _) ->
       Writer.flush t.writer (fun () -> Stream.finish_stream t Finished)
     | _ ->
@@ -406,7 +406,7 @@ let report_error t exn error_code =
   | Closed _ ->
     ()
 
-let report_exn t exn = report_error t (`Exn exn) Error.InternalError
+let report_exn t exn = report_error t (`Exn exn) Error_code.InternalError
 
 let try_with t f : (unit, exn) Result.result =
   try

@@ -190,7 +190,7 @@ type frame_payload =
   (* From RFC7540§6.4:
    *   The RST_STREAM frame contains a single unsigned, 32-bit integer
    *   identifying the error code (Section 7). [...] *)
-  | RSTStream of Error.error_code
+  | RSTStream of Error_code.t
   (* From RFC7540§6.5:
    *   The payload of a SETTINGS frame consists of zero or more parameters,
    *   each consisting of an unsigned 16-bit setting identifier and an
@@ -216,7 +216,7 @@ type frame_payload =
    *
    *   [...] Endpoints MAY append opaque data to the payload of any GOAWAY
    *   frame. *)
-  | GoAway of Stream_identifier.t * Error.error_code * Bigstringaf.t
+  | GoAway of Stream_identifier.t * Error_code.t * Bigstringaf.t
   (* From RFC7540§6.9:
    *   The payload of a WINDOW_UPDATE frame is one reserved bit plus an
    *   unsigned 31-bit integer indicating the number of octets that the

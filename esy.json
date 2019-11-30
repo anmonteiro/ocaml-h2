@@ -20,7 +20,8 @@
     "@opam/conf-libev": "*",
     "@opam/httpaf": "*",
     "@opam/httpaf-lwt-unix": "*",
-    "@opam/ssl": ">= 0.5.8"
+    "@opam/ssl": ">= 0.5.8",
+    "@opam/sexplib": ">= v0.12.0"
   },
   "devDependencies": {
     "@opam/alcotest": "*",
@@ -32,17 +33,9 @@
   },
   "resolutions": {
     "@opam/conf-libev": "esy-packages/libev:package.json#0b5eb66",
-    "@opam/conf-openssl": "esy-packages/esy-openssl#306bb87",
-    "@opam/httpaf": "anmonteiro/httpaf:httpaf.opam#491b927",
-    "@opam/httpaf-lwt": "anmonteiro/httpaf:httpaf-lwt.opam#491b927",
-    "@opam/httpaf-lwt-unix": "anmonteiro/httpaf:httpaf-lwt-unix.opam#491b927",
-    "@opam/merlin": {
-      "source": "ocaml/merlin:merlin.opam#cfc28bd",
-      "override": {
-        "dependencies": {
-          "ocaml": "~4.9.0"
-        }
-      }
-    }
+    "@opam/conf-libssl": "esy-packages/esy-openssl#860ad7f",
+    "@opam/httpaf": "anmonteiro/httpaf:httpaf.opam#b8d4eb3",
+    "@opam/httpaf-lwt": "anmonteiro/httpaf:httpaf-lwt.opam#b8d4eb3",
+    "@opam/httpaf-lwt-unix": "anmonteiro/httpaf:httpaf-lwt-unix.opam#b8d4eb3"
   }
 }

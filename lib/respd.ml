@@ -40,7 +40,7 @@ open Stream
 type error =
   [ `Malformed_response of string
   | `Invalid_response_body_length of Response.t
-  | `Protocol_error
+  | `Protocol_error of Error_code.t * string
   | `Exn of exn
   ]
 
@@ -186,7 +186,7 @@ let close_stream t =
     ()
 
 (* returns whether we should send an RST_STREAM frame or not. *)
-let _report_error t ?response_body exn error_code =
+let _report_error t ?response_body error error_code =
   match fst t.error_code with
   | `Ok ->
     (match response_body with
@@ -196,28 +196,28 @@ let _report_error t ?response_body exn error_code =
       Body.execute_read response_body
     | None ->
       ());
-    t.error_code <- (exn :> [ `Ok | error ]), Some error_code;
-    t.error_handler exn;
+    t.error_code <- (error :> [ `Ok | error ]), Some error_code;
+    t.error_handler error;
     true
   | `Exn _
-  | `Protocol_error
+  | `Protocol_error _
   | `Invalid_response_body_length _
   | `Malformed_response _ ->
     (* XXX: Is this even possible? *)
     failwith "h2.Reqd.report_exn: NYI"
 
-let report_error t exn error_code =
+let report_error t error error_code =
   match t.state with
   | Active
       ( ( Open (ActiveMessage { response_body; _ })
         | HalfClosed (ActiveMessage { response_body; _ }) )
       , s ) ->
     Body.close_writer s.request_body;
-    if _report_error t ~response_body exn error_code then
+    if _report_error t ~response_body error error_code then
       reset_stream t error_code
   | Reserved (ActiveMessage s) | Active (_, s) ->
     Body.close_writer s.request_body;
-    if _report_error t exn error_code then
+    if _report_error t error error_code then
       reset_stream t error_code
   | Reserved _ ->
     (* Streams in the reserved state don't yet have a stream-level error
@@ -225,7 +225,7 @@ let report_error t exn error_code =
     ()
   | Idle | Closed _ ->
     (* Not allowed to send RST_STREAM frames in these states *)
-    ignore (_report_error t exn error_code)
+    ignore (_report_error t error error_code)
 
 let close_request_body { request_body; _ } = Body.close_reader request_body
 

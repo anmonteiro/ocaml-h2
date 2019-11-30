@@ -28,6 +28,8 @@ Unreleased
 - h2-mirage: Adapt to Mirage 3.7 interfaces. `h2_mirage` now requires
   `conduit-mirage` >= 2.0.2 and `mirage-flow` >= 2.0.0
   ([#77](https://github.com/anmonteiro/ocaml-h2/pull/77))
+- h2: Expose more information in client error handlers when initiating a
+  connection ([#80](https://github.com/anmonteiro/ocaml-h2/pull/80))
 
 0.3.0 2019-05-04
 --------------

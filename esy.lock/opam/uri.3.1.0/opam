@@ -16,7 +16,7 @@ depends: [
   "ocaml" {>= "4.04.0"}
   "dune" {>= "1.2.0"}
   "ounit" {with-test & >= "1.0.2"}
-  "ppx_sexp_conv" {with-test & >= "v0.9.0" & < "v0.13"}
+  "ppx_sexp_conv" {with-test & >= "v0.9.0"}
   "re" {>= "1.9.0"}
   "stringext" {>= "1.4.0"}
 ]
@@ -27,9 +27,9 @@ build: [
 ]
 url {
   src:
-    "https://github.com/mirage/ocaml-uri/releases/download/v3.0.0/uri-v3.0.0.tbz"
+    "https://github.com/mirage/ocaml-uri/releases/download/v3.1.0/uri-v3.1.0.tbz"
   checksum: [
-    "sha256=8fb334fba6ebbf879e2e82d80d6adee8bdaf6cec3bb3da248110d805477d19fa"
-    "sha512=553c18032a7c96cccdc8e37f497ce34e821b9dd089cfc8685783b7ade1d4dfa422722e4724abcba8b1171b51fa91a2bee297396fc7c349118069b6352e07881e"
+    "sha256=c452823fd870cf7cffe51aef3e9ca646a382dc6f87282f2b16bfe30a7515ac43"
+    "sha512=c015576bb077fd243022bcd8804e628d23a253dcd8bbdda8dc2a57e86cfeb9fd629087ec7d7e23dc71dd7cd137450ca2c5ecf8fb7d184ec9d1d4e41f6f83ee38"
   ]
 }
