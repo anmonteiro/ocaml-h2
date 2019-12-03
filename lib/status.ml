@@ -40,7 +40,12 @@
  *   makes unifying types with http/af much easier. `H2.Status.t` is, thus, a
  *   strict superset of `Httpaf.Status.t`. *)
 
-include Httpaf.Status
+include (
+  Httpaf.Status :
+    module type of Httpaf.Status
+      with type client_error := Httpaf.Status.client_error
+       and type standard := Httpaf.Status.standard
+       and type t := Httpaf.Status.t)
 
 type client_error =
   [ Httpaf.Status.client_error
