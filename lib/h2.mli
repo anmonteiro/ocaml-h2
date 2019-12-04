@@ -65,37 +65,19 @@ module Method : module type of Httpaf.Method
     See {{:https://tools.ietf.org/html/rfc7231#section-6} RFC7231§6} for more
     details.
 
-    For the most part, this module is a proxy to [Httpaf.Status]. Its
-    [informational] type, however, removes support for the [Switching_protocols]
-    tag, as per the HTTP/2 spec (relevant portion reproduced below).
-
-    From RFC7540§8.1.1: HTTP/2 removes support for the 101 (Switching
-    Protocols) informational status code ([RFC7231], Section 6.2.2).
+    This module is a strict superset of [Httpaf.Status]. Even though the HTTP/2
+    specification removes support for the [Switching_protocols] status code, h2
+    keeps it for the sake of higher level interaction between OCaml libraries
+    that support both HTTP/1 and HTTP/2.
 
     See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1}
     for more details. *)
 module Status : sig
-  type informational = [ `Continue ]
-  (** The 1xx (Informational) class of status code indicates an interim response
-      for communicating connection status or request progress prior to
-      completing the requested action and sending a final response.
-
-      See {{:https://tools.ietf.org/html/rfc7231#section-6.2} RFC7231§6.2} for
-      more details. *)
-
-  type successful = Httpaf.Status.successful
-  (** The 2xx (Successful) class of status code indicates that the client's
-      request was successfully received, understood, and accepted.
-
-      See {{:https://tools.ietf.org/html/rfc7231#section-6.3} RFC7231§6.3} for
-      more details. *)
-
-  type redirection = Httpaf.Status.redirection
-  (** The 3xx (Redirection) class of status code indicates that further action
-      needs to be taken by the user agent in order to fulfill the request.
-
-      See {{:https://tools.ietf.org/html/rfc7231#section-6.4} RFC7231§6.4} for
-      more details. *)
+  include
+    module type of Httpaf.Status
+      with type client_error := Httpaf.Status.client_error
+       and type standard := Httpaf.Status.standard
+       and type t := Httpaf.Status.t
 
   type client_error =
     [ Httpaf.Status.client_error
@@ -111,20 +93,9 @@ module Status : sig
       Request) tag. See {{:https://tools.ietf.org/html/rfc7540#section-9.1.2}
       RFC7540§9.1.2} for more details. *)
 
-  type server_error = Httpaf.Status.server_error
-  (** The 5xx (Server Error) class of status code indicates that the server is
-      aware that it has erred or is incapable of performing the requested
-      method.
-
-      See {{:https://tools.ietf.org/html/rfc7231#section-6.6} RFC7231§6.6} for
-      more details. *)
-
   type standard =
-    [ informational
-    | successful
-    | redirection
+    [ Httpaf.Status.standard
     | client_error
-    | server_error
     ]
   (** The status codes defined in the HTTP/1.1 RFCs, excluding the
       [Switching Protocols] status and including the [Misdirected Request] as

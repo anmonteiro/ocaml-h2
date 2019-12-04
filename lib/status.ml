@@ -34,12 +34,18 @@
 
 (* From RFC7540§8.1.1:
  *   HTTP/2 removes support for the 101 (Switching Protocols) informational
- *   status code ([RFC7231], Section 6.2.2). *)
-type informational = [ `Continue ]
+ *   status code ([RFC7231], Section 6.2.2).
+ *
+ *   Note: While the above is true, we don't enforce in this library, as it
+ *   makes unifying types with http/af much easier. `H2.Status.t` is, thus, a
+ *   strict superset of `Httpaf.Status.t`. *)
 
-type successful = Httpaf.Status.successful
-
-type redirection = Httpaf.Status.redirection
+include (
+  Httpaf.Status :
+    module type of Httpaf.Status
+      with type client_error := Httpaf.Status.client_error
+       and type standard := Httpaf.Status.standard
+       and type t := Httpaf.Status.t)
 
 type client_error =
   [ Httpaf.Status.client_error
@@ -52,14 +58,9 @@ type client_error =
     `Misdirected_request
   ]
 
-type server_error = Httpaf.Status.server_error
-
 type standard =
-  [ informational
-  | successful
-  | redirection
+  [ Httpaf.Status.standard
   | client_error
-  | server_error
   ]
 
 type t =
@@ -85,121 +86,17 @@ let to_code = function
   | #Httpaf.Status.t as t ->
     Httpaf.Status.to_code t
 
-let really_unsafe_of_code = function
-  (* Informational *)
-  | 100 ->
-    `Continue
-  (* Successful *)
-  | 200 ->
-    `OK
-  | 201 ->
-    `Created
-  | 202 ->
-    `Accepted
-  | 203 ->
-    `Non_authoritative_information
-  | 204 ->
-    `No_content
-  | 205 ->
-    `Reset_content
-  | 206 ->
-    `Partial_content
-  (* Redirection *)
-  | 300 ->
-    `Multiple_choices
-  | 301 ->
-    `Moved_permanently
-  | 302 ->
-    `Found
-  | 303 ->
-    `See_other
-  | 304 ->
-    `Not_modified
-  | 305 ->
-    `Use_proxy
-  | 307 ->
-    `Temporary_redirect
-  (* Client error *)
-  | 400 ->
-    `Bad_request
-  | 401 ->
-    `Unauthorized
-  | 402 ->
-    `Payment_required
-  | 403 ->
-    `Forbidden
-  | 404 ->
-    `Not_found
-  | 405 ->
-    `Method_not_allowed
-  | 406 ->
-    `Not_acceptable
-  | 407 ->
-    `Proxy_authentication_required
-  | 408 ->
-    `Request_timeout
-  | 409 ->
-    `Conflict
-  | 410 ->
-    `Gone
-  | 411 ->
-    `Length_required
-  | 412 ->
-    `Precondition_failed
-  | 413 ->
-    `Payload_too_large
-  | 414 ->
-    `Uri_too_long
-  | 415 ->
-    `Unsupported_media_type
-  | 416 ->
-    `Range_not_satisfiable
-  | 417 ->
-    `Expectation_failed
-  | 418 ->
-    `I_m_a_teapot
-  | 420 ->
-    `Enhance_your_calm
+let unsafe_of_code = function
   | 421 ->
     `Misdirected_request
-  | 426 ->
-    `Upgrade_required
-  (* Server error *)
-  | 500 ->
-    `Internal_server_error
-  | 501 ->
-    `Not_implemented
-  | 502 ->
-    `Bad_gateway
-  | 503 ->
-    `Service_unavailable
-  | 504 ->
-    `Gateway_timeout
-  | 505 ->
-    `Http_version_not_supported
   | c ->
-    `Code c
+    (Httpaf.Status.unsafe_of_code c :> t)
 
-let unsafe_of_code c =
-  match really_unsafe_of_code c with
-  | `Code c ->
-    if c < 0 then
-      failwith (Printf.sprintf "Status.unsafe_of_code: %d is negative" c)
-    else
-      `Code c
-  | s ->
-    s
-
-let of_code c =
-  match really_unsafe_of_code c with
-  | `Code c ->
-    if c < 100 || c > 999 then
-      failwith
-        (Printf.sprintf "Status.of_code: %d is not a three-digit number" c)
-    else
-      `Code c
-  | s ->
-    s
+let of_code = function
+  | 421 ->
+    `Misdirected_request
+  | c ->
+    (Httpaf.Status.of_code c :> t)
 
 let is_informational = function
   | `Misdirected_request ->
