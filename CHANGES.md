@@ -5,6 +5,8 @@ Unreleased
   lower than 4.06 ([#74](https://github.com/anmonteiro/ocaml-h2/pull/74))
 - h2: Expose more information in client error handlers when initiating a
   connection ([#80](https://github.com/anmonteiro/ocaml-h2/pull/80))
+- h2: Make H2.Status.t a strict superset of Httpaf.Status.t
+  ([#83](https://github.com/anmonteiro/ocaml-h2/pull/83))
 
 0.4.0 2019-11-05
 --------------
