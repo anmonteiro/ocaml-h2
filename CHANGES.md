@@ -7,6 +7,11 @@ Unreleased
   connection ([#80](https://github.com/anmonteiro/ocaml-h2/pull/80))
 - h2: Make H2.Status.t a strict superset of Httpaf.Status.t
   ([#83](https://github.com/anmonteiro/ocaml-h2/pull/83))
+- h2-lwt, h2-lwt-unix: split HTTPS functions in 2: one that sets up a default
+  secure connection and performs the TLS handshake / accept, and one that is
+  more "raw", i.e. leaves that responsibility to the caller. Also exposes the
+  `socket` type to make it easier to abstract over HTTP / HTTPS
+  ([#84](https://github.com/anmonteiro/httpaf/pull/84))
 
 0.4.0 2019-11-05
 --------------

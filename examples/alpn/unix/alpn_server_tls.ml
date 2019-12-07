@@ -1,10 +1,7 @@
 open Alpn_lib
 
-let http1_handler tls_server =
+let http1_handler =
   Httpaf_lwt_unix.Server.TLS.create_connection_handler
-    ~server:tls_server
-    ?certfile:None
-    ?keyfile:None
     ?config:None
     ~request_handler:Http1_handler.request_handler
     ~error_handler:Http1_handler.error_handler
@@ -63,7 +60,7 @@ let start_https_server () =
                   (* Unable to negotiate a protocol *)
                   Lwt.return_unit
                 | Some "http/1.1" ->
-                  http1_handler tls_server client_addr fd
+                  http1_handler client_addr tls_server
                 | Some "h2" ->
                   h2_handler client_addr tls_server
                 | _ ->
