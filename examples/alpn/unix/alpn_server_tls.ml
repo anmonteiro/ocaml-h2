@@ -9,11 +9,8 @@ let http1_handler tls_server =
     ~request_handler:Http1_handler.request_handler
     ~error_handler:Http1_handler.error_handler
 
-let h2_handler tls_server =
+let h2_handler =
   H2_lwt_unix.Server.TLS.create_connection_handler
-    ~server:tls_server
-    ?certfile:None
-    ?keyfile:None
     ?config:None
     ~request_handler:H2_handler.request_handler
     ~error_handler:H2_handler.error_handler
@@ -68,7 +65,7 @@ let start_https_server () =
                 | Some "http/1.1" ->
                   http1_handler tls_server client_addr fd
                 | Some "h2" ->
-                  h2_handler tls_server client_addr fd
+                  h2_handler client_addr tls_server
                 | _ ->
                   (* Can't really happen - would mean that TLS negotiated a
                    * protocol that we didn't specify. *)

@@ -91,6 +91,8 @@ module Config = H2.Config
 include H2_lwt_intf
 
 module Server (Io : IO) = struct
+  type socket = Io.socket
+
   let create_connection_handler
       ?(config = Config.default)
       ~request_handler

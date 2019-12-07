@@ -94,8 +94,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
   in
   let certfile = "./certificates/server.pem" in
   let keyfile = "./certificates/server.key" in
-  H2_lwt_unix.Server.SSL.create_connection_handler
-    ?server:None
+  H2_lwt_unix.Server.SSL.create_connection_handler_with_default
     ~certfile
     ~keyfile
     ?config:None

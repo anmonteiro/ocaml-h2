@@ -119,27 +119,19 @@ let make_client socket =
 
 (* This function does not perform error handling and will therefore crash a
  * server in case e.g. the handshake fails. *)
-let make_server ?server ?certfile ?keyfile socket =
-  match server, certfile, keyfile with
-  | Some server, _, _ ->
-    Lwt.return server
-  | None, Some cert, Some priv_key ->
-    let server_ctx = Ssl.create_context Ssl.TLSv1_3 Ssl.Server_context in
-    Ssl.disable_protocols server_ctx [ Ssl.SSLv23 ];
-    Ssl.use_certificate server_ctx cert priv_key;
-    let rec first_match l1 = function
-      | [] ->
-        None
-      | x :: _ when List.mem x l1 ->
-        Some x
-      | _ :: xs ->
-        first_match l1 xs
-    in
-    Ssl.set_context_alpn_protos server_ctx [ "h2" ];
-    Ssl.set_context_alpn_select_callback server_ctx (fun client_protos ->
-        first_match client_protos [ "h2" ]);
-    Lwt_ssl.ssl_accept socket server_ctx
-  | _ ->
-    Lwt.fail
-      (Invalid_argument
-         "Certfile and Keyfile required when server isn't provided")
+let make_server ~certfile ~keyfile socket =
+  let server_ctx = Ssl.create_context Ssl.TLSv1_3 Ssl.Server_context in
+  Ssl.disable_protocols server_ctx [ Ssl.SSLv23 ];
+  Ssl.use_certificate server_ctx certfile keyfile;
+  let rec first_match l1 = function
+    | [] ->
+      None
+    | x :: _ when List.mem x l1 ->
+      Some x
+    | _ :: xs ->
+      first_match l1 xs
+  in
+  Ssl.set_context_alpn_protos server_ctx [ "h2" ];
+  Ssl.set_context_alpn_select_callback server_ctx (fun client_protos ->
+      first_match client_protos [ "h2" ]);
+  Lwt_ssl.ssl_accept socket server_ctx

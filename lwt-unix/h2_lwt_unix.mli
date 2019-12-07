@@ -37,14 +37,21 @@ open H2
 module Server : sig
   include
     H2_lwt.Server
-      with type socket := Lwt_unix.file_descr
+      with type socket = Lwt_unix.file_descr
        and type addr := Unix.sockaddr
 
   module TLS : sig
     val create_connection_handler
-      :  ?server:Tls_io.descriptor
-      -> ?certfile:string
-      -> ?keyfile:string
+      :  ?config:Config.t
+      -> request_handler:(Unix.sockaddr -> Server_connection.request_handler)
+      -> error_handler:(Unix.sockaddr -> Server_connection.error_handler)
+      -> Unix.sockaddr
+      -> Tls_io.descriptor
+      -> unit Lwt.t
+
+    val create_connection_handler_with_default
+      :  certfile:string
+      -> keyfile:string
       -> ?config:Config.t
       -> request_handler:(Unix.sockaddr -> Server_connection.request_handler)
       -> error_handler:(Unix.sockaddr -> Server_connection.error_handler)
@@ -55,9 +62,16 @@ module Server : sig
 
   module SSL : sig
     val create_connection_handler
-      :  ?server:Ssl_io.descriptor
-      -> ?certfile:string
-      -> ?keyfile:string
+      :  ?config:Config.t
+      -> request_handler:(Unix.sockaddr -> Server_connection.request_handler)
+      -> error_handler:(Unix.sockaddr -> Server_connection.error_handler)
+      -> Unix.sockaddr
+      -> Ssl_io.descriptor
+      -> unit Lwt.t
+
+    val create_connection_handler_with_default
+      :  certfile:string
+      -> keyfile:string
       -> ?config:Config.t
       -> request_handler:(Unix.sockaddr -> Server_connection.request_handler)
       -> error_handler:(Unix.sockaddr -> Server_connection.error_handler)
@@ -71,11 +85,10 @@ module Client : sig
   include H2_lwt.Client with type socket = Lwt_unix.file_descr
 
   module TLS : sig
-    include H2_lwt.Client with type socket := Lwt_unix.file_descr
+    include H2_lwt.Client with type socket = Tls_io.descriptor
 
-    val create_connection
-      :  ?client:Tls_io.descriptor
-      -> ?config:Config.t
+    val create_connection_with_default
+      :  ?config:Config.t
       -> ?push_handler:
            (Request.t -> (Client_connection.response_handler, unit) result)
       -> error_handler:Client_connection.error_handler
@@ -86,7 +99,7 @@ module Client : sig
   module SSL : sig
     include H2_lwt.Client with type socket = Ssl_io.descriptor
 
-    val create_connection_with_default_secure_client
+    val create_connection_with_default
       :  ?config:Config.t
       -> ?push_handler:
            (Request.t -> (Client_connection.response_handler, unit) result)

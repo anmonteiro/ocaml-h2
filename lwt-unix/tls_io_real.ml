@@ -102,40 +102,24 @@ module Io :
     Lwt.return_unit
 end
 
-let make_client ?client socket =
-  match client with
-  | Some client ->
-    Lwt.return client
-  | None ->
-    X509_lwt.authenticator `No_authentication_I'M_STUPID
-    >>= fun authenticator ->
-    let config = Tls.Config.client ~authenticator ~alpn_protocols:[ "h2" ] () in
-    Tls_lwt.Unix.client_of_fd config socket
+let make_client socket =
+  X509_lwt.authenticator `No_authentication_I'M_STUPID >>= fun authenticator ->
+  let config = Tls.Config.client ~authenticator ~alpn_protocols:[ "h2" ] () in
+  Tls_lwt.Unix.client_of_fd config socket
 
 (* This function does not perform error handling and will therefore crash a
  * server in case e.g. the handshake fails. *)
-let make_server ?server ?certfile ?keyfile socket =
-  let server =
-    match server, certfile, keyfile with
-    | Some server, _, _ ->
-      Lwt.return server
-    | None, Some cert, Some priv_key ->
-      X509_lwt.private_of_pems ~cert ~priv_key >>= fun certificate ->
-      let config =
-        Tls.Config.server
-          ~alpn_protocols:[ "h2" ]
-          ~certificates:
-            (`Single certificate) (* ~version:Tls.Core.(TLS_1_2, TLS_1_2) *)
-          ~ciphers:
-            (List.filter
-               Tls.Ciphersuite.ciphersuite_tls12_only
-               Tls.Config.Ciphers.supported)
-          ()
-      in
-      Tls_lwt.Unix.server_of_fd config socket
-    | _ ->
-      Lwt.fail
-        (Invalid_argument
-           "Certfile and Keyfile required when server isn't provided")
+let make_server ~certfile ~keyfile socket =
+  X509_lwt.private_of_pems ~cert:certfile ~priv_key:keyfile
+  >>= fun certificate ->
+  let config =
+    Tls.Config.server
+      ~alpn_protocols:[ "h2" ]
+      ~certificates:(`Single certificate)
+      ~ciphers:
+        (List.filter
+           Tls.Ciphersuite.ciphersuite_tls12_only
+           Tls.Config.Ciphers.supported)
+      ()
   in
-  server
+  Tls_lwt.Unix.server_of_fd config socket
