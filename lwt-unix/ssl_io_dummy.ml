@@ -51,9 +51,7 @@ module Io :
   let report_exn _connection _ _exn = failwith "Ssl not available"
 end
 
-let[@ocaml.warning "-21"] make_client ?client:_ =
-  failwith "Ssl not available";
-  fun _socket -> Lwt.fail_with "Ssl not available"
+let make_client _socket = Lwt.fail_with "Ssl not available"
 
 let[@ocaml.warning "-21"] make_server ?server:_ ?certfile:_ ?keyfile:_ =
   failwith "Ssl not available";
