@@ -54,7 +54,9 @@ let () =
       in
       let response_received, notify_response_received = Lwt.wait () in
       let response_handler = response_handler notify_response_received in
-      Client.SSL.create_connection_with_default_secure_client ~error_handler socket
+      Client.SSL.create_connection_with_default_secure_client
+        ~error_handler
+        socket
       >>= fun connection ->
       let request_body =
         Client.SSL.request connection request ~error_handler ~response_handler

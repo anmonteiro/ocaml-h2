@@ -171,7 +171,7 @@ module Client = struct
     let create_connection_with_default_secure_client
         ?(config = Config.default) ?push_handler ~error_handler socket
       =
-        Ssl_io.make_client socket >>= fun ssl_client ->
-        create_connection ~config ?push_handler ~error_handler ssl_client
+      Ssl_io.make_client socket >>= fun ssl_client ->
+      create_connection ~config ?push_handler ~error_handler ssl_client
   end
 end
