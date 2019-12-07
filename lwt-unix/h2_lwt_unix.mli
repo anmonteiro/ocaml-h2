@@ -68,7 +68,7 @@ module Server : sig
 end
 
 module Client : sig
-  include H2_lwt.Client with type socket := Lwt_unix.file_descr
+  include H2_lwt.Client with type socket = Lwt_unix.file_descr
 
   module TLS : sig
     include H2_lwt.Client with type socket := Lwt_unix.file_descr
@@ -84,11 +84,10 @@ module Client : sig
   end
 
   module SSL : sig
-    include H2_lwt.Client with type socket := Lwt_unix.file_descr
+    include H2_lwt.Client with type socket = Ssl_io.descriptor
 
-    val create_connection
-      :  ?client:Ssl_io.descriptor
-      -> ?config:Config.t
+    val create_connection_with_default_secure_client
+      :  ?config:Config.t
       -> ?push_handler:
            (Request.t -> (Client_connection.response_handler, unit) result)
       -> error_handler:Client_connection.error_handler

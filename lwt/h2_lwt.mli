@@ -45,4 +45,4 @@ module type Client = H2_lwt_intf.Client
 module Server (Io : IO) :
   Server with type socket := Io.socket and type addr := Io.addr
 
-module Client (Io : IO) : Client with type socket := Io.socket
+module Client (Io : IO) : Client with type socket = Io.socket

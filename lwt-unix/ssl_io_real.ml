@@ -110,16 +110,12 @@ module Io :
     Lwt.return_unit
 end
 
-let make_client ?client socket =
-  match client with
-  | Some client ->
-    Lwt.return client
-  | None ->
-    let client_ctx = Ssl.create_context Ssl.SSLv23 Ssl.Client_context in
-    Ssl.disable_protocols client_ctx [ Ssl.SSLv23 ];
-    Ssl.set_context_alpn_protos client_ctx [ "h2" ];
-    Ssl.honor_cipher_order client_ctx;
-    Lwt_ssl.ssl_connect socket client_ctx
+let make_client socket =
+  let client_ctx = Ssl.create_context Ssl.SSLv23 Ssl.Client_context in
+  Ssl.disable_protocols client_ctx [ Ssl.SSLv23 ];
+  Ssl.set_context_alpn_protos client_ctx [ "h2" ];
+  Ssl.honor_cipher_order client_ctx;
+  Lwt_ssl.ssl_connect socket client_ctx
 
 (* This function does not perform error handling and will therefore crash a
  * server in case e.g. the handshake fails. *)

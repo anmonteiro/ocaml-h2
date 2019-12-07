@@ -156,6 +156,7 @@ end
 
 module Client (Io : IO) = struct
   module Client_connection = H2.Client_connection
+  type socket = Io.socket
 
   type t = Client_connection.t
 
