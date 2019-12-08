@@ -93,6 +93,29 @@ include H2_lwt_intf
 module Server (Io : IO) = struct
   type socket = Io.socket
 
+  let report_exn connection socket exn =
+    (* This needs to handle two cases. The case where the socket is
+     * still open and we can gracefully respond with an error, and the
+     * case where the client has already left. The second case is more
+     * common when communicating over HTTPS, given that the remote peer
+     * can close the connection without requiring an acknowledgement:
+     *
+     * From RFC5246§7.2.1:
+     *   Unless some other fatal alert has been transmitted, each party
+     *   is required to send a close_notify alert before closing the
+     *   write side of the connection.  The other party MUST respond
+     *   with a close_notify alert of its own and close down the
+     *   connection immediately, discarding any pending writes. It is
+     *   not required for the initiator of the close to wait for the
+     *   responding close_notify alert before closing the read side of
+     *   the connection. *)
+    (match Io.state socket with
+    | `Error | `Closed ->
+      H2.Server_connection.shutdown connection
+    | `Open ->
+      H2.Server_connection.report_exn connection exn);
+    Lwt.return_unit
+
   let create_connection_handler
       ?(config = Config.default)
       ~request_handler
@@ -106,7 +129,6 @@ module Server (Io : IO) = struct
         ~error_handler:(error_handler client_addr)
         (request_handler client_addr)
     in
-    let report_exn = Io.report_exn connection socket in
     let read_buffer = Buffer.create config.Config.read_buffer_size in
     let read_loop_exited, notify_read_loop_exited = Lwt.wait () in
     let read_loop () =
@@ -129,7 +151,8 @@ module Server (Io : IO) = struct
           Io.shutdown_receive socket;
           Lwt.return_unit
       in
-      Lwt.async (fun () -> Lwt.catch read_loop_step report_exn)
+      Lwt.async (fun () ->
+          Lwt.catch read_loop_step (report_exn connection socket))
     in
     let writev = Io.writev socket in
     let write_loop_exited, notify_write_loop_exited = Lwt.wait () in
@@ -148,7 +171,8 @@ module Server (Io : IO) = struct
           Io.shutdown_send socket;
           Lwt.return_unit
       in
-      Lwt.async (fun () -> Lwt.catch write_loop_step report_exn)
+      Lwt.async (fun () ->
+          Lwt.catch write_loop_step (report_exn connection socket))
     in
     read_loop ();
     write_loop ();

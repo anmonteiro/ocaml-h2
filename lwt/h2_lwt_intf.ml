@@ -55,7 +55,7 @@ module type IO = sig
 
   val close : socket -> unit Lwt.t
 
-  val report_exn : Server_connection.t -> socket -> exn -> unit Lwt.t
+  val state : socket -> [ `Open | `Error | `Closed ]
 end
 
 module type Server = sig

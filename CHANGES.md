@@ -12,6 +12,9 @@ Unreleased
   more "raw", i.e. leaves that responsibility to the caller. Also exposes the
   `socket` type to make it easier to abstract over HTTP / HTTPS
   ([#84](https://github.com/anmonteiro/httpaf/pull/84))
+- h2-lwt, h2-lwt-unix, h2-mirage: Improve the `H2_lwt.IO` interface, don't
+  require a `report_exn` function, only a `state` function that returns the
+  socket state ([#85](https://github.com/anmonteiro/httpaf/pull/85))
 
 0.4.0 2019-11-05
 --------------
