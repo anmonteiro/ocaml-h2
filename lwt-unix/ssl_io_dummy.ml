@@ -48,7 +48,7 @@ module Io :
 
   let close _ = failwith "Ssl not available"
 
-  let report_exn _connection _ _exn = failwith "Ssl not available"
+  let state _ = failwith "Ssl not available"
 end
 
 let make_client _socket = Lwt.fail_with "Ssl not available"

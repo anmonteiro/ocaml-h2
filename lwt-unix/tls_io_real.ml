@@ -78,28 +78,8 @@ module Io :
 
   let close = Tls_lwt.Unix.close
 
-  let report_exn connection tls exn =
-    (* This needs to handle two cases. The case where the socket is
-     * still open and we can gracefully respond with an error, and the
-     * case where the client has already left. The second case is more
-     * common when communicating over HTTPS, given that the remote peer
-     * can close the connection without requiring an acknowledgement:
-     *
-     * From RFC5246§7.2.1:
-     *   Unless some other fatal alert has been transmitted, each party
-     *   is required to send a close_notify alert before closing the
-     *   write side of the connection.  The other party MUST respond
-     *   with a close_notify alert of its own and close down the
-     *   connection immediately, discarding any pending writes. It is
-     *   not required for the initiator of the close to wait for the
-     *   responding close_notify alert before closing the read side of
-     *   the connection. *)
-    (match Tls_lwt.Unix.epoch tls with
-    | `Error ->
-      H2.Server_connection.shutdown connection
-    | `Ok _ ->
-      H2.Server_connection.report_exn connection exn);
-    Lwt.return_unit
+  let state tls =
+    match Tls_lwt.Unix.epoch tls with `Error -> `Error | `Ok _ -> `Open
 end
 
 let make_client socket =

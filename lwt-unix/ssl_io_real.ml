@@ -86,28 +86,14 @@ module Io :
 
   let close = Lwt_ssl.close
 
-  let report_exn connection ssl exn =
-    (* This needs to handle two cases. The case where the socket is
-     * still open and we can gracefully respond with an error, and the
-     * case where the client has already left. The second case is more
-     * common when communicating over HTTPS, given that the remote peer
-     * can close the connection without requiring an acknowledgement:
-     *
-     * From RFC5246§7.2.1:
-     *   Unless some other fatal alert has been transmitted, each party
-     *   is required to send a close_notify alert before closing the
-     *   write side of the connection.  The other party MUST respond
-     *   with a close_notify alert of its own and close down the
-     *   connection immediately, discarding any pending writes. It is
-     *   not required for the initiator of the close to wait for the
-     *   responding close_notify alert before closing the read side of
-     *   the connection. *)
-    (match Lwt_unix.state (Lwt_ssl.get_fd ssl) with
-    | Aborted _ | Closed ->
-      H2.Server_connection.shutdown connection
+  let state ssl =
+    match Lwt_unix.state (Lwt_ssl.get_fd ssl) with
+    | Aborted _ ->
+      `Error
+    | Closed ->
+      `Closed
     | Opened ->
-      H2.Server_connection.report_exn connection exn);
-    Lwt.return_unit
+      `Open
 end
 
 let make_client socket =

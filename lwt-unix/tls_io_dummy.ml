@@ -48,7 +48,7 @@ module Io :
 
   let close _ = Lwt.fail_with "Tls not available"
 
-  let report_exn _connection _ _exn = Lwt.fail_with "Tls not available"
+  let state _ = failwith "Tls not available"
 end
 
 let make_client _socket = Lwt.return `Tls_not_available

@@ -30,7 +30,6 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
-open H2
 open Lwt.Infix
 
 module Io :
@@ -76,28 +75,14 @@ struct
 
   let writev = Faraday_lwt_unix.writev_of_fd
 
-  let report_exn connection socket exn =
-    (* This needs to handle two cases. The case where the socket is
-     * still open and we can gracefully respond with an error, and the
-     * case where the client has already left. The second case is more
-     * common when communicating over HTTPS, given that the remote peer
-     * can close the connection without requiring an acknowledgement:
-     *
-     * From RFC5246§7.2.1:
-     *   Unless some other fatal alert has been transmitted, each party
-     *   is required to send a close_notify alert before closing the
-     *   write side of the connection.  The other party MUST respond
-     *   with a close_notify alert of its own and close down the
-     *   connection immediately, discarding any pending writes. It is
-     *   not required for the initiator of the close to wait for the
-     *   responding close_notify alert before closing the read side of
-     *   the connection. *)
-    (match Lwt_unix.state socket with
-    | Aborted _ | Closed ->
-      Server_connection.shutdown connection
+  let state socket =
+    match Lwt_unix.state socket with
+    | Aborted _ ->
+      `Error
+    | Closed ->
+      `Closed
     | Opened ->
-      Server_connection.report_exn connection exn);
-    Lwt.return_unit
+      `Open
 end
 
 module Config = H2.Config
