@@ -404,7 +404,7 @@ let open_stream t ?priority stream_id =
         ~initial_window_size:t.settings.initial_window_size
         reqd;
       Some reqd
-    | Some (Stream stream) ->
+    | Some (Scheduler.Stream stream) ->
       (* From RFC7540§6.9.2:
        *   Both endpoints can adjust the initial window size for new streams
        *   by including a value for SETTINGS_INITIAL_WINDOW_SIZE in the
