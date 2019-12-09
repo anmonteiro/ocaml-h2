@@ -812,7 +812,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       report_connection_error t ~additional_debug_data Error_code.ProtocolError)
   else
     match Settings.check_settings_list ~is_client:true settings with
-    | None ->
+    | Ok () ->
       (* From RFC7540§6.5:
        *   Each parameter in a SETTINGS frame replaces any existing value for
        *   that parameter. Parameters are processed in the order in which they
@@ -890,7 +890,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       Writer.write_settings t.writer frame_info [];
       t.unacked_settings <- t.unacked_settings + 1;
       wakeup_writer t
-    | Some error ->
+    | Error error ->
       report_error t error
 
 let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block =

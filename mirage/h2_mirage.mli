@@ -44,6 +44,14 @@ module type Server = sig
     -> error_handler:Server_connection.error_handler
     -> flow
     -> unit Lwt.t
+
+  val create_h2c_connection_handler
+    :  ?config:Config.t
+    -> http_request:Httpaf.Request.t
+    -> request_handler:Server_connection.request_handler
+    -> error_handler:Server_connection.error_handler
+    -> flow
+    -> (unit, string) result Lwt.t
 end
 
 module Server (Flow : Mirage_flow.S) : Server with type flow = Flow.flow

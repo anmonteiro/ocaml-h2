@@ -95,6 +95,19 @@ module Server (Flow : Mirage_flow.S) = struct
     let request_handler () = request_handler in
     let error_handler () = error_handler in
     create_connection_handler ?config ~request_handler ~error_handler () flow
+
+  let create_h2c_connection_handler
+      ?config ~http_request ~request_handler ~error_handler flow
+    =
+    let request_handler () = request_handler in
+    let error_handler () = error_handler in
+    create_h2c_connection_handler
+      ?config
+      ~http_request
+      ~request_handler
+      ~error_handler
+      ()
+      flow
 end
 
 (* Almost like the `H2_lwt.Server` module type but we don't need the client
@@ -110,6 +123,14 @@ module type Server = sig
     -> error_handler:Server_connection.error_handler
     -> flow
     -> unit Lwt.t
+
+  val create_h2c_connection_handler
+    :  ?config:Config.t
+    -> http_request:Httpaf.Request.t
+    -> request_handler:Server_connection.request_handler
+    -> error_handler:Server_connection.error_handler
+    -> flow
+    -> (unit, string) result Lwt.t
 end
 
 module Server_with_conduit = struct

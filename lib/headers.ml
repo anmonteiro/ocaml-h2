@@ -351,6 +351,67 @@ let trailers_valid t =
   in
   not invalid
 
+let is_valid_h2c_connection connection =
+  let values = String.split_on_char ',' connection in
+  let values = List.map String.trim values in
+  (* From RFC7540§3.2.1:
+   *   [...] Since the upgrade is only intended to apply to the immediate
+   *   connection, a client sending the HTTP2-Settings header field MUST also
+   *   send HTTP2-Settings as a connection option in the Connection header
+   *   field to prevent it from being forwarded (see Section 6.1 of [RFC7230]).
+   *)
+  match
+    ( List.find_opt (fun x -> CI.equal x "upgrade") values
+    , List.find_opt (fun x -> CI.equal x "http2-settings") values )
+  with
+  | Some _, Some _ ->
+    true
+  | _ ->
+    false
+
+let of_http1 { Httpaf.Request.headers; meth; target; _ } =
+  let module Headers = Httpaf.Headers in
+  match Headers.get headers "host" with
+  | Some host ->
+    (* From RFC7540§8.1.2.3:
+     *   Clients that generate HTTP/2 requests directly SHOULD use the
+     *   :authority pseudo-header field instead of the Host header field. *)
+    let headers =
+      Headers.fold
+        ~f:(fun name value acc ->
+          if CI.equal name "host" || CI.equal name "connection" then
+            (* From RFC7540§8.1.2.2:
+             *   HTTP/2 does not use the Connection header field to indicate
+             *   connection-specific header fields; in this protocol,
+             *   connection-specific metadata is conveyed by other means. An
+             *   endpoint MUST NOT generate an HTTP/2 message containing
+             *   connection-specific header fields; any message containing
+             *   connection-specific header fields MUST be treated as malformed
+             *   (Section 8.1.2.6). *)
+            acc
+          else
+            let name =
+              (* From RFC7540§8.1.2:
+               *   header field names MUST be converted to lowercase prior to
+               *   their encoding in HTTP/2. *)
+              if CI.is_lowercase name then
+                name
+              else
+                String.lowercase_ascii name
+            in
+            (name, value) :: acc)
+        ~init:
+          [ ":authority", host
+          ; ":method", Httpaf.Method.to_string meth
+          ; ":path", target
+          ; ":scheme", "https"
+          ]
+        headers
+    in
+    Ok (of_rev_list headers)
+  | None ->
+    Error "Missing `Host` header field"
+
 let pp_hum fmt t =
   let pp_elem fmt (name, value) = Format.fprintf fmt "@[(%S %S)@]" name value in
   Format.fprintf fmt "@[(";

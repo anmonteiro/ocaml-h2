@@ -13,6 +13,7 @@
     "@opam/angstrom": "*",
     "@opam/faraday": "*",
     "@opam/psq": "*",
+    "@opam/base64": "*",
     "@opam/conduit-mirage": "*",
     "@opam/mirage-flow": "*",
     "@opam/faraday-lwt-unix": "*",

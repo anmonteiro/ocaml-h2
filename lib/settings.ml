@@ -65,6 +65,12 @@ type value = int
 
 type settings_list = (key * value) list
 
+(* From RFC7540§6.5.1:
+ *   The payload of a SETTINGS frame consists of zero or more parameters,
+ *   each consisting of an unsigned 16-bit setting identifier and an
+ *   unsigned 32-bit value. *)
+let octets_per_setting = 6
+
 let serialize_key = function
   | HeaderTableSize ->
     0x1
@@ -102,7 +108,7 @@ let check_value ~is_client = function
        *   The initial value is 1, which indicates that server push is
        *   permitted. Any value other than 0 or 1 MUST be treated as a
        *   connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
-      Some
+      Error
         Error.(
           ConnectionError (ProtocolError, "SETTINGS_ENABLE_PUSH must be 0 or 1"))
     else if is_client && v == 1 then
@@ -111,18 +117,18 @@ let check_value ~is_client = function
        *   SETTINGS_ENABLE_PUSH setting to a value other than 0 by
        *   treating the message as a connection error (Section 5.4.1) of
        *   type PROTOCOL_ERROR. *)
-      Some
+      Error
         Error.(
           ConnectionError
             (ProtocolError, "Server must not try to enable SETTINGS_ENABLE_PUSH"))
     else
-      None
+      Ok ()
   | InitialWindowSize, v when WindowSize.is_window_overflow v ->
     (* From RFC7540§6.5.2
      *   Values above the maximum flow-control window size of 2^31-1 MUST be
      *   treated as a connection error (Section 5.4.1) of type
      *   FLOW_CONTROL_ERROR. *)
-    Some
+    Error
       Error.(
         ConnectionError
           ( FlowControlError
@@ -136,23 +142,23 @@ let check_value ~is_client = function
      *   frame size (224-1 or 16,777,215 octets), inclusive. Values outside
      *   this range MUST be treated as a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
-    Some
+    Error
       Error.(
         ConnectionError
           (ProtocolError, "Max frame size must be in the 16384 - 16777215 range"))
   | _ ->
-    None
+    Ok ()
 
 (* Check incoming settings and report an error if any. *)
 let check_settings_list ?(is_client = false) settings =
   let rec loop = function
     | [] ->
-      None
+      Ok ()
     | x :: xs ->
       (match check_value ~is_client x with
-      | None ->
+      | Ok () ->
         loop xs
-      | Some _ as err ->
+      | Error _ as err ->
         err)
   in
   loop settings
@@ -208,3 +214,25 @@ let settings_for_the_connection settings =
       settings_list
   in
   settings_list
+
+let pp_hum formatter t =
+  let string_of_key = function
+    | HeaderTableSize ->
+      "HEADER_TABLE_SIZE"
+    | EnablePush ->
+      "ENABLE_PUSH"
+    | MaxConcurrentStreams ->
+      "MAX_CONCURRENT_STREAMS"
+    | InitialWindowSize ->
+      "INITIAL_WINDOW_SIZE"
+    | MaxFrameSize ->
+      "MAX_FRAME_SIZE"
+    | MaxHeaderListSize ->
+      "MAX_HEADER_LIST_SIZE"
+  in
+  let pp_elem formatter (key, value) =
+    Format.fprintf formatter "@[(%S %d)@]" (string_of_key key) value
+  in
+  Format.fprintf formatter "@[(";
+  Format.pp_print_list pp_elem formatter t;
+  Format.fprintf formatter ")@]"

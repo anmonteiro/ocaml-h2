@@ -1,6 +1,6 @@
 (executables
- (names lwt_echo_server2 lwt_https_server lwt_get lwt_post)
- (libraries h2 httpaf h2-lwt-unix lwt lwt.unix))
+ (names lwt_h2c lwt_echo_server2 lwt_https_server lwt_get lwt_post)
+ (libraries base64 h2 httpaf httpaf-lwt-unix h2-lwt-unix lwt lwt.unix))
 
 (alias
  (name examples)
