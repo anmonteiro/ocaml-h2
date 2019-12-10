@@ -1101,38 +1101,42 @@ let settings_from_config
 
 let wakeup_stream t () = wakeup_writer (Lazy.force t)
 
-let create
-    ?(config = Config.default)
-    ?(error_handler = default_error_handler)
-    request_handler
-  =
+let write_connection_preface t =
+  (* Check if the settings for the connection are different than the default
+   * HTTP/2 settings. In the event that they are, we need to send a non-empty
+   * SETTINGS frame advertising our configuration. *)
+  let settings = Settings.settings_for_the_connection t.settings in
+  (* Now send the connection preface, including our settings for the
+   * connection.
+   *
+   * From RFC7540§3.5:
+   *   The server connection preface consists of a potentially empty
+   *   SETTINGS frame (Section 6.5) that MUST be the first frame the
+   *   server sends in the HTTP/2 connection. *)
+  write_settings_frame ~ack:false t settings;
+  (* If a higher value for initial window size is configured, add more
+   * tokens to the connection (we have no streams at this point). *)
+  if
+    t.settings.initial_window_size
+    > Settings.default_settings.initial_window_size
+  then
+    let diff =
+      t.settings.initial_window_size
+      - Settings.default_settings.initial_window_size
+    in
+    send_window_update t t.streams diff
+
+let create_generic ~h2c ~config ~error_handler request_handler =
   let settings = settings_from_config config in
   let writer = Writer.create settings.max_frame_size in
   let rec connection_preface_handler recv_frame settings_list =
     let t = Lazy.force t in
-    (* Check if the settings for the connection are different than the default
-     * HTTP/2 settings. In the event that they are, we need to send a non-empty
-     * SETTINGS frame advertising our configuration. *)
-    let settings = Settings.settings_for_the_connection settings in
-    (* Now send the connection preface, including our settings for the
-     * connection.
-     *
-     * From RFC7540§3.5:
-     *   The server connection preface consists of a potentially empty
-     *   SETTINGS frame (Section 6.5) that MUST be the first frame the
-     *   server sends in the HTTP/2 connection. *)
-    write_settings_frame ~ack:false t settings;
-    (* If a higher value for initial window size is configured, add more
-     * tokens to the connection (we have no streams at this point). *)
-    (if
-     t.settings.initial_window_size
-     > Settings.default_settings.initial_window_size
-   then
-       let diff =
-         t.settings.initial_window_size
-         - Settings.default_settings.initial_window_size
-       in
-       send_window_update t t.streams diff);
+    (* If this connection is `h2c` (HTTP/2 over TCP), we have already written
+     * the server connection preface. This is only necessary if we're
+     * responding to a client-initiated connection, but in `h2c` the server
+     * writes the preface first (handled below in `create_h2c`) *)
+    if not h2c then
+      write_connection_preface t;
     (* Now process the client's SETTINGS frame. `process_settings_frame` will
      * take care of calling `wakeup_writer`. *)
     process_settings_frame t recv_frame settings_list
@@ -1217,6 +1221,14 @@ let create
   in
   Lazy.force t
 
+let create
+    ?(config = Config.default)
+    ?(error_handler = default_error_handler)
+    request_handler
+  =
+  (* `h2c` false = direct *)
+  create_generic ~h2c:false ~config ~error_handler request_handler
+
 let handle_h2c_request t ~end_stream headers =
   (* From RFC7540§3.2:
    *   The HTTP/1.1 request that is sent prior to upgrade is assigned a stream
@@ -1243,7 +1255,10 @@ let handle_h2c_request t ~end_stream headers =
 
 (* Meant to be called inside an HTTP/1.1 upgrade handler *)
 let create_h2c
-    ?(config = Config.default) ?error_handler ~http_request request_handler
+    ?(config = Config.default)
+    ?(error_handler = default_error_handler)
+    ~http_request
+    request_handler
   =
   let { Httpaf.Request.headers; _ } = http_request in
   (* From RFC7540§3.2.1:
@@ -1284,20 +1299,27 @@ let create_h2c
         | Ok upgrade_settings ->
           (match Settings.check_settings_list upgrade_settings with
           | Ok () ->
-            let t = create ~config ?error_handler request_handler in
+            let t =
+              create_generic ~h2c:true ~config ~error_handler request_handler
+            in
             apply_settings_list t upgrade_settings;
-            let settings = settings_from_config config in
-            let settings = Settings.settings_for_the_connection settings in
             (* From RFC7540§3.5:
              *   The first HTTP/2 frame sent by the server MUST be a server
-             *   connection preface (Section 3.5) consisting of a SETTINGS frame
-             *   (Section 6.5). *)
-            write_settings_frame t ~ack:false settings;
+             *   connection preface (Section 3.5) consisting of a SETTINGS
+             *   frame (Section 6.5).
+             *
+             *   Note: as opposed to a connection started by a client, in h2c
+             *   we're upgrading from HTTP/1.1 so the server is reponsible for
+             *   writing the HTTP/2 connection preface to the wire first. We
+             *   also configure the connection with `~h2c:true` above to not
+             *   send it a second time. *)
+            write_connection_preface t;
             (* From RFC7540§3.2:
-             *   A server that supports HTTP/2 accepts the upgrade with a 101 (Switching
-             *   Protocols) response. After the empty line that terminates the 101
-             *   response, the server can begin sending HTTP/2 frames. These frames MUST
-             *   include a response to the request that initiated the upgrade *)
+             *   A server that supports HTTP/2 accepts the upgrade with a 101
+             *   (Switching Protocols) response. After the empty line that
+             *   terminates the 101 response, the server can begin sending
+             *   HTTP/2 frames. These frames MUST include a response to the
+             *   request that initiated the upgrade *)
             handle_h2c_request t ~end_stream:true h2_headers;
             Ok t
           | Error error ->
