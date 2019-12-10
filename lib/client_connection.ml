@@ -74,6 +74,7 @@ type t =
   ; error_handler : error -> unit
   ; push_handler : Request.t -> (response_handler, unit) result
   ; wakeup_writer : (unit -> unit) ref
+  ; wakeup_stream : unit -> unit
         (* From RFC7540§4.3:
          *   Header compression is stateful. One compression context and one
          *   decompression context are used for the entire connection. *)
@@ -93,7 +94,7 @@ let on_wakeup_writer t k =
   else
     t.wakeup_writer := k
 
-let default_wakeup_writer () = ()
+let default_wakeup_writer = Sys.opaque_identity (fun () -> ())
 
 let _wakeup_writer wakeup_ref =
   let f = !wakeup_ref in
@@ -101,6 +102,8 @@ let _wakeup_writer wakeup_ref =
   f ()
 
 let wakeup_writer t = _wakeup_writer t.wakeup_writer
+
+let wakeup_stream t () = wakeup_writer (Lazy.force t)
 
 let shutdown_reader t = Reader.force_close t.reader
 
@@ -248,12 +251,10 @@ let handle_push_promise_headers t respd headers =
         respd.state <-
           Active
             ( HalfClosed Stream.WaitingForPeer
-              (* TODO: should we just store a `unit -> unit` in `t` to avoid
-               * one closure allocation here? *)
             , { Respd.request
               ; request_body
               ; response_handler
-              ; wakeup_writer = (fun () -> wakeup_writer t)
+              ; wakeup_writer = t.wakeup_stream
               } )
       | Error _ ->
         (* From RFC7540§6.6:
@@ -1117,12 +1118,7 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
      *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
     report_connection_error t Error_code.ProtocolError
 
-(* Unlike e.g. http/af's current Client implementation (Oneshot) where a new
- * connection is created per request, we create a single connection where all
- * requests go through. HTTP/2 allows concurrency to exist on the connection
- * level.
- *
- * From RFC7540§1:
+(* From RFC7540§1:
  *   HTTP/2 [...] allows interleaving of request and response messages on the
  *   same connection and uses an efficient coding for HTTP header fields. *)
 let create ?(config = Config.default) ?push_handler ~error_handler =

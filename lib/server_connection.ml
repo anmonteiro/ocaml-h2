@@ -76,6 +76,7 @@ type t =
   ; mutable unacked_settings : int
   ; mutable did_send_go_away : bool
   ; wakeup_writer : (unit -> unit) ref
+  ; wakeup_stream : unit -> unit
         (* From RFC7540§4.3:
          *   Header compression is stateful. One compression context and one
          *   decompression context are used for the entire connection. *)
@@ -91,7 +92,7 @@ let on_wakeup_writer t k =
   else
     t.wakeup_writer := k
 
-let default_wakeup_writer () = ()
+let default_wakeup_writer = Sys.opaque_identity (fun () -> ())
 
 let _wakeup_writer wakeup_ref =
   let f = !wakeup_ref in
@@ -440,7 +441,7 @@ let process_first_headers_block t frame_header reqd headers_block =
     Reqd.create_active_stream
       t.hpack_encoder
       t.config.response_body_buffer_size
-      (fun () -> wakeup_writer t)
+      t.wakeup_stream
       (create_push_stream t)
   in
   reqd.Stream.state <-
@@ -870,6 +871,16 @@ let apply_settings_list t settings =
         t.settings.max_header_list_size <- Some x)
     settings
 
+let write_settings_frame t ~ack settings =
+  let flags =
+    if ack then Flags.(set_ack default_flags) else Flags.default_flags
+  in
+  let frame_info = Writer.make_frame_info ~flags Stream_identifier.connection in
+  Writer.write_settings t.writer frame_info settings;
+  if not ack then
+    (* Don't expected our acknowledgements to be acknowledged... *)
+    t.unacked_settings <- t.unacked_settings + 1
+
 let process_settings_frame t { Frame.frame_header; _ } settings =
   let { Frame.flags; _ } = frame_header in
   (* We already checked that an acked SETTINGS is empty. Don't need to do
@@ -888,17 +899,12 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       apply_settings_list t settings;
       (* From RFC7540§6.5.2:
        *   Once all values have been processed, the recipient MUST immediately
-       *   emit a SETTINGS frame with the ACK flag set. *)
-      let frame_info =
-        Writer.make_frame_info
-          ~flags:Flags.(set_ack default_flags)
-          Stream_identifier.connection
-      in
-      (* From RFC7540§6.5:
+       *   emit a SETTINGS frame with the ACK flag set.
+       *
+       * From RFC7540§6.5:
        *   ACK (0x1): [...] When this bit is set, the payload of the SETTINGS
        *   frame MUST be empty. *)
-      Writer.write_settings t.writer frame_info [];
-      t.unacked_settings <- t.unacked_settings + 1;
+      write_settings_frame t ~ack:true [];
       wakeup_writer t
     | Error error ->
       report_error t error
@@ -1093,6 +1099,8 @@ let settings_from_config
   ; enable_push = enable_server_push
   }
 
+let wakeup_stream t () = wakeup_writer (Lazy.force t)
+
 let create
     ?(config = Config.default)
     ?(error_handler = default_error_handler)
@@ -1106,14 +1114,14 @@ let create
      * HTTP/2 settings. In the event that they are, we need to send a non-empty
      * SETTINGS frame advertising our configuration. *)
     let settings = Settings.settings_for_the_connection settings in
-    (* This is the connection preface. We don't set the ack flag. *)
-    let frame_info = Writer.make_frame_info Stream_identifier.connection in
-    (* This is our SETTINGS frame. *)
-    (* From RFC7540§3.5:
+    (* Now send the connection preface, including our settings for the
+     * connection.
+     *
+     * From RFC7540§3.5:
      *   The server connection preface consists of a potentially empty
      *   SETTINGS frame (Section 6.5) that MUST be the first frame the
      *   server sends in the HTTP/2 connection. *)
-    Writer.write_settings t.writer frame_info settings;
+    write_settings_frame ~ack:false t settings;
     (* If a higher value for initial window size is configured, add more
      * tokens to the connection (we have no streams at this point). *)
     (if
@@ -1202,6 +1210,7 @@ let create
       ; did_send_go_away = false
       ; unacked_settings = 0
       ; wakeup_writer = ref default_wakeup_writer
+      ; wakeup_stream = wakeup_stream t
       ; hpack_encoder = Hpack.Encoder.(create settings.header_table_size)
       ; hpack_decoder = Hpack.Decoder.(create settings.header_table_size)
       }
@@ -1279,14 +1288,11 @@ let create_h2c
             apply_settings_list t upgrade_settings;
             let settings = settings_from_config config in
             let settings = Settings.settings_for_the_connection settings in
-            let frame_info =
-              Writer.make_frame_info Stream_identifier.connection
-            in
             (* From RFC7540§3.5:
              *   The first HTTP/2 frame sent by the server MUST be a server
              *   connection preface (Section 3.5) consisting of a SETTINGS frame
              *   (Section 6.5). *)
-            Writer.write_settings t.writer frame_info settings;
+            write_settings_frame t ~ack:false settings;
             (* From RFC7540§3.2:
              *   A server that supports HTTP/2 accepts the upgrade with a 101 (Switching
              *   Protocols) response. After the empty line that terminates the 101
