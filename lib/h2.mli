@@ -778,6 +778,14 @@ module Client_connection : sig
       promised streams by returning a RST_STREAM referencing the promised stream
       identifier back to the sender of the PUSH_PROMISE. *)
 
+  val create_h2c
+    :  ?config:Config.t
+    -> ?push_handler:(Request.t -> (response_handler, unit) result)
+    -> http_request:Httpaf.Request.t
+    -> error_handler:error_handler
+    -> response_handler * error_handler
+    -> (t, string) result
+
   val request
     :  t
     -> Request.t

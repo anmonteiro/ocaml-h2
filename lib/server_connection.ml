@@ -1254,6 +1254,7 @@ let handle_h2c_request t ~end_stream headers =
     ()
 
 (* Meant to be called inside an HTTP/1.1 upgrade handler *)
+(* TODO: support passing the request body to the handler *)
 let create_h2c
     ?(config = Config.default)
     ?(error_handler = default_error_handler)

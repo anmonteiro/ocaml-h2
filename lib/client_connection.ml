@@ -1212,8 +1212,9 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
       ; reader = Reader.client_frames connection_preface_handler frame_handler
       ; writer = Writer.create settings.max_frame_size
       ; streams = Scheduler.make_root ()
-      ; wakeup_writer =
-          ref default_wakeup_writer
+      ; wakeup_writer = ref default_wakeup_writer
+      ; wakeup_stream =
+          wakeup_stream t
           (* From RFC7540§4.3:
            *   Header compression is stateful. One compression context and one
            *   decompression context are used for the entire connection. *)
@@ -1241,12 +1242,8 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
      send_window_update t t.streams diff);
   t
 
-let request t request ~error_handler ~response_handler =
+let create_and_add_stream t ~error_handler =
   let max_frame_size = t.settings.max_frame_size in
-  let wakeup_stream () = wakeup_writer t in
-  let request_body =
-    Body.create (Bigstringaf.create max_frame_size) wakeup_stream
-  in
   t.current_stream_id <- Int32.add t.current_stream_id 2l;
   let stream_id = t.current_stream_id in
   let respd =
@@ -1262,8 +1259,70 @@ let request t request ~error_handler ~response_handler =
     t.streams (* ?priority *)
     ~initial_window_size:t.settings.initial_window_size
     respd;
+  respd
+
+(* Meant to be called after receiving an HTTP/1.1 `101 Switching_protocols`
+ * response upgrading to HTTP/2. *)
+let create_h2c
+    ?config
+    ?push_handler
+    ~http_request
+    ~error_handler
+    (response_handler, response_error_handler)
+  =
+  let { Httpaf.Request.target; meth; _ } = http_request in
+  match Headers.of_http1 http_request with
+  | Ok headers ->
+    (* From RFC7540§3.2:
+     *   Upon receiving the 101 response, the client MUST send a connection
+     *   preface (Section 3.5), which includes a SETTINGS frame. *)
+    let t = create ?config ?push_handler ~error_handler in
+    let respd = create_and_add_stream t ~error_handler:response_error_handler in
+    assert (Stream_identifier.(t.current_stream_id === 1l));
+    assert (Stream_identifier.(respd.id === 1l));
+    let request = Request.create ~headers ~scheme:"http" meth target in
+    (* TODO: Request body. We can just take a single (optionally empty) Bigstringaf.t:
+     *
+     * From RFC7540§3.2:
+     *   Requests that contain a payload body MUST be sent in their entirety
+     *   before the client can send HTTP/2 frames. This means that a large
+     *   request can block the use of the connection until it is completely
+     *   sent. *)
+    let request_body =
+      Body.empty
+      (* Body.create (Bigstringaf.create t.settings.max_frame_size)
+         t.wakeup_stream *)
+    in
+    (* From RFC7540§3.2:
+     *   The HTTP/1.1 request that is sent prior to upgrade is assigned a
+     *   stream identifier of 1 (see Section 5.1.1) with default priority
+     *   values (Section 5.3.5). Stream 1 is implicitly "half-closed" from the
+     *   client toward the server (see Section 5.1), since the request is
+     *   completed as an HTTP/1.1 request. *)
+    respd.state <-
+      Active
+        ( HalfClosed WaitingForPeer
+        , { request
+          ; request_body
+          ; response_handler
+          ; wakeup_writer = t.wakeup_stream
+          } );
+    wakeup_writer t;
+    Ok t
+  | Error msg ->
+    Error msg
+
+let request t request ~error_handler ~response_handler =
+  let max_frame_size = t.settings.max_frame_size in
+  let respd = create_and_add_stream t ~error_handler in
+  let request_body =
+    Body.create (Bigstringaf.create max_frame_size) t.wakeup_stream
+  in
   let frame_info =
-    Writer.make_frame_info ~max_frame_size ~flags:Flags.default_flags stream_id
+    Writer.make_frame_info
+      ~max_frame_size:t.settings.max_frame_size
+      ~flags:Flags.default_flags
+      respd.id
   in
   Writer.write_request_headers t.writer t.hpack_encoder frame_info request;
   Writer.flush t.writer (fun () ->
@@ -1273,7 +1332,7 @@ let request t request ~error_handler ~response_handler =
           , { request
             ; request_body
             ; response_handler
-            ; wakeup_writer = wakeup_stream
+            ; wakeup_writer = t.wakeup_stream
             } ));
   wakeup_writer t;
   (* Closing the request body puts the stream in the half-closed (local) state.
