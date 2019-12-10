@@ -1281,18 +1281,6 @@ let create_h2c
     assert (Stream_identifier.(t.current_stream_id === 1l));
     assert (Stream_identifier.(respd.id === 1l));
     let request = Request.create ~headers ~scheme:"http" meth target in
-    (* TODO: Request body. We can just take a single (optionally empty) Bigstringaf.t:
-     *
-     * From RFC7540§3.2:
-     *   Requests that contain a payload body MUST be sent in their entirety
-     *   before the client can send HTTP/2 frames. This means that a large
-     *   request can block the use of the connection until it is completely
-     *   sent. *)
-    let request_body =
-      Body.empty
-      (* Body.create (Bigstringaf.create t.settings.max_frame_size)
-         t.wakeup_stream *)
-    in
     (* From RFC7540§3.2:
      *   The HTTP/1.1 request that is sent prior to upgrade is assigned a
      *   stream identifier of 1 (see Section 5.1.1) with default priority
@@ -1303,7 +1291,16 @@ let create_h2c
       Active
         ( HalfClosed WaitingForPeer
         , { request
-          ; request_body
+            (* The request body is no more than a placeholder. The HTTP/1.1
+             * connection that we're upgrading from already sent it to the
+             * server. Application code knows what it is.
+             *
+             * From RFC7540§3.2:
+             *   Requests that contain a payload body MUST be sent in their
+             *   entirety before the client can send HTTP/2 frames. This means
+             *   that a large request can block the use of the connection until
+             *   it is completely sent. *)
+          ; request_body = Body.empty
           ; response_handler
           ; wakeup_writer = t.wakeup_stream
           } );
