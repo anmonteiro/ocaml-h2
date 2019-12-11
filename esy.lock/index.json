@@ -1,5 +1,5 @@
 {
-  "checksum": "3062e3cc438ed3cf535bb21f933448db",
+  "checksum": "48b98bb8c9715611181ae9c7487aff2e",
   "root": "h2@link-dev:./esy.json",
   "node": {
     "yarn-pkg-config@github:esy-ocaml/yarn-pkg-config#cca65f99674ed2d954d28788edeb8c57fada5ed0@d41d8cd9": {
@@ -39,7 +39,8 @@
       "source": { "type": "link-dev", "path": ".", "manifest": "esy.json" },
       "overrides": [],
       "dependencies": [
-        "ocaml@4.9.0@d41d8cd9", "@opam/ssl@opam:0.5.9@44a7fdbe",
+        "ocaml@4.9.0@d41d8cd9",
+        "@opam/ssl@github:savonet/ocaml-ssl:ssl.opam#0111764@d41d8cd9",
         "@opam/sexplib@opam:v0.13.0@79086695",
         "@opam/psq@opam:0.2.0@247756d4",
         "@opam/mirage-flow@opam:2.0.1@b9cf2b19",
@@ -52,6 +53,7 @@
         "@opam/conf-libev@archive:http://dist.schmorp.de/libev/Attic/libev-4.27.tar.gz#sha1:b67aff18f6f1ffec4422e188c98d9fe458c5ed0b@6c404c36",
         "@opam/conduit-mirage@opam:2.0.2@67183090",
         "@opam/bigstringaf@opam:0.6.0@971764fa",
+        "@opam/base64@opam:3.2.0@6303aa3a",
         "@opam/angstrom@opam:0.12.1@02015bad"
       ],
       "devDependencies": [
@@ -641,35 +643,23 @@
         "@opam/base@opam:v0.13.0@93f21415"
       ]
     },
-    "@opam/ssl@opam:0.5.9@44a7fdbe": {
-      "id": "@opam/ssl@opam:0.5.9@44a7fdbe",
+    "@opam/ssl@github:savonet/ocaml-ssl:ssl.opam#0111764@d41d8cd9": {
+      "id": "@opam/ssl@github:savonet/ocaml-ssl:ssl.opam#0111764@d41d8cd9",
       "name": "@opam/ssl",
-      "version": "opam:0.5.9",
+      "version": "github:savonet/ocaml-ssl:ssl.opam#0111764",
       "source": {
         "type": "install",
-        "source": [
-          "archive:https://opam.ocaml.org/cache/md5/09/09265ae2dee5ac48507ccb8a81244a15#md5:09265ae2dee5ac48507ccb8a81244a15",
-          "archive:https://github.com/savonet/ocaml-ssl/archive/0.5.9.tar.gz#md5:09265ae2dee5ac48507ccb8a81244a15"
-        ],
-        "opam": {
-          "name": "ssl",
-          "version": "0.5.9",
-          "path": "esy.lock/opam/ssl.0.5.9"
-        }
+        "source": [ "github:savonet/ocaml-ssl:ssl.opam#0111764" ]
       },
       "overrides": [],
       "dependencies": [
-        "ocaml@4.9.0@d41d8cd9",
-        "@opam/dune-configurator@opam:1.0.0@4873acd8",
-        "@opam/dune@opam:1.11.4@a7ccb7ae",
+        "ocaml@4.9.0@d41d8cd9", "@opam/dune@opam:1.11.4@a7ccb7ae",
         "@opam/conf-libssl@archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1d.tar.gz#sha1:df0ee4811c87c209ebadb4e6b203d1e560d00f9a@af5fc8c4",
         "@opam/base-unix@opam:base@87d0b2eb",
         "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [
-        "ocaml@4.9.0@d41d8cd9",
-        "@opam/dune-configurator@opam:1.0.0@4873acd8",
-        "@opam/dune@opam:1.11.4@a7ccb7ae",
+        "ocaml@4.9.0@d41d8cd9", "@opam/dune@opam:1.11.4@a7ccb7ae",
         "@opam/conf-libssl@archive:https://github.com/openssl/openssl/archive/OpenSSL_1_1_1d.tar.gz#sha1:df0ee4811c87c209ebadb4e6b203d1e560d00f9a@af5fc8c4",
         "@opam/base-unix@opam:base@87d0b2eb"
       ]
@@ -906,8 +896,8 @@
         "@opam/dune@opam:1.11.4@a7ccb7ae"
       ]
     },
-    "@opam/ppxlib@opam:0.10.0@43604fcc": {
-      "id": "@opam/ppxlib@opam:0.10.0@43604fcc",
+    "@opam/ppxlib@opam:0.10.0@011ee889": {
+      "id": "@opam/ppxlib@opam:0.10.0@011ee889",
       "name": "@opam/ppxlib",
       "version": "opam:0.10.0",
       "source": {
@@ -1038,14 +1028,14 @@
       "overrides": [],
       "dependencies": [
         "ocaml@4.9.0@d41d8cd9", "@opam/sexplib0@opam:v0.13.0@3f54c2be",
-        "@opam/ppxlib@opam:0.10.0@43604fcc",
+        "@opam/ppxlib@opam:0.10.0@011ee889",
         "@opam/dune@opam:1.11.4@a7ccb7ae",
         "@opam/base@opam:v0.13.0@93f21415",
         "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [
         "ocaml@4.9.0@d41d8cd9", "@opam/sexplib0@opam:v0.13.0@3f54c2be",
-        "@opam/ppxlib@opam:0.10.0@43604fcc",
+        "@opam/ppxlib@opam:0.10.0@011ee889",
         "@opam/dune@opam:1.11.4@a7ccb7ae", "@opam/base@opam:v0.13.0@93f21415"
       ]
     },
@@ -1886,13 +1876,15 @@
       },
       "overrides": [],
       "dependencies": [
-        "ocaml@4.9.0@d41d8cd9", "@opam/ssl@opam:0.5.9@44a7fdbe",
+        "ocaml@4.9.0@d41d8cd9",
+        "@opam/ssl@github:savonet/ocaml-ssl:ssl.opam#0111764@d41d8cd9",
         "@opam/lwt@opam:4.4.0@0357bb8b", "@opam/dune@opam:1.11.4@a7ccb7ae",
         "@opam/base-unix@opam:base@87d0b2eb",
         "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [
-        "ocaml@4.9.0@d41d8cd9", "@opam/ssl@opam:0.5.9@44a7fdbe",
+        "ocaml@4.9.0@d41d8cd9",
+        "@opam/ssl@github:savonet/ocaml-ssl:ssl.opam#0111764@d41d8cd9",
         "@opam/lwt@opam:4.4.0@0357bb8b", "@opam/dune@opam:1.11.4@a7ccb7ae",
         "@opam/base-unix@opam:base@87d0b2eb"
       ]
@@ -3119,6 +3111,33 @@
       ],
       "devDependencies": [
         "ocaml@4.9.0@d41d8cd9", "@opam/dune@opam:1.11.4@a7ccb7ae"
+      ]
+    },
+    "@opam/base64@opam:3.2.0@6303aa3a": {
+      "id": "@opam/base64@opam:3.2.0@6303aa3a",
+      "name": "@opam/base64",
+      "version": "opam:3.2.0",
+      "source": {
+        "type": "install",
+        "source": [
+          "archive:https://opam.ocaml.org/cache/md5/8a/8ac1d6145277cee57d36611d1c420f05#md5:8ac1d6145277cee57d36611d1c420f05",
+          "archive:https://github.com/mirage/ocaml-base64/releases/download/v3.2.0/base64-v3.2.0.tbz#md5:8ac1d6145277cee57d36611d1c420f05"
+        ],
+        "opam": {
+          "name": "base64",
+          "version": "3.2.0",
+          "path": "esy.lock/opam/base64.3.2.0"
+        }
+      },
+      "overrides": [],
+      "dependencies": [
+        "ocaml@4.9.0@d41d8cd9", "@opam/dune@opam:1.11.4@a7ccb7ae",
+        "@opam/base-bytes@opam:base@19d0c2ff",
+        "@esy-ocaml/substs@0.0.1@d41d8cd9"
+      ],
+      "devDependencies": [
+        "ocaml@4.9.0@d41d8cd9", "@opam/dune@opam:1.11.4@a7ccb7ae",
+        "@opam/base-bytes@opam:base@19d0c2ff"
       ]
     },
     "@opam/base-unix@opam:base@87d0b2eb": {

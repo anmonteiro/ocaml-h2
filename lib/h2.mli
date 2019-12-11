@@ -653,6 +653,26 @@ module Server_connection : sig
   (** [create ?config ?error_handler ~request_handler] creates a connection
       handler that will service individual requests with [request_handler]. *)
 
+  val create_h2c
+    :  ?config:Config.t
+    -> ?error_handler:error_handler
+    -> http_request:Httpaf.Request.t
+    -> ?request_body:Bigstringaf.t IOVec.t list
+    -> request_handler
+    -> (t, string) result
+  (** [create ?config ?error_handler ~http_request ~request_handler] creates a
+      connection handler that will take over the communication channel from a
+      HTTP/1.1 connection, and service individual HTTP/2.0 requests with
+      [request_handler]. Upon successful creation, it returns the connection,
+      otherwise an error message is returned with an explanation of the failure
+      that caused the connection setup to not succeed.
+
+      This function is intended to be used in HTTP/1.1 upgrade handlers to set
+      up a new [h2c] (HTTP/2.0 over TCP) connection without prior knowledge.
+
+      See {{:https://tools.ietf.org/html/rfc7540#section-3.2} RFC7540§3.2} for
+      more details. *)
+
   val next_read_operation : t -> [ `Read | `Close ]
   (** [next_read_operation t] returns a value describing the next operation that
       the caller should conduct on behalf of the connection. *)
@@ -759,6 +779,14 @@ module Client_connection : sig
       promised streams by returning a RST_STREAM referencing the promised stream
       identifier back to the sender of the PUSH_PROMISE. *)
 
+  val create_h2c
+    :  ?config:Config.t
+    -> ?push_handler:(Request.t -> (response_handler, unit) result)
+    -> http_request:Httpaf.Request.t
+    -> error_handler:error_handler
+    -> response_handler * error_handler
+    -> (t, string) result
+
   val request
     :  t
     -> Request.t
@@ -846,4 +874,27 @@ module Client_connection : sig
       [`Close _] and {!next_write_operation} will do the same will return a
       [`Write _] until all buffered output has been flushed, at which point it
       will return [`Close]. *)
+end
+
+(* TODO: needs docs *)
+module Settings : sig
+  type key =
+    | HeaderTableSize
+    | EnablePush
+    | MaxConcurrentStreams
+    | InitialWindowSize
+    | MaxFrameSize (* this means payload size *)
+    | MaxHeaderListSize
+
+  type value = int
+
+  type settings_list = (key * value) list
+
+  val of_base64 : string -> (settings_list, string) result
+  (** {{:https://tools.ietf.org/html/rfc7540#section-3.2.1} RFC7540§3.2.1} *)
+
+  val to_base64 : settings_list -> (string, string) result
+  (** {{:https://tools.ietf.org/html/rfc7540#section-3.2.1} RFC7540§3.2.1} *)
+
+  val pp_hum : Format.formatter -> settings_list -> unit
 end

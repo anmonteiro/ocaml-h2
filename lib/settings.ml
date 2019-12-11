@@ -65,6 +65,12 @@ type value = int
 
 type settings_list = (key * value) list
 
+(* From RFC7540§6.5.1:
+ *   The payload of a SETTINGS frame consists of zero or more parameters,
+ *   each consisting of an unsigned 16-bit setting identifier and an
+ *   unsigned 32-bit value. *)
+let octets_per_setting = 6
+
 let serialize_key = function
   | HeaderTableSize ->
     0x1
@@ -102,7 +108,7 @@ let check_value ~is_client = function
        *   The initial value is 1, which indicates that server push is
        *   permitted. Any value other than 0 or 1 MUST be treated as a
        *   connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
-      Some
+      Error
         Error.(
           ConnectionError (ProtocolError, "SETTINGS_ENABLE_PUSH must be 0 or 1"))
     else if is_client && v == 1 then
@@ -111,18 +117,18 @@ let check_value ~is_client = function
        *   SETTINGS_ENABLE_PUSH setting to a value other than 0 by
        *   treating the message as a connection error (Section 5.4.1) of
        *   type PROTOCOL_ERROR. *)
-      Some
+      Error
         Error.(
           ConnectionError
             (ProtocolError, "Server must not try to enable SETTINGS_ENABLE_PUSH"))
     else
-      None
+      Ok ()
   | InitialWindowSize, v when WindowSize.is_window_overflow v ->
     (* From RFC7540§6.5.2
      *   Values above the maximum flow-control window size of 2^31-1 MUST be
      *   treated as a connection error (Section 5.4.1) of type
      *   FLOW_CONTROL_ERROR. *)
-    Some
+    Error
       Error.(
         ConnectionError
           ( FlowControlError
@@ -136,23 +142,23 @@ let check_value ~is_client = function
      *   frame size (224-1 or 16,777,215 octets), inclusive. Values outside
      *   this range MUST be treated as a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
-    Some
+    Error
       Error.(
         ConnectionError
           (ProtocolError, "Max frame size must be in the 16384 - 16777215 range"))
   | _ ->
-    None
+    Ok ()
 
 (* Check incoming settings and report an error if any. *)
 let check_settings_list ?(is_client = false) settings =
   let rec loop = function
     | [] ->
-      None
+      Ok ()
     | x :: xs ->
       (match check_value ~is_client x with
-      | None ->
+      | Ok () ->
         loop xs
-      | Some _ as err ->
+      | Error _ as err ->
         err)
   in
   loop settings
@@ -208,3 +214,95 @@ let settings_for_the_connection settings =
       settings_list
   in
   settings_list
+
+let parse_settings_payload num_settings =
+  let open Angstrom in
+  let parse_setting =
+    lift2
+      (fun k v ->
+        match parse_key k with
+        | Some s ->
+          Some (s, Int32.to_int v)
+        | None ->
+          None)
+      BE.any_uint16
+      BE.any_int32
+  in
+  (* Note: This ignores unknown settings.
+   *
+   * From RFC7540§6.5.3:
+   *   Unsupported parameters MUST be ignored.
+   *)
+  lift
+    (fun xs ->
+      let rec filter_opt acc = function
+        | [] ->
+          acc []
+        | Some x :: xs ->
+          filter_opt (fun ys -> acc (x :: ys)) xs
+        | None :: xs ->
+          filter_opt acc xs
+      in
+      (* From RFC7540§6.5.3:
+       *   The values in the SETTINGS frame MUST be processed in the order
+       *   they appear, with no other frame processing between values. *)
+      filter_opt (fun x -> x) xs)
+    (count num_settings parse_setting)
+
+let rec write_settings_payload t settings_list =
+  let open Faraday in
+  match settings_list with
+  | [] ->
+    ()
+  | (key, value) :: xs ->
+    (* From RFC7540§6.5.1:
+     *   The payload of a SETTINGS frame consists of zero or more parameters,
+     *   each consisting of an unsigned 16-bit setting identifier and an
+     *   unsigned 32-bit value. *)
+    BE.write_uint16 t (serialize_key key);
+    BE.write_uint32 t (Int32.of_int value);
+    write_settings_payload t xs
+
+let of_base64 encoded =
+  match Base64.decode ~alphabet:Base64.uri_safe_alphabet encoded with
+  | Ok settings_payload ->
+    let settings_payload_length =
+      String.length settings_payload / octets_per_setting
+    in
+    Angstrom.parse_string
+      (parse_settings_payload settings_payload_length)
+      settings_payload
+  | Error (`Msg msg) ->
+    Error msg
+
+let to_base64 settings =
+  let faraday = Faraday.create (List.length settings * 6) in
+  write_settings_payload faraday settings;
+  let settings_hex = Faraday.serialize_to_string faraday in
+  match Base64.encode ~alphabet:Base64.uri_safe_alphabet settings_hex with
+  | Ok r ->
+    Ok r
+  | Error (`Msg msg) ->
+    Error msg
+
+let pp_hum formatter t =
+  let string_of_key = function
+    | HeaderTableSize ->
+      "HEADER_TABLE_SIZE"
+    | EnablePush ->
+      "ENABLE_PUSH"
+    | MaxConcurrentStreams ->
+      "MAX_CONCURRENT_STREAMS"
+    | InitialWindowSize ->
+      "INITIAL_WINDOW_SIZE"
+    | MaxFrameSize ->
+      "MAX_FRAME_SIZE"
+    | MaxHeaderListSize ->
+      "MAX_HEADER_LIST_SIZE"
+  in
+  let pp_elem formatter (key, value) =
+    Format.fprintf formatter "@[(%S %d)@]" (string_of_key key) value
+  in
+  Format.fprintf formatter "@[(";
+  Format.pp_print_list pp_elem formatter t;
+  Format.fprintf formatter ")@]"

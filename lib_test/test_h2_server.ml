@@ -871,6 +871,60 @@ module Server_connection_tests = struct
     write_response t ~body:"" response;
     writer_yields t
 
+  let test_h2c () =
+    let settings_payload =
+      Settings.[ EnablePush, 0; MaxConcurrentStreams, 2 ]
+    in
+    let f = Faraday.create 100 in
+    Serialize.write_settings_payload f settings_payload;
+    let serialized_settings = Faraday.serialize_to_string f in
+    let http_request =
+      Httpaf.Request.create
+        ~headers:
+          (Httpaf.Headers.of_list
+             [ "Connection", "Upgrade, HTTP2-Settings"
+             ; "Upgrade", "h2c"
+             ; ( "HTTP2-Settings"
+               , Base64.(
+                   encode_string ~alphabet:uri_safe_alphabet serialized_settings)
+               )
+             ; "Host", "localhost"
+             ])
+        `GET
+        "/"
+    in
+    let request_handler_called = ref false in
+    match
+      create_h2c ~http_request (fun _ -> request_handler_called := true)
+    with
+    | Ok t ->
+      Alcotest.(check bool)
+        "Request handler called"
+        true
+        !request_handler_called;
+      Alcotest.(check bool)
+        "Connection settings were set as per the incoming settings"
+        true
+        (t.settings
+        = { Settings.default_settings with
+            enable_push = false
+          ; max_concurrent_streams = 2
+          });
+      (match next_write_operation t with
+      | `Write iovecs ->
+        let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
+        let frame = List.hd frames in
+        Alcotest.(check int)
+          "Next write operation is a SETTINGS frame (server connection preface)"
+          (Frame.FrameType.serialize Settings)
+          Frame.(frame.frame_header.frame_type |> FrameType.serialize)
+      | _ ->
+        Alcotest.fail
+          "Expected state machine to issue a write operation after seeing \
+           headers.")
+    | Error msg ->
+      Alcotest.fail msg
+
   (* TODO: test for trailer headers. *)
   (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
   let suite =
@@ -913,6 +967,7 @@ module Server_connection_tests = struct
     ; ( "empty fixed streaming response"
       , `Quick
       , test_empty_fixed_streaming_response )
+    ; "starting an h2c connection", `Quick, test_h2c
     ]
 end
 

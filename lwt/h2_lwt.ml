@@ -116,19 +116,7 @@ module Server (Io : IO) = struct
       H2.Server_connection.report_exn connection exn);
     Lwt.return_unit
 
-  let create_connection_handler
-      ?(config = Config.default)
-      ~request_handler
-      ~error_handler
-      client_addr
-      socket
-    =
-    let connection =
-      Server_connection.create
-        ~config
-        ~error_handler:(error_handler client_addr)
-        (request_handler client_addr)
-    in
+  let start_read_write_loops ~config connection socket =
     let read_buffer = Buffer.create config.Config.read_buffer_size in
     let read_loop_exited, notify_read_loop_exited = Lwt.wait () in
     let read_loop () =
@@ -178,6 +166,44 @@ module Server (Io : IO) = struct
     write_loop ();
     Lwt.join [ read_loop_exited; write_loop_exited ] >>= fun () ->
     Io.close socket
+
+  let create_connection_handler
+      ?(config = Config.default)
+      ~request_handler
+      ~error_handler
+      client_addr
+      socket
+    =
+    let connection =
+      Server_connection.create
+        ~config
+        ~error_handler:(error_handler client_addr)
+        (request_handler client_addr)
+    in
+    start_read_write_loops ~config connection socket
+
+  (* Creates an upgraded HTTP/2 connection from an HTTP/1.1 upgrade request. *)
+  let create_h2c_connection_handler
+      ?(config = Config.default)
+      ~http_request
+      ?(request_body = [])
+      ~request_handler
+      ~error_handler
+      client_addr
+      socket
+    =
+    match
+      Server_connection.create_h2c
+        ~config
+        ~error_handler:(error_handler client_addr)
+        ~http_request
+        ~request_body
+        (request_handler client_addr)
+    with
+    | Ok connection ->
+      Lwt_result.ok (start_read_write_loops ~config connection socket)
+    | Error msg ->
+      Lwt_result.fail msg
 end
 
 module Client (Io : IO) = struct
@@ -187,12 +213,7 @@ module Client (Io : IO) = struct
 
   type t = Client_connection.t
 
-  let create_connection
-      ?(config = Config.default) ?push_handler ~error_handler socket
-    =
-    let connection =
-      Client_connection.create ~config ?push_handler ~error_handler
-    in
+  let start_read_write_loops ~config connection socket =
     let read_buffer = Buffer.create config.Config.read_buffer_size in
     let read_loop_exited, notify_read_loop_exited = Lwt.wait () in
     let read_loop () =
@@ -247,6 +268,35 @@ module Client (Io : IO) = struct
         Lwt.join [ read_loop_exited; write_loop_exited ] >>= fun () ->
         Io.close socket);
     Lwt.return connection
+
+  let create_connection
+      ?(config = Config.default) ?push_handler ~error_handler socket
+    =
+    let connection =
+      Client_connection.create ~config ?push_handler ~error_handler
+    in
+    start_read_write_loops ~config connection socket
+
+  let create_h2c_connection
+      ?(config = Config.default)
+      ?push_handler
+      ~http_request
+      ~error_handler
+      (response_handler, response_error_handler)
+      socket
+    =
+    match
+      Client_connection.create_h2c
+        ~config
+        ?push_handler
+        ~http_request
+        ~error_handler
+        (response_handler, response_error_handler)
+    with
+    | Ok connection ->
+      Lwt_result.ok (start_read_write_loops ~config connection socket)
+    | Error msg ->
+      Lwt_result.fail msg
 
   let request = Client_connection.request
 

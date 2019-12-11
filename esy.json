@@ -13,6 +13,7 @@
     "@opam/angstrom": "*",
     "@opam/faraday": "*",
     "@opam/psq": "*",
+    "@opam/base64": "*",
     "@opam/conduit-mirage": "*",
     "@opam/mirage-flow": "*",
     "@opam/faraday-lwt-unix": "*",
@@ -36,6 +37,7 @@
     "@opam/conf-libssl": "esy-packages/esy-openssl#860ad7f",
     "@opam/httpaf": "anmonteiro/httpaf:httpaf.opam#b01626b",
     "@opam/httpaf-lwt": "anmonteiro/httpaf:httpaf-lwt.opam#b01626b",
-    "@opam/httpaf-lwt-unix": "anmonteiro/httpaf:httpaf-lwt-unix.opam#b01626b"
+    "@opam/httpaf-lwt-unix": "anmonteiro/httpaf:httpaf-lwt-unix.opam#b01626b",
+    "@opam/ssl": "savonet/ocaml-ssl:ssl.opam#0111764"
   }
 }

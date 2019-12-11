@@ -76,6 +76,7 @@ type t =
   ; mutable unacked_settings : int
   ; mutable did_send_go_away : bool
   ; wakeup_writer : (unit -> unit) ref
+  ; wakeup_stream : unit -> unit
         (* From RFC7540§4.3:
          *   Header compression is stateful. One compression context and one
          *   decompression context are used for the entire connection. *)
@@ -91,7 +92,7 @@ let on_wakeup_writer t k =
   else
     t.wakeup_writer := k
 
-let default_wakeup_writer () = ()
+let default_wakeup_writer = Sys.opaque_identity (fun () -> ())
 
 let _wakeup_writer wakeup_ref =
   let f = !wakeup_ref in
@@ -372,87 +373,82 @@ let handle_headers_block
 
 let handle_trailer_headers = handle_headers_block ~is_trailers:true
 
-let open_stream t frame_header ?priority headers_block =
-  let open Scheduler in
-  let { Frame.flags; stream_id; _ } = frame_header in
-  if not Stream_identifier.(stream_id > t.max_client_stream_id) then
+let open_stream t ?priority stream_id =
+  if not Stream_identifier.(stream_id > t.max_client_stream_id) then (
     (* From RFC7540§5.1.1:
      *   [...] The identifier of a newly established stream MUST be numerically
      *   greater than all streams that the initiating endpoint has opened or
      *   reserved. [...] An endpoint that receives an unexpected stream
      *   identifier MUST respond with a connection error (Section 5.4.1) of
      *   type PROTOCOL_ERROR. *)
-    report_connection_error t Error_code.ProtocolError
+    report_connection_error t Error_code.ProtocolError;
+    None)
   else
     (* From RFC7540§6.2:
      *   The HEADERS frame (type=0x1) is used to open a stream (Section 5.1),
      *   and additionally carries a header block fragment. HEADERS frames can
      *   be sent on a stream in the "idle", "reserved (local)", "open", or
      *   "half-closed (remote)" state. *)
-    let reqd =
-      match Scheduler.get_node t.streams stream_id with
-      | None ->
-        let reqd =
-          Stream.create
-            stream_id
-            ~max_frame_size:t.settings.max_frame_size
-            t.writer
-            t.error_handler
-            (on_close_stream t stream_id)
-        in
-        Scheduler.add
-          t.streams
-          ?priority
-          ~initial_window_size:t.settings.initial_window_size
-          reqd;
-        reqd
-      | Some (Stream stream) ->
-        (* From RFC7540§6.9.2:
-         *   Both endpoints can adjust the initial window size for new streams
-         *   by including a value for SETTINGS_INITIAL_WINDOW_SIZE in the
-         *   SETTINGS frame.
-         *
-         * Note: we already have the stream in the priority tree, and the
-         * defaultnitial window size for new streams could have changed between
-         * addinghe (idle) stream and opening it. *)
-        stream.flow <- t.settings.initial_window_size;
-        stream.descriptor
-    in
-    let end_headers = Flags.test_end_header flags in
-    let headers_block_length = Bigstringaf.length headers_block in
-    let initial_buffer_size =
-      if end_headers then
-        headers_block_length
-      else
-        (* Conservative estimate that there's only going to be one CONTINUATION
-         * frame. *)
-        2 * headers_block_length
-    in
-    let partial_headers =
-      { Stream.parse_state =
-          AB.parse
-            ~initial_buffer_size
-            (Hpack.Decoder.decode_headers t.hpack_decoder)
-      ; end_stream = Flags.test_end_stream flags
-      }
-    in
-    let active_stream =
-      Reqd.create_active_stream
-        t.hpack_encoder
-        t.config.response_body_buffer_size
-        (fun () -> wakeup_writer t)
-        (create_push_stream t)
-    in
-    reqd.state <- Active (Open (PartialHeaders partial_headers), active_stream);
-    if not end_headers then
-      t.receiving_headers_for_stream <- Some stream_id;
-    handle_headers_block
-      t
-      reqd
-      active_stream
-      partial_headers
-      flags
-      headers_block
+    match Scheduler.get_node t.streams stream_id with
+    | None ->
+      let reqd =
+        Stream.create
+          stream_id
+          ~max_frame_size:t.settings.max_frame_size
+          t.writer
+          t.error_handler
+          (on_close_stream t stream_id)
+      in
+      Scheduler.add
+        t.streams
+        ?priority
+        ~initial_window_size:t.settings.initial_window_size
+        reqd;
+      Some reqd
+    | Some (Scheduler.Stream stream) ->
+      (* From RFC7540§6.9.2:
+       *   Both endpoints can adjust the initial window size for new streams
+       *   by including a value for SETTINGS_INITIAL_WINDOW_SIZE in the
+       *   SETTINGS frame.
+       *
+       * Note: we already have the stream in the priority tree, and the
+       * default initial window size for new streams could have changed
+       * between adding the (idle) stream and opening it. *)
+      stream.flow <- t.settings.initial_window_size;
+      Some stream.descriptor
+
+let process_first_headers_block t frame_header reqd headers_block =
+  let { Frame.stream_id; flags; _ } = frame_header in
+  let end_headers = Flags.test_end_header flags in
+  let headers_block_length = Bigstringaf.length headers_block in
+  let initial_buffer_size =
+    if end_headers then
+      headers_block_length
+    else
+      (* Conservative estimate that there's only going to be one CONTINUATION
+       * frame. *)
+      2 * headers_block_length
+  in
+  let partial_headers =
+    { Stream.parse_state =
+        AB.parse
+          ~initial_buffer_size
+          (Hpack.Decoder.decode_headers t.hpack_decoder)
+    ; end_stream = Flags.test_end_stream flags
+    }
+  in
+  let active_stream =
+    Reqd.create_active_stream
+      t.hpack_encoder
+      t.config.response_body_buffer_size
+      t.wakeup_stream
+      (create_push_stream t)
+  in
+  reqd.Stream.state <-
+    Active (Open (PartialHeaders partial_headers), active_stream);
+  if not end_headers then
+    t.receiving_headers_for_stream <- Some stream_id;
+  handle_headers_block t reqd active_stream partial_headers flags headers_block
 
 let process_trailer_headers t reqd active_stream frame_header headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
@@ -505,14 +501,22 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
     | _ ->
       (match Scheduler.find t.streams stream_id with
       | None ->
-        open_stream t frame_header ?priority headers_block
+        (match open_stream t ?priority stream_id with
+        | Some reqd ->
+          process_first_headers_block t frame_header reqd headers_block
+        | None ->
+          ())
       | Some reqd ->
         (match reqd.state with
         | Idle ->
           (* From RFC7540§6.2:
            *   HEADERS frames can be sent on a stream in the "idle", "reserved
            *   (local)", "open", or "half-closed (remote)" state. *)
-          open_stream t frame_header ?priority headers_block
+          (match open_stream t ?priority stream_id with
+          | Some reqd ->
+            process_first_headers_block t frame_header reqd headers_block
+          | None ->
+            ())
         | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
           (* This case is unreachable because we check that partial HEADERS
            * states must be followed by CONTINUATION frames elsewhere. *)
@@ -795,8 +799,89 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
          *   "idle". *)
         report_connection_error t Error_code.ProtocolError
 
-let process_settings_frame t { Frame.frame_header; _ } settings =
+let apply_settings_list t settings =
   let open Scheduler in
+  (* From RFC7540§6.5:
+   *   Each parameter in a SETTINGS frame replaces any existing value for
+   *   that parameter. Parameters are processed in the order in which they
+   *   appear, and a receiver of a SETTINGS frame does not need to maintain
+   *   any state other than the current value of its parameters. *)
+  List.iter
+    (function
+      | Settings.HeaderTableSize, x ->
+        (* From RFC7540§6.5.2:
+         *   Allows the sender to inform the remote endpoint of the maximum
+         *   size of the header compression table used to decode header
+         *   blocks, in octets. *)
+        t.settings.header_table_size <- x;
+        Hpack.Encoder.set_capacity t.hpack_encoder x
+      | EnablePush, x ->
+        (* We've already verified that this setting is either 0 or 1 in the
+         * call to `Settings.check_settings_list` above. *)
+        t.settings.enable_push <- x == 1
+      | MaxConcurrentStreams, x ->
+        t.settings.max_concurrent_streams <- x
+      | InitialWindowSize, new_val ->
+        (* From RFC7540§6.9.2:
+         *   [...] a SETTINGS frame can alter the initial flow-control
+         *   window size for streams with active flow-control windows (that
+         *   is, streams in the "open" or "half-closed (remote)" state).
+         *   When the value of SETTINGS_INITIAL_WINDOW_SIZE changes, a
+         *   receiver MUST adjust the size of all stream flow-control
+         *   windows that it maintains by the difference between the new
+         *   value and the old value. *)
+        let old_val = t.settings.initial_window_size in
+        t.settings.initial_window_size <- new_val;
+        let growth = new_val - old_val in
+        let exception Local in
+        (match
+           Scheduler.iter
+             ~f:(fun stream ->
+               (* From RFC7540§6.9.2:
+                *   An endpoint MUST treat a change to
+                *   SETTINGS_INITIAL_WINDOW_SIZE that causes any
+                *   flow-control window to exceed the maximum size as a
+                *   connection error (Section 5.4.1) of type
+                *   FLOW_CONTROL_ERROR. *)
+               if not (Scheduler.add_flow stream growth) then
+                 raise Local)
+             t.streams
+         with
+        | () ->
+          ()
+        | exception Local ->
+          report_connection_error
+            t
+            ~additional_debug_data:
+              (Format.sprintf
+                 "Window size for stream would exceed %d"
+                 Settings.WindowSize.max_window_size)
+            Error_code.FlowControlError)
+      | MaxFrameSize, x ->
+        (* XXX: We're probably not abiding entirely by this. If we get a
+         * MAX_FRAME_SIZE setting we'd need to reallocate the read buffer?
+         * This will need support from the I/O runtimes. *)
+        t.settings.max_frame_size <- x;
+        Scheduler.iter
+          ~f:(fun (Stream { descriptor; _ }) ->
+            if Reqd.requires_output descriptor then
+              descriptor.max_frame_size <- x)
+          t.streams
+      | MaxHeaderListSize, x ->
+        t.settings.max_header_list_size <- Some x)
+    settings
+
+let write_settings_frame t ~ack settings =
+  let flags =
+    if ack then Flags.(set_ack default_flags) else Flags.default_flags
+  in
+  let frame_info = Writer.make_frame_info ~flags Stream_identifier.connection in
+  Writer.write_settings t.writer frame_info settings;
+  if not ack then
+    (* Don't expected our acknowledgements to be acknowledged... *)
+    t.unacked_settings <- t.unacked_settings + 1
+
+let process_settings_frame t { Frame.frame_header; _ } settings =
   let { Frame.flags; _ } = frame_header in
   (* We already checked that an acked SETTINGS is empty. Don't need to do
    * anything else in that case *)
@@ -810,91 +895,18 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       report_connection_error t ~additional_debug_data Error_code.ProtocolError)
   else
     match Settings.check_settings_list settings with
-    | None ->
-      (* From RFC7540§6.5:
-       *   Each parameter in a SETTINGS frame replaces any existing value for
-       *   that parameter. Parameters are processed in the order in which they
-       *   appear, and a receiver of a SETTINGS frame does not need to maintain
-       *   any state other than the current value of its parameters. *)
-      List.iter
-        (function
-          | Settings.HeaderTableSize, x ->
-            (* From RFC7540§6.5.2:
-             *   Allows the sender to inform the remote endpoint of the maximum
-             *   size of the header compression table used to decode header
-             *   blocks, in octets. *)
-            t.settings.header_table_size <- x;
-            Hpack.Encoder.set_capacity t.hpack_encoder x
-          | EnablePush, x ->
-            (* We've already verified that this setting is either 0 or 1 in the
-             * call to `Settings.check_settings_list` above. *)
-            t.settings.enable_push <- x == 1
-          | MaxConcurrentStreams, x ->
-            t.settings.max_concurrent_streams <- x
-          | InitialWindowSize, new_val ->
-            (* From RFC7540§6.9.2:
-             *   [...] a SETTINGS frame can alter the initial flow-control
-             *   window size for streams with active flow-control windows (that
-             *   is, streams in the "open" or "half-closed (remote)" state).
-             *   When the value of SETTINGS_INITIAL_WINDOW_SIZE changes, a
-             *   receiver MUST adjust the size of all stream flow-control
-             *   windows that it maintains by the difference between the new
-             *   value and the old value. *)
-            let old_val = t.settings.initial_window_size in
-            t.settings.initial_window_size <- new_val;
-            let growth = new_val - old_val in
-            let exception Local in
-            (match
-               Scheduler.iter
-                 ~f:(fun stream ->
-                   (* From RFC7540§6.9.2:
-                    *   An endpoint MUST treat a change to
-                    *   SETTINGS_INITIAL_WINDOW_SIZE that causes any
-                    *   flow-control window to exceed the maximum size as a
-                    *   connection error (Section 5.4.1) of type
-                    *   FLOW_CONTROL_ERROR. *)
-                   if not (Scheduler.add_flow stream growth) then
-                     raise Local)
-                 t.streams
-             with
-            | () ->
-              ()
-            | exception Local ->
-              report_connection_error
-                t
-                ~additional_debug_data:
-                  (Format.sprintf
-                     "Window size for stream would exceed %d"
-                     Settings.WindowSize.max_window_size)
-                Error_code.FlowControlError)
-          | MaxFrameSize, x ->
-            (* XXX: We're probably not abiding entirely by this. If we get a
-             * MAX_FRAME_SIZE setting we'd need to reallocate the read buffer?
-             * This will need support from the I/O runtimes. *)
-            t.settings.max_frame_size <- x;
-            Scheduler.iter
-              ~f:(fun (Stream { descriptor; _ }) ->
-                if Reqd.requires_output descriptor then
-                  descriptor.max_frame_size <- x)
-              t.streams
-          | MaxHeaderListSize, x ->
-            t.settings.max_header_list_size <- Some x)
-        settings;
+    | Ok () ->
+      apply_settings_list t settings;
       (* From RFC7540§6.5.2:
        *   Once all values have been processed, the recipient MUST immediately
-       *   emit a SETTINGS frame with the ACK flag set. *)
-      let frame_info =
-        Writer.make_frame_info
-          ~flags:Flags.(set_ack default_flags)
-          Stream_identifier.connection
-      in
-      (* From RFC7540§6.5:
+       *   emit a SETTINGS frame with the ACK flag set.
+       *
+       * From RFC7540§6.5:
        *   ACK (0x1): [...] When this bit is set, the payload of the SETTINGS
        *   frame MUST be empty. *)
-      Writer.write_settings t.writer frame_info [];
-      t.unacked_settings <- t.unacked_settings + 1;
+      write_settings_frame t ~ack:true [];
       wakeup_writer t
-    | Some error ->
+    | Error error ->
       report_error t error
 
 let process_ping_frame t { Frame.frame_header; _ } payload =
@@ -1072,45 +1084,59 @@ let default_error_handler ?request:_ error handle =
   Body.write_string body message;
   Body.close_writer body
 
-let create
-    ?(config = Config.default)
-    ?(error_handler = default_error_handler)
-    request_handler
-  =
-  let settings =
-    { Settings.default_settings with
-      max_frame_size = config.read_buffer_size
-    ; max_concurrent_streams = config.max_concurrent_streams
-    ; initial_window_size = config.initial_window_size
-    ; enable_push = config.enable_server_push
+let settings_from_config
+    { Config.read_buffer_size
+    ; max_concurrent_streams
+    ; initial_window_size
+    ; enable_server_push
+    ; _
     }
-  in
+  =
+  { Settings.default_settings with
+    max_frame_size = read_buffer_size
+  ; max_concurrent_streams
+  ; initial_window_size
+  ; enable_push = enable_server_push
+  }
+
+let wakeup_stream t () = wakeup_writer (Lazy.force t)
+
+let write_connection_preface t =
+  (* Check if the settings for the connection are different than the default
+   * HTTP/2 settings. In the event that they are, we need to send a non-empty
+   * SETTINGS frame advertising our configuration. *)
+  let settings = Settings.settings_for_the_connection t.settings in
+  (* Now send the connection preface, including our settings for the
+   * connection.
+   *
+   * From RFC7540§3.5:
+   *   The server connection preface consists of a potentially empty
+   *   SETTINGS frame (Section 6.5) that MUST be the first frame the
+   *   server sends in the HTTP/2 connection. *)
+  write_settings_frame ~ack:false t settings;
+  (* If a higher value for initial window size is configured, add more
+   * tokens to the connection (we have no streams at this point). *)
+  if
+    t.settings.initial_window_size
+    > Settings.default_settings.initial_window_size
+  then
+    let diff =
+      t.settings.initial_window_size
+      - Settings.default_settings.initial_window_size
+    in
+    send_window_update t t.streams diff
+
+let create_generic ~h2c ~config ~error_handler request_handler =
+  let settings = settings_from_config config in
   let writer = Writer.create settings.max_frame_size in
   let rec connection_preface_handler recv_frame settings_list =
     let t = Lazy.force t in
-    (* Check if the settings for the connection are different than the default
-     * HTTP/2 settings. In the event that they are, we need to send a non-empty
-     * SETTINGS frame advertising our configuration. *)
-    let settings = Settings.settings_for_the_connection settings in
-    (* This is the connection preface. We don't set the ack flag. *)
-    let frame_info = Writer.make_frame_info Stream_identifier.connection in
-    (* This is our SETTINGS frame. *)
-    (* From RFC7540§3.5:
-     *   The server connection preface consists of a potentially empty
-     *   SETTINGS frame (Section 6.5) that MUST be the first frame the
-     *   server sends in the HTTP/2 connection. *)
-    Writer.write_settings t.writer frame_info settings;
-    (* If a higher value for initial window size is configured, add more
-     * tokens to the connection (we have no streams at this point). *)
-    (if
-     t.settings.initial_window_size
-     > Settings.default_settings.initial_window_size
-   then
-       let diff =
-         t.settings.initial_window_size
-         - Settings.default_settings.initial_window_size
-       in
-       send_window_update t t.streams diff);
+    (* If this connection is `h2c` (HTTP/2 over TCP), we have already written
+     * the server connection preface. This is only necessary if we're
+     * responding to a client-initiated connection, but in `h2c` the server
+     * writes the preface first (handled below in `create_h2c`) *)
+    if not h2c then
+      write_connection_preface t;
     (* Now process the client's SETTINGS frame. `process_settings_frame` will
      * take care of calling `wakeup_writer`. *)
     process_settings_frame t recv_frame settings_list
@@ -1188,11 +1214,144 @@ let create
       ; did_send_go_away = false
       ; unacked_settings = 0
       ; wakeup_writer = ref default_wakeup_writer
+      ; wakeup_stream = wakeup_stream t
       ; hpack_encoder = Hpack.Encoder.(create settings.header_table_size)
       ; hpack_decoder = Hpack.Decoder.(create settings.header_table_size)
       }
   in
   Lazy.force t
+
+let create
+    ?(config = Config.default)
+    ?(error_handler = default_error_handler)
+    request_handler
+  =
+  (* `h2c` false = direct *)
+  create_generic ~h2c:false ~config ~error_handler request_handler
+
+let handle_h2c_request t headers request_body_iovecs =
+  (* From RFC7540§3.2:
+   *   The HTTP/1.1 request that is sent prior to upgrade is assigned a stream
+   *   identifier of 1 (see Section 5.1.1) with default priority values
+   *   (Section 5.3.5). *)
+  match open_stream t 1l with
+  | Some reqd ->
+    let active_stream =
+      Reqd.create_active_stream
+        t.hpack_encoder
+        t.config.response_body_buffer_size
+        (fun () -> wakeup_writer t)
+        (create_push_stream t)
+    in
+    (* From RFC7540§3.2:
+     *   Stream 1 is implicitly "half-closed" from the client toward the server
+     *   (see Section 5.1), since the request is completed as an HTTP/1.1
+     *   request. After commencing the HTTP/2 connection, stream 1 is used for
+     *   the response. *)
+    t.max_client_stream_id <- reqd.Stream.id;
+    let end_stream = Httpaf.IOVec.lengthv request_body_iovecs = 0 in
+    handle_headers t ~end_stream reqd active_stream headers;
+    if not end_stream then
+      let request_body = Reqd.request_body reqd in
+      let faraday = Body.unsafe_faraday request_body in
+      (* Don't bother changing request info body_bytes because its only use is to
+       * check message body length when DATA frames arrive, and we aren't expecting
+       * any. *)
+      if not (Faraday.is_closed faraday) then (
+        List.iter
+          (fun { Httpaf.IOVec.buffer; off; len } ->
+            Faraday.schedule_bigstring faraday ~off ~len buffer)
+          request_body_iovecs;
+        (* Close the request body, we're not expecting more input. *)
+        Body.close_reader request_body)
+  | None ->
+    ()
+
+(* This function is meant to be called inside an HTTP/1.1 upgrade handler.
+ *
+ * It's useful to have the request body on the server because a single request
+ * handler may process both upgraded (h2c) and direct connections. Given the
+ * following, application code that calls this function needs to buffer the
+ * entire request body in memory if it wants, so we can just get a
+ * `Bigstringaf.t IOVec.t list`
+ *
+ *
+ * From RFC7540§3.2:
+ *   Requests that contain a payload body MUST be sent in their
+ *   entirety before the client can send HTTP/2 frames. This means
+ *   that a large request can block the use of the connection until
+ *   it is completely sent. *)
+let create_h2c
+    ?(config = Config.default)
+    ?(error_handler = default_error_handler)
+    ~http_request
+    ?(request_body = [])
+    request_handler
+  =
+  let { Httpaf.Request.headers; _ } = http_request in
+  (* From RFC7540§3.2.1:
+   *   A request that upgrades from HTTP/1.1 to HTTP/2 MUST include exactly one
+   *   HTTP2-Settings header field.
+   *
+   *   [...] A server MUST NOT upgrade the connection to HTTP/2 if this header
+   *   field is not present or if more than one is present. A server MUST NOT
+   *   send this header field. *)
+  match
+    Httpaf.Headers.(
+      get_multi headers "http2-settings", get_multi headers "connection")
+  with
+  | [ settings ], [ connection ] when Headers.is_valid_h2c_connection connection
+    ->
+    (* From RFC7540§3.2.1:
+     *   The content of the HTTP2-Settings header field is the payload of a
+     *   SETTINGS frame (Section 6.5), encoded as a base64url string (that is,
+     *   the URL- and filename-safe Base64 encoding described in Section 5 of
+     *   [RFC4648], with any trailing '=' characters omitted).
+     *
+     *   [...] A server decodes and interprets these values as it would any
+     *   other SETTINGS frame. Explicit acknowledgement of these settings
+     *   (Section 6.5.3) is not necessary, since a 101 response serves as
+     *   implicit acknowledgement. *)
+    (match Headers.of_http1 http_request with
+    | Ok h2_headers ->
+      (match Settings.of_base64 settings with
+      | Ok upgrade_settings ->
+        (match Settings.check_settings_list upgrade_settings with
+        | Ok () ->
+          let t =
+            create_generic ~h2c:true ~config ~error_handler request_handler
+          in
+          apply_settings_list t upgrade_settings;
+          (* From RFC7540§3.5:
+           *   The first HTTP/2 frame sent by the server MUST be a server
+           *   connection preface (Section 3.5) consisting of a SETTINGS
+           *   frame (Section 6.5).
+           *
+           *   Note: as opposed to a connection started by a client, in h2c
+           *   we're upgrading from HTTP/1.1 so the server is reponsible for
+           *   writing the HTTP/2 connection preface to the wire first. We
+           *   also configure the connection with `~h2c:true` above to not
+           *   send it a second time. *)
+          write_connection_preface t;
+          (* From RFC7540§3.2:
+           *   A server that supports HTTP/2 accepts the upgrade with a 101
+           *   (Switching Protocols) response. After the empty line that
+           *   terminates the 101 response, the server can begin sending
+           *   HTTP/2 frames. These frames MUST include a response to the
+           *   request that initiated the upgrade *)
+          handle_h2c_request t h2_headers request_body;
+          Ok t
+        | Error error ->
+          Error (Error.message error))
+      | Error msg ->
+        Error msg)
+    | Error msg ->
+      Error msg)
+  | _ ->
+    Error
+      "A request that upgrades from HTTP/1.1 to HTTP/2 MUST include exactly \
+       one HTTP2-Settings header field and HTTP2-Settings as a connection \
+       option in the Connection header field."
 
 let next_read_operation t =
   if Reader.is_closed t.reader then shutdown_reader t;

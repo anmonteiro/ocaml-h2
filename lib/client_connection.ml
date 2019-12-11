@@ -74,6 +74,7 @@ type t =
   ; error_handler : error -> unit
   ; push_handler : Request.t -> (response_handler, unit) result
   ; wakeup_writer : (unit -> unit) ref
+  ; wakeup_stream : unit -> unit
         (* From RFC7540§4.3:
          *   Header compression is stateful. One compression context and one
          *   decompression context are used for the entire connection. *)
@@ -93,7 +94,7 @@ let on_wakeup_writer t k =
   else
     t.wakeup_writer := k
 
-let default_wakeup_writer () = ()
+let default_wakeup_writer = Sys.opaque_identity (fun () -> ())
 
 let _wakeup_writer wakeup_ref =
   let f = !wakeup_ref in
@@ -101,6 +102,8 @@ let _wakeup_writer wakeup_ref =
   f ()
 
 let wakeup_writer t = _wakeup_writer t.wakeup_writer
+
+let wakeup_stream t () = wakeup_writer (Lazy.force t)
 
 let shutdown_reader t = Reader.force_close t.reader
 
@@ -248,12 +251,10 @@ let handle_push_promise_headers t respd headers =
         respd.state <-
           Active
             ( HalfClosed Stream.WaitingForPeer
-              (* TODO: should we just store a `unit -> unit` in `t` to avoid
-               * one closure allocation here? *)
             , { Respd.request
               ; request_body
               ; response_handler
-              ; wakeup_writer = (fun () -> wakeup_writer t)
+              ; wakeup_writer = t.wakeup_stream
               } )
       | Error _ ->
         (* From RFC7540§6.6:
@@ -812,7 +813,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       report_connection_error t ~additional_debug_data Error_code.ProtocolError)
   else
     match Settings.check_settings_list ~is_client:true settings with
-    | None ->
+    | Ok () ->
       (* From RFC7540§6.5:
        *   Each parameter in a SETTINGS frame replaces any existing value for
        *   that parameter. Parameters are processed in the order in which they
@@ -890,7 +891,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       Writer.write_settings t.writer frame_info [];
       t.unacked_settings <- t.unacked_settings + 1;
       wakeup_writer t
-    | Some error ->
+    | Error error ->
       report_error t error
 
 let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block =
@@ -1117,12 +1118,7 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
      *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
     report_connection_error t Error_code.ProtocolError
 
-(* Unlike e.g. http/af's current Client implementation (Oneshot) where a new
- * connection is created per request, we create a single connection where all
- * requests go through. HTTP/2 allows concurrency to exist on the connection
- * level.
- *
- * From RFC7540§1:
+(* From RFC7540§1:
  *   HTTP/2 [...] allows interleaving of request and response messages on the
  *   same connection and uses an efficient coding for HTTP header fields. *)
 let create ?(config = Config.default) ?push_handler ~error_handler =
@@ -1216,8 +1212,9 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
       ; reader = Reader.client_frames connection_preface_handler frame_handler
       ; writer = Writer.create settings.max_frame_size
       ; streams = Scheduler.make_root ()
-      ; wakeup_writer =
-          ref default_wakeup_writer
+      ; wakeup_writer = ref default_wakeup_writer
+      ; wakeup_stream =
+          wakeup_stream t
           (* From RFC7540§4.3:
            *   Header compression is stateful. One compression context and one
            *   decompression context are used for the entire connection. *)
@@ -1245,12 +1242,8 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
      send_window_update t t.streams diff);
   t
 
-let request t request ~error_handler ~response_handler =
+let create_and_add_stream t ~error_handler =
   let max_frame_size = t.settings.max_frame_size in
-  let wakeup_stream () = wakeup_writer t in
-  let request_body =
-    Body.create (Bigstringaf.create max_frame_size) wakeup_stream
-  in
   t.current_stream_id <- Int32.add t.current_stream_id 2l;
   let stream_id = t.current_stream_id in
   let respd =
@@ -1266,8 +1259,67 @@ let request t request ~error_handler ~response_handler =
     t.streams (* ?priority *)
     ~initial_window_size:t.settings.initial_window_size
     respd;
+  respd
+
+(* Meant to be called after receiving an HTTP/1.1 `101 Switching_protocols`
+ * response upgrading to HTTP/2. *)
+let create_h2c
+    ?config
+    ?push_handler
+    ~http_request
+    ~error_handler
+    (response_handler, response_error_handler)
+  =
+  let { Httpaf.Request.target; meth; _ } = http_request in
+  match Headers.of_http1 http_request with
+  | Ok headers ->
+    (* From RFC7540§3.2:
+     *   Upon receiving the 101 response, the client MUST send a connection
+     *   preface (Section 3.5), which includes a SETTINGS frame. *)
+    let t = create ?config ?push_handler ~error_handler in
+    let respd = create_and_add_stream t ~error_handler:response_error_handler in
+    assert (Stream_identifier.(t.current_stream_id === 1l));
+    assert (Stream_identifier.(respd.id === 1l));
+    let request = Request.create ~headers ~scheme:"http" meth target in
+    (* From RFC7540§3.2:
+     *   The HTTP/1.1 request that is sent prior to upgrade is assigned a
+     *   stream identifier of 1 (see Section 5.1.1) with default priority
+     *   values (Section 5.3.5). Stream 1 is implicitly "half-closed" from the
+     *   client toward the server (see Section 5.1), since the request is
+     *   completed as an HTTP/1.1 request. *)
+    respd.state <-
+      Active
+        ( HalfClosed WaitingForPeer
+        , { request
+            (* The request body is no more than a placeholder. The HTTP/1.1
+             * connection that we're upgrading from already sent it to the
+             * server. Application code knows what it is.
+             *
+             * From RFC7540§3.2:
+             *   Requests that contain a payload body MUST be sent in their
+             *   entirety before the client can send HTTP/2 frames. This means
+             *   that a large request can block the use of the connection until
+             *   it is completely sent. *)
+          ; request_body = Body.empty
+          ; response_handler
+          ; wakeup_writer = t.wakeup_stream
+          } );
+    wakeup_writer t;
+    Ok t
+  | Error msg ->
+    Error msg
+
+let request t request ~error_handler ~response_handler =
+  let max_frame_size = t.settings.max_frame_size in
+  let respd = create_and_add_stream t ~error_handler in
+  let request_body =
+    Body.create (Bigstringaf.create max_frame_size) t.wakeup_stream
+  in
   let frame_info =
-    Writer.make_frame_info ~max_frame_size ~flags:Flags.default_flags stream_id
+    Writer.make_frame_info
+      ~max_frame_size:t.settings.max_frame_size
+      ~flags:Flags.default_flags
+      respd.id
   in
   Writer.write_request_headers t.writer t.hpack_encoder frame_info request;
   Writer.flush t.writer (fun () ->
@@ -1277,7 +1329,7 @@ let request t request ~error_handler ~response_handler =
           , { request
             ; request_body
             ; response_handler
-            ; wakeup_writer = wakeup_stream
+            ; wakeup_writer = t.wakeup_stream
             } ));
   wakeup_writer t;
   (* Closing the request body puts the stream in the half-closed (local) state.
