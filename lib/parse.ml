@@ -221,39 +221,6 @@ let parse_rst_stream_frame { Frame.payload_length; stream_id; _ } =
   else
     lift (fun error_code -> Ok (Frame.RSTStream error_code)) parse_error_code
 
-let parse_settings_payload num_settings =
-  let parse_setting =
-    lift2
-      (fun k v ->
-        match Settings.parse_key k with
-        | Some s ->
-          Some (s, Int32.to_int v)
-        | None ->
-          None)
-      BE.any_uint16
-      BE.any_int32
-  in
-  (* Note: This ignores unknown settings.
-   *
-   * From RFC7540§6.5.3:
-   *   Unsupported parameters MUST be ignored.
-   *)
-  lift
-    (fun xs ->
-      let rec filter_opt acc = function
-        | [] ->
-          acc []
-        | Some x :: xs ->
-          filter_opt (fun ys -> acc (x :: ys)) xs
-        | None :: xs ->
-          filter_opt acc xs
-      in
-      (* From RFC7540§6.5.3:
-       *   The values in the SETTINGS frame MUST be processed in the order
-       *   they appear, with no other frame processing between values. *)
-      filter_opt (fun x -> x) xs)
-    (count num_settings parse_setting)
-
 let parse_settings_frame { Frame.payload_length; stream_id; flags; _ } =
   if not (Stream_identifier.is_connection stream_id) then
     (* From RFC7540§6.5:
@@ -282,7 +249,8 @@ let parse_settings_frame { Frame.payload_length; stream_id; flags; _ } =
     connection_error FrameSizeError "SETTINGS with ACK must be empty"
   else
     let num_settings = payload_length / Settings.octets_per_setting in
-    parse_settings_payload num_settings >>| fun xs -> Ok (Frame.Settings xs)
+    Settings.parse_settings_payload num_settings >>| fun xs ->
+    Ok (Frame.Settings xs)
 
 let parse_push_promise_frame frame_header =
   let { Frame.payload_length; stream_id; _ } = frame_header in

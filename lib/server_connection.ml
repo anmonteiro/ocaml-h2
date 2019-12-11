@@ -1287,47 +1287,36 @@ let create_h2c
      *   implicit acknowledgement. *)
     (match Headers.of_http1 http_request with
     | Ok h2_headers ->
-      (match Base64.decode ~alphabet:Base64.uri_safe_alphabet settings with
-      | Ok settings_payload ->
-        let settings_payload_length =
-          String.length settings_payload / Settings.octets_per_setting
-        in
-        (match
-           Angstrom.parse_string
-             (Parse.parse_settings_payload settings_payload_length)
-             settings_payload
-         with
-        | Ok upgrade_settings ->
-          (match Settings.check_settings_list upgrade_settings with
-          | Ok () ->
-            let t =
-              create_generic ~h2c:true ~config ~error_handler request_handler
-            in
-            apply_settings_list t upgrade_settings;
-            (* From RFC7540§3.5:
-             *   The first HTTP/2 frame sent by the server MUST be a server
-             *   connection preface (Section 3.5) consisting of a SETTINGS
-             *   frame (Section 6.5).
-             *
-             *   Note: as opposed to a connection started by a client, in h2c
-             *   we're upgrading from HTTP/1.1 so the server is reponsible for
-             *   writing the HTTP/2 connection preface to the wire first. We
-             *   also configure the connection with `~h2c:true` above to not
-             *   send it a second time. *)
-            write_connection_preface t;
-            (* From RFC7540§3.2:
-             *   A server that supports HTTP/2 accepts the upgrade with a 101
-             *   (Switching Protocols) response. After the empty line that
-             *   terminates the 101 response, the server can begin sending
-             *   HTTP/2 frames. These frames MUST include a response to the
-             *   request that initiated the upgrade *)
-            handle_h2c_request t ~end_stream:true h2_headers;
-            Ok t
-          | Error error ->
-            Error (Error.message error))
-        | Error msg ->
-          Error msg)
-      | Error (`Msg msg) ->
+      (match Settings.of_base64 settings with
+      | Ok upgrade_settings ->
+        (match Settings.check_settings_list upgrade_settings with
+        | Ok () ->
+          let t =
+            create_generic ~h2c:true ~config ~error_handler request_handler
+          in
+          apply_settings_list t upgrade_settings;
+          (* From RFC7540§3.5:
+           *   The first HTTP/2 frame sent by the server MUST be a server
+           *   connection preface (Section 3.5) consisting of a SETTINGS
+           *   frame (Section 6.5).
+           *
+           *   Note: as opposed to a connection started by a client, in h2c
+           *   we're upgrading from HTTP/1.1 so the server is reponsible for
+           *   writing the HTTP/2 connection preface to the wire first. We
+           *   also configure the connection with `~h2c:true` above to not
+           *   send it a second time. *)
+          write_connection_preface t;
+          (* From RFC7540§3.2:
+           *   A server that supports HTTP/2 accepts the upgrade with a 101
+           *   (Switching Protocols) response. After the empty line that
+           *   terminates the 101 response, the server can begin sending
+           *   HTTP/2 frames. These frames MUST include a response to the
+           *   request that initiated the upgrade *)
+          handle_h2c_request t ~end_stream:true h2_headers;
+          Ok t
+        | Error error ->
+          Error (Error.message error))
+      | Error msg ->
         Error msg)
     | Error msg ->
       Error msg)

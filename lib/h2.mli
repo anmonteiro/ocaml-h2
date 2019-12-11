@@ -874,3 +874,25 @@ module Client_connection : sig
       [`Write _] until all buffered output has been flushed, at which point it
       will return [`Close]. *)
 end
+
+module Settings : sig
+  type key =
+    | HeaderTableSize
+    | EnablePush
+    | MaxConcurrentStreams
+    | InitialWindowSize
+    | MaxFrameSize (* this means payload size *)
+    | MaxHeaderListSize
+
+  type value = int
+
+  type settings_list = (key * value) list
+
+  val of_base64 : string -> (settings_list, string) result
+  (** {{:https://tools.ietf.org/html/rfc7540#section-3.2.1} RFC7540§3.2.1} *)
+
+  val to_base64 : settings_list -> (string, string) result
+  (** {{:https://tools.ietf.org/html/rfc7540#section-3.2.1} RFC7540§3.2.1} *)
+
+  val pp_hum : Format.formatter -> settings_list -> unit
+end
