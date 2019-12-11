@@ -48,6 +48,7 @@ module type Server = sig
   val create_h2c_connection_handler
     :  ?config:Config.t
     -> http_request:Httpaf.Request.t
+    -> ?request_body:Bigstringaf.t IOVec.t list
     -> request_handler:Server_connection.request_handler
     -> error_handler:Server_connection.error_handler
     -> flow

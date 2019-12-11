@@ -97,13 +97,14 @@ module Server (Flow : Mirage_flow.S) = struct
     create_connection_handler ?config ~request_handler ~error_handler () flow
 
   let create_h2c_connection_handler
-      ?config ~http_request ~request_handler ~error_handler flow
+      ?config ~http_request ?request_body ~request_handler ~error_handler flow
     =
     let request_handler () = request_handler in
     let error_handler () = error_handler in
     create_h2c_connection_handler
       ?config
       ~http_request
+      ?request_body
       ~request_handler
       ~error_handler
       ()
@@ -127,6 +128,7 @@ module type Server = sig
   val create_h2c_connection_handler
     :  ?config:Config.t
     -> http_request:Httpaf.Request.t
+    -> ?request_body:Bigstringaf.t IOVec.t list
     -> request_handler:Server_connection.request_handler
     -> error_handler:Server_connection.error_handler
     -> flow

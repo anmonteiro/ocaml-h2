@@ -2,8 +2,8 @@ open Lwt.Infix
 
 module Http2 = struct
   let connection_handler
-      :  Httpaf.Request.t -> Unix.sockaddr -> Lwt_unix.file_descr
-      -> (unit, string) result Lwt.t
+      :  Httpaf.Request.t -> Bigstringaf.t H2.IOVec.t list -> Unix.sockaddr
+      -> Lwt_unix.file_descr -> (unit, string) result Lwt.t
     =
     let open H2 in
     let request_handler : Unix.sockaddr -> Reqd.t -> unit =
@@ -21,6 +21,7 @@ module Http2 = struct
           | None ->
             "application/octet-stream"
         in
+        let buf = Buffer.create 10 in
         let rec respond () =
           Body.schedule_read
             request_body
@@ -34,8 +35,17 @@ module Http2 = struct
               Reqd.respond_with_string
                 request_descriptor
                 response
-                "non-empty data.")
-            ~on_read:(fun _request_data ~off:_ ~len:_ -> respond ())
+                (Buffer.contents buf))
+            ~on_read:(fun request_data ~off ~len ->
+              let bytes = Bytes.create len in
+              Bigstringaf.blit_to_bytes
+                request_data
+                ~src_off:off
+                ~dst_off:0
+                ~len
+                bytes;
+              Buffer.add_bytes buf bytes;
+              respond ())
         in
         respond ()
       | _ ->
@@ -58,10 +68,11 @@ module Http2 = struct
         Body.write_string response_body (Status.default_reason_phrase error));
       Body.close_writer response_body
     in
-    fun http_request ->
+    fun http_request request_body ->
       H2_lwt_unix.Server.create_h2c_connection_handler
         ?config:None
         ~http_request
+        ~request_body
         ~request_handler
         ~error_handler
 end
@@ -73,7 +84,18 @@ let connection_handler =
   let module Response = Httpaf.Response in
   let module Status = Httpaf.Status in
   let upgrade_handler request addr socket =
-    Http2.connection_handler request addr socket >|= ignore
+    let off = 0 in
+    let len = 3 in
+    let body =
+      [ { H2.IOVec.buffer = Bigstringaf.of_string ~off ~len "foo"; off; len }
+      ; { buffer = Bigstringaf.of_string ~off ~len "bar"; off; len }
+      ; { buffer = Bigstringaf.of_string ~off ~len "baz"; off; len }
+      ]
+    in
+    Http2.connection_handler request body addr socket >|= ignore
+    (* let to_ = Lwt_timeout.create 2 (fun () -> Http2.connection_handler
+       request addr socket |> ignore) in Lwt_timeout.start to_; let x, _ =
+       Lwt.wait () in x >|= fun () -> Format.eprintf "never ending?@." *)
   in
   let http_error_handler _client_address ?request:_ error handle =
     let message =

@@ -1229,7 +1229,7 @@ let create
   (* `h2c` false = direct *)
   create_generic ~h2c:false ~config ~error_handler request_handler
 
-let handle_h2c_request t ~end_stream headers =
+let handle_h2c_request t headers request_body_iovecs =
   (* From RFC7540§3.2:
    *   The HTTP/1.1 request that is sent prior to upgrade is assigned a stream
    *   identifier of 1 (see Section 5.1.1) with default priority values
@@ -1249,16 +1249,43 @@ let handle_h2c_request t ~end_stream headers =
      *   request. After commencing the HTTP/2 connection, stream 1 is used for
      *   the response. *)
     t.max_client_stream_id <- reqd.Stream.id;
-    handle_headers t ~end_stream reqd active_stream headers
+    let end_stream = Httpaf.IOVec.lengthv request_body_iovecs = 0 in
+    handle_headers t ~end_stream reqd active_stream headers;
+    if not end_stream then
+      let request_body = Reqd.request_body reqd in
+      let faraday = Body.unsafe_faraday request_body in
+      (* Don't bother changing request info body_bytes because its only use is to
+       * check message body length when DATA frames arrive, and we aren't expecting
+       * any. *)
+      if not (Faraday.is_closed faraday) then (
+        List.iter
+          (fun { Httpaf.IOVec.buffer; off; len } ->
+            Faraday.schedule_bigstring faraday ~off ~len buffer)
+          request_body_iovecs;
+        (* Close the request body, we're not expecting more input. *)
+        Body.close_reader request_body)
   | None ->
     ()
 
-(* Meant to be called inside an HTTP/1.1 upgrade handler *)
-(* TODO: support passing the request body to the handler *)
+(* This function is meant to be called inside an HTTP/1.1 upgrade handler.
+ *
+ * It's useful to have the request body on the server because a single request
+ * handler may process both upgraded (h2c) and direct connections. Given the
+ * following, application code that calls this function needs to buffer the
+ * entire request body in memory if it wants, so we can just get a
+ * `Bigstringaf.t IOVec.t list`
+ *
+ *
+ * From RFC7540§3.2:
+ *   Requests that contain a payload body MUST be sent in their
+ *   entirety before the client can send HTTP/2 frames. This means
+ *   that a large request can block the use of the connection until
+ *   it is completely sent. *)
 let create_h2c
     ?(config = Config.default)
     ?(error_handler = default_error_handler)
     ~http_request
+    ?(request_body = [])
     request_handler
   =
   let { Httpaf.Request.headers; _ } = http_request in
@@ -1312,7 +1339,7 @@ let create_h2c
            *   terminates the 101 response, the server can begin sending
            *   HTTP/2 frames. These frames MUST include a response to the
            *   request that initiated the upgrade *)
-          handle_h2c_request t ~end_stream:true h2_headers;
+          handle_h2c_request t h2_headers request_body;
           Ok t
         | Error error ->
           Error (Error.message error))

@@ -657,6 +657,7 @@ module Server_connection : sig
     :  ?config:Config.t
     -> ?error_handler:error_handler
     -> http_request:Httpaf.Request.t
+    -> ?request_body:Bigstringaf.t IOVec.t list
     -> request_handler
     -> (t, string) result
   (** [create ?config ?error_handler ~http_request ~request_handler] creates a

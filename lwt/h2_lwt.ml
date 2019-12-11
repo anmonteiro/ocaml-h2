@@ -186,6 +186,7 @@ module Server (Io : IO) = struct
   let create_h2c_connection_handler
       ?(config = Config.default)
       ~http_request
+      ?(request_body = [])
       ~request_handler
       ~error_handler
       client_addr
@@ -196,6 +197,7 @@ module Server (Io : IO) = struct
         ~config
         ~error_handler:(error_handler client_addr)
         ~http_request
+        ~request_body
         (request_handler client_addr)
     with
     | Ok connection ->
