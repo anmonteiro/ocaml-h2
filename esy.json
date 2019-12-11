@@ -35,9 +35,9 @@
   "resolutions": {
     "@opam/conf-libev": "esy-packages/libev:package.json#0b5eb66",
     "@opam/conf-libssl": "esy-packages/esy-openssl#860ad7f",
-    "@opam/httpaf": "anmonteiro/httpaf:httpaf.opam#b01626b",
-    "@opam/httpaf-lwt": "anmonteiro/httpaf:httpaf-lwt.opam#b01626b",
-    "@opam/httpaf-lwt-unix": "anmonteiro/httpaf:httpaf-lwt-unix.opam#b01626b",
+    "@opam/httpaf": "anmonteiro/httpaf:httpaf.opam#ec526a5",
+    "@opam/httpaf-lwt": "anmonteiro/httpaf:httpaf-lwt.opam#ec526a5",
+    "@opam/httpaf-lwt-unix": "anmonteiro/httpaf:httpaf-lwt-unix.opam#ec526a5",
     "@opam/ssl": "savonet/ocaml-ssl:ssl.opam#0111764"
   }
 }
