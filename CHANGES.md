@@ -15,6 +15,10 @@ Unreleased
 - h2-lwt, h2-lwt-unix, h2-mirage: Improve the `H2_lwt.IO` interface, don't
   require a `report_exn` function, only a `state` function that returns the
   socket state ([#85](https://github.com/anmonteiro/httpaf/pull/85))
+- h2, h2-lwt, h2-lwt-unix, h2-mirage: Add support for starting HTTP/2 for
+  "http" URIs. Covers [section 3.2](https://tools.ietf.org/html/rfc7540#section-3.2)
+  of the HTTP/2 specification
+  ([#87](https://github.com/anmonteiro/httpaf/pull/87))
 
 0.4.0 2019-11-05
 --------------
