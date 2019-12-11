@@ -876,6 +876,7 @@ module Client_connection : sig
       will return [`Close]. *)
 end
 
+(* TODO: needs docs *)
 module Settings : sig
   type key =
     | HeaderTableSize
