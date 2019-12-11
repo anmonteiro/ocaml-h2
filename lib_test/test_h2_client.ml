@@ -132,7 +132,7 @@ module Client_connection_tests = struct
         Alcotest.(check int) "Read the entire frame" frame_length read_frame)
       frames
 
-  let write_response
+  let read_response
       t
       hpack_encoder
       ?priority
@@ -156,7 +156,7 @@ module Client_connection_tests = struct
       headers_length
       read_headers
 
-  let write_response_body
+  let read_response_body
       t ?(stream_id = 1l) ?(flags = Flags.(default_flags |> set_end_stream)) s
     =
     let writer = Writer.create 4096 in
@@ -343,7 +343,7 @@ module Client_connection_tests = struct
       (Flags.test_end_stream frame.frame_header.flags);
     report_write_result t (`Ok lenv);
     let hpack_encoder = Hpack.Encoder.create 4096 in
-    write_response t hpack_encoder (Response.create `OK);
+    read_response t hpack_encoder (Response.create `OK);
     Alcotest.(check bool) "Response handler called" true !handler_called
 
   let test_data_larger_than_reported () =
@@ -390,12 +390,12 @@ module Client_connection_tests = struct
       (Flags.test_end_stream frame.frame_header.flags);
     report_write_result t (`Ok lenv);
     let hpack_encoder = Hpack.Encoder.create 4096 in
-    write_response
+    read_response
       t
       hpack_encoder
       ~flags:Flags.(default_flags |> set_end_header)
       (Response.create `OK ~headers:(Headers.of_list [ "content-length", "2" ]));
-    write_response_body t "foo";
+    read_response_body t "foo";
     Alcotest.(check bool)
       "Stream level error handler called"
       true
@@ -442,7 +442,7 @@ module Client_connection_tests = struct
       (Flags.test_end_stream frame.frame_header.flags);
     report_write_result t (`Ok lenv);
     let hpack_encoder = Hpack.Encoder.create 4096 in
-    write_response
+    read_response
       t
       hpack_encoder
       ~priority:
@@ -598,7 +598,7 @@ module Client_connection_tests = struct
       (Flags.test_end_stream frame.frame_header.flags);
     report_write_result t (`Ok lenv);
     let hpack_encoder = Hpack.Encoder.create 4096 in
-    write_response
+    read_response
       t
       hpack_encoder
       ~flags:Flags.(default_flags |> set_end_header)
@@ -626,7 +626,7 @@ module Client_connection_tests = struct
     let read_push = read t ~off:0 ~len:push_length push_wire in
     Alcotest.(check int) "Read the entire push frame" push_length read_push;
     Alcotest.(check bool) "Push handler called" true !push_handler_called;
-    write_response
+    read_response
       t
       hpack_encoder
       ~stream_id:2l
@@ -672,7 +672,7 @@ module Client_connection_tests = struct
       (Flags.test_end_stream frame.frame_header.flags);
     report_write_result t (`Ok lenv);
     let hpack_encoder = Hpack.Encoder.create 4096 in
-    write_response
+    read_response
       t
       hpack_encoder
       ~flags:Flags.(default_flags |> set_end_header)
@@ -797,7 +797,7 @@ module Client_connection_tests = struct
       true
       (not (Stream.is_open stream));
     let hpack_encoder = Hpack.Encoder.create 4096 in
-    write_response t hpack_encoder (Response.create `OK);
+    read_response t hpack_encoder (Response.create `OK);
     Alcotest.(check bool) "Response handler called" true !handler_called;
     Alcotest.(check bool)
       "Stream transitions to the closed state once the response has been \
@@ -906,6 +906,46 @@ module Client_connection_tests = struct
       `Yield
       (next_write_operation t)
 
+  let test_h2c () =
+    let settings_payload =
+      Settings.[ EnablePush, 0; MaxConcurrentStreams, 2 ]
+    in
+    let f = Faraday.create 100 in
+    Serialize.write_settings_payload f settings_payload;
+    let serialized_settings = Faraday.serialize_to_string f in
+    let http_request =
+      Httpaf.Request.create
+        ~headers:
+          (Httpaf.Headers.of_list
+             [ "Connection", "Upgrade, HTTP2-Settings"
+             ; "Upgrade", "h2c"
+             ; ( "HTTP2-Settings"
+               , Base64.(
+                   encode_string ~alphabet:uri_safe_alphabet serialized_settings)
+               )
+             ; "Host", "localhost"
+             ])
+        `GET
+        "/"
+    in
+    let response_handler_called = ref false in
+    match
+      create_h2c
+        ~http_request
+        ~error_handler:default_error_handler
+        ((fun _ _ -> response_handler_called := true), fun _ -> assert false)
+    with
+    | Ok t ->
+      handle_preface t;
+      let hpack_encoder = Hpack.Encoder.create 4096 in
+      read_response t hpack_encoder (Response.create `OK);
+      Alcotest.(check bool)
+        "Response handler called"
+        true
+        !response_handler_called
+    | Error msg ->
+      Alcotest.fail msg
+
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
@@ -932,6 +972,7 @@ module Client_connection_tests = struct
     ; ( "stream level error handler called on RST_STREAM frames"
       , `Quick
       , test_error_handler_rst_stream )
+    ; "starting an h2c connection", `Quick, test_h2c
     ]
 end
 
