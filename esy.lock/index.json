@@ -1,5 +1,5 @@
 {
-  "checksum": "48b98bb8c9715611181ae9c7487aff2e",
+  "checksum": "f92d1f78536eafe9dd2b13e89f8b4867",
   "root": "h2@link-dev:./esy.json",
   "node": {
     "yarn-pkg-config@github:esy-ocaml/yarn-pkg-config#cca65f99674ed2d954d28788edeb8c57fada5ed0@d41d8cd9": {
@@ -45,8 +45,8 @@
         "@opam/psq@opam:0.2.0@247756d4",
         "@opam/mirage-flow@opam:2.0.1@b9cf2b19",
         "@opam/lwt_ssl@opam:1.1.3@9d044ebe", "@opam/lwt@opam:4.4.0@0357bb8b",
-        "@opam/httpaf-lwt-unix@github:anmonteiro/httpaf:httpaf-lwt-unix.opam#b01626b@d41d8cd9",
-        "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#b01626b@d41d8cd9",
+        "@opam/httpaf-lwt-unix@github:anmonteiro/httpaf:httpaf-lwt-unix.opam#ec526a5@d41d8cd9",
+        "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#ec526a5@d41d8cd9",
         "@opam/faraday-lwt-unix@opam:0.7.0@52a60108",
         "@opam/faraday@opam:0.7.0@6d4772f6",
         "@opam/dune@opam:1.11.4@a7ccb7ae",
@@ -2122,61 +2122,61 @@
         "@opam/bigarray-compat@opam:1.0.0@1faefa97"
       ]
     },
-    "@opam/httpaf-lwt-unix@github:anmonteiro/httpaf:httpaf-lwt-unix.opam#b01626b@d41d8cd9": {
+    "@opam/httpaf-lwt-unix@github:anmonteiro/httpaf:httpaf-lwt-unix.opam#ec526a5@d41d8cd9": {
       "id":
-        "@opam/httpaf-lwt-unix@github:anmonteiro/httpaf:httpaf-lwt-unix.opam#b01626b@d41d8cd9",
+        "@opam/httpaf-lwt-unix@github:anmonteiro/httpaf:httpaf-lwt-unix.opam#ec526a5@d41d8cd9",
       "name": "@opam/httpaf-lwt-unix",
-      "version": "github:anmonteiro/httpaf:httpaf-lwt-unix.opam#b01626b",
+      "version": "github:anmonteiro/httpaf:httpaf-lwt-unix.opam#ec526a5",
       "source": {
         "type": "install",
-        "source": [ "github:anmonteiro/httpaf:httpaf-lwt-unix.opam#b01626b" ]
+        "source": [ "github:anmonteiro/httpaf:httpaf-lwt-unix.opam#ec526a5" ]
       },
       "overrides": [],
       "dependencies": [
         "ocaml@4.9.0@d41d8cd9", "@opam/tls@opam:0.10.5@06575639",
         "@opam/lwt_ssl@opam:1.1.3@9d044ebe", "@opam/lwt@opam:4.4.0@0357bb8b",
-        "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#b01626b@d41d8cd9",
-        "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#b01626b@d41d8cd9",
+        "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#ec526a5@d41d8cd9",
+        "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#ec526a5@d41d8cd9",
         "@opam/faraday-lwt-unix@opam:0.7.0@52a60108",
         "@opam/dune@opam:1.11.4@a7ccb7ae", "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [
         "ocaml@4.9.0@d41d8cd9", "@opam/lwt@opam:4.4.0@0357bb8b",
-        "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#b01626b@d41d8cd9",
-        "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#b01626b@d41d8cd9",
+        "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#ec526a5@d41d8cd9",
+        "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#ec526a5@d41d8cd9",
         "@opam/faraday-lwt-unix@opam:0.7.0@52a60108",
         "@opam/dune@opam:1.11.4@a7ccb7ae"
       ]
     },
-    "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#b01626b@d41d8cd9": {
+    "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#ec526a5@d41d8cd9": {
       "id":
-        "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#b01626b@d41d8cd9",
+        "@opam/httpaf-lwt@github:anmonteiro/httpaf:httpaf-lwt.opam#ec526a5@d41d8cd9",
       "name": "@opam/httpaf-lwt",
-      "version": "github:anmonteiro/httpaf:httpaf-lwt.opam#b01626b",
+      "version": "github:anmonteiro/httpaf:httpaf-lwt.opam#ec526a5",
       "source": {
         "type": "install",
-        "source": [ "github:anmonteiro/httpaf:httpaf-lwt.opam#b01626b" ]
+        "source": [ "github:anmonteiro/httpaf:httpaf-lwt.opam#ec526a5" ]
       },
       "overrides": [],
       "dependencies": [
         "ocaml@4.9.0@d41d8cd9", "@opam/lwt@opam:4.4.0@0357bb8b",
-        "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#b01626b@d41d8cd9",
+        "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#ec526a5@d41d8cd9",
         "@opam/dune@opam:1.11.4@a7ccb7ae", "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [
         "ocaml@4.9.0@d41d8cd9", "@opam/lwt@opam:4.4.0@0357bb8b",
-        "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#b01626b@d41d8cd9",
+        "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#ec526a5@d41d8cd9",
         "@opam/dune@opam:1.11.4@a7ccb7ae"
       ]
     },
-    "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#b01626b@d41d8cd9": {
+    "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#ec526a5@d41d8cd9": {
       "id":
-        "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#b01626b@d41d8cd9",
+        "@opam/httpaf@github:anmonteiro/httpaf:httpaf.opam#ec526a5@d41d8cd9",
       "name": "@opam/httpaf",
-      "version": "github:anmonteiro/httpaf:httpaf.opam#b01626b",
+      "version": "github:anmonteiro/httpaf:httpaf.opam#ec526a5",
       "source": {
         "type": "install",
-        "source": [ "github:anmonteiro/httpaf:httpaf.opam#b01626b" ]
+        "source": [ "github:anmonteiro/httpaf:httpaf.opam#ec526a5" ]
       },
       "overrides": [],
       "dependencies": [

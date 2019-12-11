@@ -1243,20 +1243,23 @@ let handle_h2c_request t headers request_body_iovecs =
         (fun () -> wakeup_writer t)
         (create_push_stream t)
     in
+    t.max_client_stream_id <- reqd.Stream.id;
+    let lengthv = Httpaf.IOVec.lengthv request_body_iovecs in
+    let end_stream = lengthv = 0 in
+    handle_headers t ~end_stream reqd active_stream headers;
+    let request = Reqd.request reqd in
+    let request_body = Reqd.request_body reqd in
+    let request_info = Reqd.create_active_request request request_body in
+    request_info.request_body_bytes <-
+      Int64.(add request_info.request_body_bytes (of_int lengthv));
     (* From RFC7540§3.2:
      *   Stream 1 is implicitly "half-closed" from the client toward the server
      *   (see Section 5.1), since the request is completed as an HTTP/1.1
      *   request. After commencing the HTTP/2 connection, stream 1 is used for
      *   the response. *)
-    t.max_client_stream_id <- reqd.Stream.id;
-    let end_stream = Httpaf.IOVec.lengthv request_body_iovecs = 0 in
-    handle_headers t ~end_stream reqd active_stream headers;
+    reqd.state <- Active (HalfClosed request_info, active_stream);
     if not end_stream then
-      let request_body = Reqd.request_body reqd in
       let faraday = Body.unsafe_faraday request_body in
-      (* Don't bother changing request info body_bytes because its only use is to
-       * check message body length when DATA frames arrive, and we aren't expecting
-       * any. *)
       if not (Faraday.is_closed faraday) then (
         List.iter
           (fun { Httpaf.IOVec.buffer; off; len } ->
