@@ -19,6 +19,9 @@ Unreleased
   "http" URIs. Covers [section 3.2](https://tools.ietf.org/html/rfc7540#section-3.2)
   of the HTTP/2 specification
   ([#87](https://github.com/anmonteiro/httpaf/pull/87))
+- h2: Fix misinterpretation of the spec where h2 would consider a request /
+  response malformed if it had a non-zero `content-length` header and no DATA
+  frames ([#89](https://github.com/anmonteiro/httpaf/pull/89))
 
 0.4.0 2019-11-05
 --------------
