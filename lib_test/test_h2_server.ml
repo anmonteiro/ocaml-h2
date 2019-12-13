@@ -925,6 +925,19 @@ module Server_connection_tests = struct
     | Error msg ->
       Alcotest.fail msg
 
+  let test_nonzero_content_length_no_data_frames () =
+    let request =
+      Request.create
+        ~headers:(Headers.of_list [ "content-length", "1234" ])
+        ~scheme:"http"
+        `GET
+        "/"
+    in
+    let t = create_and_handle_preface ~error_handler default_request_handler in
+    read_request t request;
+    write_response t ?body:None (Response.create `OK);
+    writer_yields t
+
   (* TODO: test for trailer headers. *)
   (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
   let suite =
@@ -968,6 +981,9 @@ module Server_connection_tests = struct
       , `Quick
       , test_empty_fixed_streaming_response )
     ; "starting an h2c connection", `Quick, test_h2c
+    ; ( "non-zero `content-length` and no DATA frames"
+      , `Quick
+      , test_nonzero_content_length_no_data_frames )
     ]
 end
 

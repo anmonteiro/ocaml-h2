@@ -272,24 +272,22 @@ let handle_response_headers t respd ~end_stream active_request headers =
   match Headers.get_multi_pseudo headers "status" with
   | [ status ] ->
     let response = Response.create ~headers (Status.of_string status) in
-    (match end_stream, Message.body_length headers with
-    | true, `Fixed len when Int64.compare len 0L != 0 ->
-      (* From RFC7540§8.1.2.6:
-       *   A request or response is also malformed if the value of a
-       *   content-length header field does not equal the sum of the DATA
-       *   frame payload lengths that form the body. *)
+    (* Note: we don't need to check for `end_stream` flag + a non-zero body
+     * length, as the spec allows for non-zero content-length headers and no
+     * DATA frames.
+     *
+     * From RFC7540§8.1.2.6:
+     *   A response that is defined to have no payload, as described in
+     *   [RFC7230], Section 3.3.2, can have a non-zero content-length header
+     *   field, even though no content is included in DATA frames. *)
+    (match Message.body_length headers with
+    | `Error _ ->
       set_error_and_handle
         t
         respd
         (`Invalid_response_body_length response)
         ProtocolError
-    | _, `Error _ ->
-      set_error_and_handle
-        t
-        respd
-        (`Invalid_response_body_length response)
-        ProtocolError
-    | _, body_length ->
+    | body_length ->
       let response_body =
         if end_stream then
           Body.empty

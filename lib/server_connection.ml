@@ -260,16 +260,18 @@ let handle_headers t ~end_stream reqd active_stream headers =
        *   closing or resetting the stream. *)
       set_error_and_handle t reqd `Bad_request ProtocolError
     | `Valid (meth, path, scheme) ->
-      (match end_stream, Message.body_length headers with
-      | true, `Fixed len when Int64.compare len 0L != 0 ->
-        (* From RFC7540§8.1.2.6:
-         *   A request or response is also malformed if the value of a
-         *   content-length header field does not equal the sum of the DATA
-         *   frame payload lengths that form the body. *)
-        set_error_and_handle t reqd `Bad_request ProtocolError
-      | _, `Error e ->
+      (* Note: we don't need to check for `end_stream` flag + a non-zero body
+       * length, as the spec allows for non-zero content-length headers and no
+       * DATA frames.
+       *
+       * From RFC7540§8.1.2.6:
+       *   A response that is defined to have no payload, as described in
+       *   [RFC7230], Section 3.3.2, can have a non-zero content-length header
+       *   field, even though no content is included in DATA frames. *)
+      (match Message.body_length headers with
+      | `Error e ->
         set_error_and_handle t reqd e ProtocolError
-      | _, body_length ->
+      | body_length ->
         let request =
           Request.create ~scheme ~headers (Httpaf.Method.of_string meth) path
         in
