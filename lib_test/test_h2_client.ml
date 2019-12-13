@@ -946,6 +946,37 @@ module Client_connection_tests = struct
     | Error msg ->
       Alcotest.fail msg
 
+  let test_nonzero_content_length_no_data_frames () =
+    let t =
+      create
+        ?config:None
+        ?push_handler:None
+        ~error_handler:default_error_handler
+    in
+    handle_preface t;
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let handler_called = ref false in
+    let response_handler _response _response_body = handler_called := true in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~error_handler:default_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    Body.close_writer request_body;
+    let _, lenv = flush_pending_writes t in
+    report_write_result t (`Ok lenv);
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    read_response
+      t
+      hpack_encoder
+      (Response.create
+         ~headers:Headers.(of_list [ "content-length", "1234" ])
+         `OK);
+    Alcotest.(check bool) "Response handler called" true !handler_called
+
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
@@ -973,6 +1004,9 @@ module Client_connection_tests = struct
       , `Quick
       , test_error_handler_rst_stream )
     ; "starting an h2c connection", `Quick, test_h2c
+    ; ( "non-zero `content-length` and no DATA frames"
+      , `Quick
+      , test_nonzero_content_length_no_data_frames )
     ]
 end
 
