@@ -24,6 +24,9 @@ Unreleased
   frames ([#89](https://github.com/anmonteiro/httpaf/pull/89))
 - h2: Add `Request.body_length` and `Response.body_length`
   ([#90](https://github.com/anmonteiro/httpaf/pull/90))
+- h2: Fix a bug that caused DATA frames to be incorrectly chunked when
+  returning a streaming response
+  ([#91](https://github.com/anmonteiro/httpaf/pull/91))
 
 0.4.0 2019-11-05
 --------------
