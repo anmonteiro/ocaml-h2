@@ -43,6 +43,8 @@ type t =
 let create ?(headers = Headers.empty) ~scheme meth target =
   { meth; target; scheme; headers }
 
+let body_length { headers; _ } = Message.body_length headers
+
 let pp_hum fmt { meth; target; scheme; headers } =
   Format.fprintf
     fmt
