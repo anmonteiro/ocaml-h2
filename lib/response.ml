@@ -42,6 +42,8 @@ type t =
  *   is included in an HTTP/1.1 status line. *)
 let create ?(headers = Headers.empty) status = { status; headers }
 
+let body_length { headers; _ } = Message.body_length headers
+
 let pp_hum fmt { status; headers } =
   let reason =
     match status with

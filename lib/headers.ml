@@ -214,18 +214,6 @@ let fold ~f ~init t =
 
 let exists ~f t = List.exists (fun { name; value; _ } -> f name value) t
 
-let to_string t =
-  let b = Buffer.create 128 in
-  List.iter
-    (fun (name, value) ->
-      Buffer.add_string b name;
-      Buffer.add_string b ": ";
-      Buffer.add_string b value;
-      Buffer.add_string b "\r\n")
-    (to_list t);
-  Buffer.add_string b "\r\n";
-  Buffer.contents b
-
 let valid_headers ?(is_request = true) t =
   match get t "connection", get t "TE" with
   | Some _, _ ->
@@ -411,6 +399,18 @@ let of_http1 { Httpaf.Request.headers; meth; target; _ } =
     Ok (of_rev_list headers)
   | None ->
     Error "Missing `Host` header field"
+
+let to_string t =
+  let b = Buffer.create 128 in
+  List.iter
+    (fun (name, value) ->
+      Buffer.add_string b name;
+      Buffer.add_string b ": ";
+      Buffer.add_string b value;
+      Buffer.add_string b "\r\n")
+    (to_list t);
+  Buffer.add_string b "\r\n";
+  Buffer.contents b
 
 let pp_hum fmt t =
   let pp_elem fmt (name, value) = Format.fprintf fmt "@[(%S %S)@]" name value in

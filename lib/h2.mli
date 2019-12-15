@@ -425,6 +425,14 @@ module Request : sig
       See {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.3}
       RFC7540§8.1.2.4} for more details. *)
 
+  val body_length
+    :  t
+    -> [ `Error of [ `Bad_request ] | `Fixed of int64 | `Unknown ]
+  (** [body_length t] is the length of the message body accompanying [t].
+
+      See {{:https://tools.ietf.org/html/rfc7230#section-3.3.3} RFC7230§3.3.3}
+      for more details. *)
+
   val pp_hum : Format.formatter -> t -> unit
 end
 
@@ -447,6 +455,14 @@ module Response : sig
 
       See {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.4}
       RFC7540§8.1.2.4} for more details. *)
+
+  val body_length
+    :  t
+    -> [ `Error of [ `Bad_request ] | `Fixed of int64 | `Unknown ]
+  (** [body_length t] is the length of the message body accompanying [t].
+
+      See {{:https://tools.ietf.org/html/rfc7230#section-3.3.3} RFC7230§3.3.3}
+      for more details. *)
 
   val pp_hum : Format.formatter -> t -> unit
 end
