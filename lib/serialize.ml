@@ -33,6 +33,7 @@
  *---------------------------------------------------------------------------*)
 
 open Faraday
+module IOVec = Httpaf.IOVec
 
 type frame_info =
   { flags : Flags.t
@@ -118,7 +119,7 @@ let bounded_schedule_iovecs t ~len iovecs =
     match remaining, iovecs with
     | 0, _ | _, [] ->
       ()
-    | remaining, { Httpaf.IOVec.buffer; off; len } :: xs ->
+    | remaining, { IOVec.buffer; off; len } :: xs ->
       if remaining < len then
         schedule_bigstring t ~off ~len:remaining buffer
       else (
@@ -128,9 +129,7 @@ let bounded_schedule_iovecs t ~len iovecs =
   loop t len iovecs
 
 let write_headers_frame t info ?priority ?len iovecs =
-  let len =
-    match len with Some len -> len | None -> Httpaf.IOVec.lengthv iovecs
-  in
+  let len = match len with Some len -> len | None -> IOVec.lengthv iovecs in
   match priority with
   | None ->
     (* See RFC7540§6.3:
@@ -207,9 +206,7 @@ let write_settings_frame t info settings =
   write_settings_payload t settings
 
 let write_push_promise_frame t info ~promised_id ?len iovecs =
-  let len =
-    match len with Some len -> len | None -> Httpaf.IOVec.lengthv iovecs
-  in
+  let len = match len with Some len -> len | None -> IOVec.lengthv iovecs in
   let payload_length =
     (* From RFC7540§6.6:
      *   The PUSH_PROMISE frame includes the unsigned 31-bit identifier of the
@@ -284,9 +281,7 @@ let write_window_update_frame t info window_size =
   BE.write_uint32 t (Int32.of_int window_size)
 
 let write_continuation_frame t info ?len iovecs =
-  let len =
-    match len with Some len -> len | None -> Httpaf.IOVec.lengthv iovecs
-  in
+  let len = match len with Some len -> len | None -> IOVec.lengthv iovecs in
   let header =
     { Frame.flags = info.flags
     ; stream_id = info.stream_id
@@ -461,7 +456,7 @@ module Writer = struct
       in
       ignore
         (Faraday.serialize faraday (fun iovecs ->
-             let len = Httpaf.IOVec.lengthv iovecs in
+             let len = IOVec.lengthv iovecs in
              write_frame t.encoder frame_info ~len iovecs;
              `Ok len))
 
@@ -533,14 +528,14 @@ module Writer = struct
     write_window_update_frame t.encoder frame_info n
 
   let schedule_iovecs t ~len frame_info iovecs =
-    let writer t ~iovecs = bounded_schedule_iovecs t ~len iovecs in
+    let writer t ~len ~iovecs = bounded_schedule_iovecs t ~len iovecs in
     chunk_data_frames frame_info len ~f:(fun ~off ~len frame_info ->
         write_frame_with_padding
           t.encoder
           frame_info
           Data
           len
-          (writer ~iovecs:(Httpaf.IOVec.shiftv iovecs off)))
+          (writer ~iovecs:(IOVec.shiftv iovecs off) ~len))
 
   let write_priority t frame_info priority =
     write_priority_frame t.encoder frame_info priority
