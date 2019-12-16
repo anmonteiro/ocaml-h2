@@ -565,7 +565,11 @@ module Writer = struct
   let drained_bytes t = t.drained_bytes
 
   let report_result t result =
-    match result with `Closed -> close t | `Ok len -> shift t.encoder len
+    match result with
+    | `Closed ->
+      close_and_drain t
+    | `Ok len ->
+      shift t.encoder len
 
   let next t =
     match Faraday.operation t.encoder with

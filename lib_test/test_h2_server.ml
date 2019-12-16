@@ -202,6 +202,8 @@ module Server_connection_tests = struct
     let response_string = response_to_string t ?body response in
     write_string t ~msg:"Response written" response_string
 
+  let write_eof t = report_write_result t `Closed
+
   let ready_to_read t =
     Alcotest.check
       read_operation
@@ -214,6 +216,12 @@ module Server_connection_tests = struct
       write_operation
       "Writer yields"
       `Yield
+      (next_write_operation t)
+
+  let writer_closed ?(unread = 0) t =
+    Alcotest.(check write_operation)
+      "Next operation should be `Close"
+      (`Close unread)
       (next_write_operation t)
 
   let error_handler ?request:_ error handle =
@@ -371,10 +379,7 @@ module Server_connection_tests = struct
         Frame.(frame.frame_header.frame_type |> FrameType.serialize);
       let iovec_len = IOVec.lengthv iovecs in
       report_write_result t (`Ok iovec_len);
-      Alcotest.(check write_operation)
-        "Next operation should be close"
-        (`Close 0)
-        (next_write_operation t);
+      writer_closed t;
       Alcotest.(check bool) "Connection is shutdown" true (is_closed t)
     | _ ->
       Alcotest.fail
@@ -938,6 +943,13 @@ module Server_connection_tests = struct
     write_response t ?body:None (Response.create `OK);
     writer_yields t
 
+  let test_unexpected_eof () =
+    let t = create_and_handle_preface ~error_handler default_request_handler in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    read_request t request;
+    write_eof t;
+    writer_closed t ~unread:10
+
   (* TODO: test for trailer headers. *)
   (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
   let suite =
@@ -984,6 +996,7 @@ module Server_connection_tests = struct
     ; ( "non-zero `content-length` and no DATA frames"
       , `Quick
       , test_nonzero_content_length_no_data_frames )
+    ; "premature remote close with pending bytes", `Quick, test_unexpected_eof
     ]
 end
 

@@ -27,6 +27,8 @@ Unreleased
 - h2: Fix a bug that caused DATA frames to be incorrectly chunked when
   returning a streaming response
   ([#91](https://github.com/anmonteiro/httpaf/pull/91))
+- h2: Drain pending bytes after getting a `Close` report from the runtime
+  ([#92](https://github.com/anmonteiro/httpaf/pull/92))
 
 0.4.0 2019-11-05
 --------------
