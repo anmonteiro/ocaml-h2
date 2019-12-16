@@ -188,6 +188,14 @@ module Client_connection_tests = struct
       `Yield
       (next_write_operation t)
 
+  let write_eof t = report_write_result t `Closed
+
+  let writer_closed ?(unread = 0) t =
+    Alcotest.(check write_operation)
+      "Next operation should be `Close"
+      (`Close unread)
+      (next_write_operation t)
+
   (* Well-formed HEADERS + CONTINUATION frames. *)
   let header_and_continuation_frames =
     let hpack_encoder = Hpack.Encoder.create 4096 in
@@ -237,6 +245,13 @@ module Client_connection_tests = struct
         ~error_handler:default_error_handler
     in
     handle_preface t
+
+  let create_and_handle_preface
+      ?config ?push_handler ?(error_handler = default_error_handler) ()
+    =
+    let t = create ?config ?push_handler ~error_handler in
+    handle_preface t;
+    t
 
   let test_invalid_preface () =
     let error_handler_called = ref false in
@@ -311,13 +326,7 @@ module Client_connection_tests = struct
     Alcotest.(check bool) "Error handler got called" true !error_handler_called
 
   let test_simple_get_request () =
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
-    handle_preface t;
+    let t = create_and_handle_preface () in
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
@@ -347,13 +356,7 @@ module Client_connection_tests = struct
     Alcotest.(check bool) "Response handler called" true !handler_called
 
   let test_data_larger_than_reported () =
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
-    handle_preface t;
+    let t = create_and_handle_preface () in
     let request = Request.create ~scheme:"http" `GET "/" in
     let response_handler _response _response_body = () in
     let error_handler_called = ref false in
@@ -402,13 +405,7 @@ module Client_connection_tests = struct
       !error_handler_called
 
   let test_stream_level_protocol_error () =
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
-    handle_preface t;
+    let t = create_and_handle_preface () in
     let request = Request.create ~scheme:"http" `GET "/" in
     let response_handler _response _response_body = () in
     let error_handler_called = ref false in
@@ -455,13 +452,7 @@ module Client_connection_tests = struct
       !error_handler_called
 
   let test_continuation_frame () =
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
-    handle_preface t;
+    let t = create_and_handle_preface () in
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
@@ -520,8 +511,7 @@ module Client_connection_tests = struct
   let test_continuation_frame_other_stream () =
     let error_handler_called = ref false in
     let error_handler _ = error_handler_called := true in
-    let t = create ?config:None ?push_handler:None ~error_handler in
-    handle_preface t;
+    let t = create_and_handle_preface ~error_handler () in
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
@@ -569,10 +559,7 @@ module Client_connection_tests = struct
       push_handler_called := true;
       Ok (fun _response _response_body -> push_response_handler_called := true)
     in
-    let t =
-      create ?config:None ~push_handler ~error_handler:default_error_handler
-    in
-    handle_preface t;
+    let t = create_and_handle_preface ~push_handler () in
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
@@ -643,10 +630,7 @@ module Client_connection_tests = struct
       push_handler_called := true;
       Error ()
     in
-    let t =
-      create ?config:None ~push_handler ~error_handler:default_error_handler
-    in
-    handle_preface t;
+    let t = create_and_handle_preface ~push_handler () in
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
@@ -712,13 +696,7 @@ module Client_connection_tests = struct
       (Frame.RSTStream Error_code.Cancel = frame.frame_payload)
 
   let test_stream_error_on_idle_stream () =
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
-    handle_preface t;
+    let t = create_and_handle_preface () in
     let request = Request.create ~scheme:"http" `GET "/" in
     let error_handler_called = ref false in
     let stream_level_error_handler error =
@@ -755,13 +733,7 @@ module Client_connection_tests = struct
       !error_handler_called
 
   let test_stream_transitions_state () =
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
-    handle_preface t;
+    let t = create_and_handle_preface () in
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
@@ -806,13 +778,7 @@ module Client_connection_tests = struct
       (match stream.Stream.state with Closed _ -> true | _ -> false)
 
   let test_ping () =
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
-    handle_preface t;
+    let t = create_and_handle_preface () in
     let ping_handler1_called = ref false in
     let ping_handler2_called = ref false in
     let ping_handler ref () = ref := true in
@@ -846,13 +812,7 @@ module Client_connection_tests = struct
       !ping_handler2_called
 
   let test_error_handler_rst_stream () =
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
-    handle_preface t;
+    let t = create_and_handle_preface () in
     let request = Request.create ~scheme:"http" `GET "/" in
     let response_handler _response _response_body = () in
     let error_handler_called = ref false in
@@ -947,13 +907,7 @@ module Client_connection_tests = struct
       Alcotest.fail msg
 
   let test_nonzero_content_length_no_data_frames () =
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
-    handle_preface t;
+    let t = create_and_handle_preface () in
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
@@ -976,6 +930,23 @@ module Client_connection_tests = struct
          ~headers:Headers.(of_list [ "content-length", "1234" ])
          `OK);
     Alcotest.(check bool) "Response handler called" true !handler_called
+
+  let test_unexpected_eof () =
+    let t = create_and_handle_preface () in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let response_handler _response _response_body = () in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~error_handler:default_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    Body.close_writer request_body;
+    let _, lenv = flush_pending_writes t in
+    write_eof t;
+    writer_closed t ~unread:lenv
 
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
@@ -1007,6 +978,7 @@ module Client_connection_tests = struct
     ; ( "non-zero `content-length` and no DATA frames"
       , `Quick
       , test_nonzero_content_length_no_data_frames )
+    ; "premature remote close with pending bytes", `Quick, test_unexpected_eof
     ]
 end
 
