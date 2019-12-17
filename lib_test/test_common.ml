@@ -53,8 +53,8 @@ let write_frame ?padding t { Frame.frame_header; frame_payload } =
     Writer.write_window_update t info window_size
   | Continuation header_block ->
     write_continuation_frame t.encoder info (make_iovecs header_block)
-  | Unknown _ ->
-    assert false
+  | Unknown (code, payload) ->
+    write_unknown_frame t.encoder ~code info payload
 
 let serialize_frame ?padding frame =
   let open Serialize in

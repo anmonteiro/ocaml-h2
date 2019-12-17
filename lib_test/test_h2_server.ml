@@ -430,7 +430,7 @@ module Server_connection_tests = struct
     Alcotest.(check int) "couldn't read more" 0 read3;
     Alcotest.check
       read_operation
-      "There was a stream error of type FRAME_SIZE_ERROR"
+      "There was a connection error of type FRAME_SIZE_ERROR"
       (`Error
         Error.(
           ConnectionError (FrameSizeError, "frame_payload: not enough input")))
@@ -950,6 +950,46 @@ module Server_connection_tests = struct
     write_eof t;
     writer_closed t ~unread:10
 
+  let test_read_frame_size_error_unknown_frame () =
+    (* Enough for a frame header *)
+    let max_length = String.length (preface ()) in
+    let config = { Config.default with read_buffer_size = max_length } in
+    let t =
+      create_and_handle_preface ~config ~error_handler default_request_handler
+    in
+    let frame =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = Unknown 80
+          }
+      ; frame_payload =
+          Frame.Unknown
+            (80, Bigstringaf.of_string ~off:0 ~len:40 (String.make 40 'a'))
+      }
+    in
+    let frame_wire = Test_common.serialize_frame frame in
+    let frame_length = Bigstringaf.length frame_wire in
+    Alcotest.(check bool)
+      "Frame payload is surely over the max length"
+      true
+      (frame_length > max_length);
+    let read1 = read t ~off:0 ~len:max_length frame_wire in
+    Alcotest.(check int) "only read the frame header" 9 read1;
+    let read2 = read t ~off:9 ~len:(max_length - 9) frame_wire in
+    Alcotest.(check int) "couldn't read more" 0 read2;
+    (* Read buffer advanced, contents are not the same anymore. *)
+    let read3 = read_eof t ~off:20 ~len:(max_length - 9) frame_wire in
+    Alcotest.(check int) "couldn't read more" 0 read3;
+    Alcotest.check
+      read_operation
+      "There was a connection error of type FRAME_SIZE_ERROR"
+      (`Error
+        Error.(
+          ConnectionError (FrameSizeError, "frame_payload: not enough input")))
+      (Reader.next t.reader)
+
   (* TODO: test for trailer headers. *)
   (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
   let suite =
@@ -997,6 +1037,9 @@ module Server_connection_tests = struct
       , `Quick
       , test_nonzero_content_length_no_data_frames )
     ; "premature remote close with pending bytes", `Quick, test_unexpected_eof
+    ; ( "frame size error unknown frame"
+      , `Quick
+      , test_read_frame_size_error_unknown_frame )
     ]
 end
 

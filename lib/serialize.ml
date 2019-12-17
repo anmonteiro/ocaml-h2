@@ -292,6 +292,18 @@ let write_continuation_frame t info ?len iovecs =
   write_frame_header t header;
   bounded_schedule_iovecs t ~len iovecs
 
+let write_unknown_frame t ~code info payload =
+  let payload_length = Bigstringaf.length payload in
+  let header =
+    { Frame.flags = info.flags
+    ; stream_id = info.stream_id
+    ; payload_length
+    ; frame_type = Unknown code
+    }
+  in
+  write_frame_header t header;
+  schedule_bigstring t ~off:0 ~len:payload_length payload
+
 let write_connection_preface t =
   (* From RFC7540§3.5:
    *   In HTTP/2, each endpoint is required to send a connection preface as a

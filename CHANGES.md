@@ -29,6 +29,9 @@ Unreleased
   ([#91](https://github.com/anmonteiro/httpaf/pull/91))
 - h2: Drain pending bytes after getting a `Close` report from the runtime
   ([#92](https://github.com/anmonteiro/httpaf/pull/92))
+- h2: Report connection errors for unknown frames that exceed the maximum
+  payload size -- they may not be speaking HTTP/2
+ ([#93](https://github.com/anmonteiro/httpaf/pull/93))
 
 0.4.0 2019-11-05
 --------------
