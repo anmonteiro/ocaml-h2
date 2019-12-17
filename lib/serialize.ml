@@ -296,12 +296,7 @@ let write_unknown_frame t ~code info payload =
   let payload_length = Bigstringaf.length payload in
   let header =
     { Frame.flags = info.flags
-    ; stream_id =
-        info.stream_id
-        (* From RFC7540§6.5.1:
-         *   The payload of a SETTINGS frame consists of zero or more
-         *   parameters, each consisting of an unsigned 16-bit setting
-         *   identifier and an unsigned 32-bit value. *)
+    ; stream_id = info.stream_id
     ; payload_length
     ; frame_type = Unknown code
     }
