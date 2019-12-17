@@ -641,7 +641,8 @@ module Reader = struct
     match t.parse_context, error_code with
     | ( { frame_header =
             Some
-              { frame_type = Headers | PushPromise | Continuation | Settings
+              { frame_type =
+                  Headers | PushPromise | Continuation | Settings | Unknown _
               ; _
               }
         ; _
