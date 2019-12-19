@@ -363,7 +363,7 @@ module Make_client (Io : IO) = struct
     | Ok connection ->
       Deferred.ok (start_read_write_loops ~config connection socket)
     | Error msg ->
-      Deferred.Result.fail msg
+      Deferred.return (Error msg)
 
   let request = Client_connection.request
 
