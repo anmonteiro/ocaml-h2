@@ -45,7 +45,7 @@ opam-steps: &opam-steps
           opam install -y lwt_ssl
           # Use `--best-effort` so that it doesn't choke trying to install
           # h2-mirage's deps (OCaml >= 4.07)
-          opam install -t --deps-only --best-effort .
+          opam install -t --deps-only --ignore-constraints-on=h2 --best-effort .
     - run:
         name: 'Clean'
         command: rm -rf ./_build
