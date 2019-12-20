@@ -1,6 +1,9 @@
 Unreleased
 --------------
 
+0.5.0 2019-12-19
+--------------
+
 - h2, h2-lwt, h2-lwt-unix, h2-mirage: Remove support for versions of OCaml
   lower than 4.06 ([#74](https://github.com/anmonteiro/ocaml-h2/pull/74))
 - h2: Expose more information in client error handlers when initiating a
