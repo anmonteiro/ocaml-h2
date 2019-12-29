@@ -1,6 +1,9 @@
 Unreleased
 --------------
 
+- h2-async: add Async adapter
+  ([#94](https://github.com/anmonteiro/httpaf/pull/94))
+
 0.5.0 2019-12-19
 --------------
 
@@ -35,8 +38,6 @@ Unreleased
 - h2: Report connection errors for unknown frames that exceed the maximum
   payload size -- they may not be speaking HTTP/2
  ([#93](https://github.com/anmonteiro/httpaf/pull/93))
-- h2-async: add Async adapter
-  ([#94](https://github.com/anmonteiro/httpaf/pull/94))
 
 0.4.0 2019-11-05
 --------------
