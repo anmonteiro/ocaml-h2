@@ -1,0 +1,16 @@
+(library
+ (name h2_async)
+ (public_name h2-async)
+ (libraries
+  async
+  core
+  faraday-async
+  h2
+  (select
+   ssl_io.ml
+   from
+   (async_ssl -> ssl_io_real.ml)
+   (!async_ssl -> ssl_io_dummy.ml)))
+ (modules h2_async h2_async_intf ssl_io)
+ (flags
+  (:standard -safe-string)))

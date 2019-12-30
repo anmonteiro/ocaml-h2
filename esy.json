@@ -7,7 +7,8 @@
   "repository": "git+https://github.com/anmonteiro/ocaml-h2",
   "dependencies": {
     "ocaml": "~4.9.0",
-    "@opam/dune": "*",
+    "@opam/dune": ">= 2.0.0",
+    "@opam/dune-configurator": ">= 2.0.0",
     "@opam/lwt": "*",
     "@opam/bigstringaf": "*",
     "@opam/angstrom": "*",
@@ -16,13 +17,16 @@
     "@opam/base64": "*",
     "@opam/conduit-mirage": "*",
     "@opam/mirage-flow": "*",
+    "@opam/faraday-async": "*",
     "@opam/faraday-lwt-unix": "*",
     "@opam/lwt_ssl": "*",
     "@opam/conf-libev": "*",
     "@opam/httpaf": "*",
     "@opam/httpaf-lwt-unix": "*",
     "@opam/ssl": ">= 0.5.8",
-    "@opam/sexplib": ">= v0.12.0"
+    "@opam/sexplib": ">= v0.12.0",
+    "@opam/async": "*",
+    "@opam/async_ssl": "*"
   },
   "devDependencies": {
     "@opam/alcotest": "*",
@@ -38,6 +42,18 @@
     "@opam/httpaf": "anmonteiro/httpaf:httpaf.opam#ec526a5",
     "@opam/httpaf-lwt": "anmonteiro/httpaf:httpaf-lwt.opam#ec526a5",
     "@opam/httpaf-lwt-unix": "anmonteiro/httpaf:httpaf-lwt-unix.opam#ec526a5",
-    "@opam/ssl": "savonet/ocaml-ssl:ssl.opam#0111764"
+    "@opam/ssl": {
+      "source": "savonet/ocaml-ssl:ssl.opam#0111764",
+      "override": {
+        "dependencies": {
+          "@opam/dune-configurator": "*"
+        }
+      }
+    },
+    "@opam/faraday": "inhabitedtype/faraday:faraday.opam#8d37f20",
+    "@opam/faraday-async": "inhabitedtype/faraday:faraday-async.opam#8d37f20",
+    "@opam/faraday-lwt": "inhabitedtype/faraday:faraday-lwt.opam#8d37f20",
+    "@opam/faraday-lwt-unix": "inhabitedtype/faraday:faraday-lwt-unix.opam#8d37f20",
+    "@opam/dune": "ocaml/dune:dune.opam#da61c7e"
   }
 }

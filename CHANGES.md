@@ -1,6 +1,9 @@
 Unreleased
 --------------
 
+- h2-async: add Async adapter
+  ([#94](https://github.com/anmonteiro/httpaf/pull/94))
+
 0.5.0 2019-12-19
 --------------
 
