@@ -5,6 +5,9 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        ocamlVersion: [407, 408, 409]
     steps:
     - uses: actions/checkout@v2
     - name: Checkout submodules
@@ -21,6 +24,3 @@ jobs:
         file: nix/ci/${{ matrix.ocamlVersion }}.nix
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
 
-strategy:
-  matrix:
-    ocamlVersion: [4_07, 4_08, 4_09]
