@@ -403,24 +403,6 @@ Tests can be run via dune:
 dune runtest
 ```
 
-### Using [Esy](https://esy.sh)
-
-There's an `esy.json` file at the root of this repository that can be used
-to develop h2 with Esy.
-
-To resolve and install the necessary dependencies, run:
-
-```
-$ esy
-```
-
-Build any examples or run the tests by prefixing the `dune` commands with
-`esy b` or `esy build`. For example:
-
-```
-$ esy b dune runtest
-```
-
 ## License
 
 h2 is distributed under the 3-Clause BSD License, see [LICENSE](./LICENSE).
