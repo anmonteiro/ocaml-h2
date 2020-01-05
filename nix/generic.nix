@@ -1,11 +1,11 @@
-{ lib, stdenv, ocamlPackages, gitignoreSource }:
+{ lib, stdenv, ocamlPackages, gitignoreSource, doCheck }:
 
 with ocamlPackages;
 
 let
   buildH2 = args: buildDunePackage ({
     version = "0.6.0-dev";
-    doCheck = true;
+    doCheck = doCheck;
     src = gitignoreSource ./..;
   } // args);
 
