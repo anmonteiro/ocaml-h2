@@ -5,7 +5,7 @@ with ocamlPackages;
 let
   buildH2 = args: buildDune2Package ({
     version = "0.6.0-dev";
-    src = lib.cleanSource ./.;
+    src = lib.cleanSource ./..;
   } // args);
 
 # TODO: h2-async, h2-mirage
