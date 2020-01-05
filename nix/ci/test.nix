@@ -37,6 +37,7 @@ in
     buildInputs = (lib.attrValues h2Drvs) ++ (with ocamlPackages; [ ocaml dune findlib pkgs.ocamlformat ]);
     doCheck = true;
     checkPhase = ''
+      dune exec spec/lwt_h2spec_string.exe
       nohup dune exec spec/lwt_h2spec_string.exe &
       sleep 2
       ${h2spec}/bin/h2spec --strict -p 8080
