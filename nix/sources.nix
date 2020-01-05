@@ -9,9 +9,13 @@ let
     sha256 = "1zd1ylgkndbb5szji32ivfhwh04mr1sbgrnvbrqpmfb67g2g3r9i";
   };
 
+  overlays = builtins.fetchTarball {
+    url = https://github.com/anmonteiro/nix-overlays/archive/d2d883d84.tar.gz;
+    sha256 = "1raq4wnv8h0v23kar79hra6xffkfl281zw4vzvyfr1fwgwwk7bx3";
+  };
+
   inherit (import gitignoreSrc { inherit (pkgs) lib; }) gitignoreSource;
 
-  overlays = builtins.fetchTarball https://github.com/anmonteiro/nix-overlays/archive/master.tar.gz;
   ocamlPackages = pkgs.ocaml-ng."ocamlPackages_${ocamlVersion}".overrideScope'
     (pkgs.callPackage "${overlays}/ocaml" { });
 
