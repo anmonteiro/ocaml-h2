@@ -9,7 +9,7 @@ let
 in
   (pkgs.mkShell {
     inputsFrom = lib.attrValues h2Drvs;
-    buildInputs = with ocamlPackages; [ merlin ];
+    buildInputs = with ocamlPackages; [ merlin pkgs.ocamlformat ];
   }).overrideAttrs (o : {
     propagatedBuildInputs = lib.filter
       (drv: drv.pname == null || !(lib.any (name: name == drv.pname) (lib.attrNames h2Drvs)))
