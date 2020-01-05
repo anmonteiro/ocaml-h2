@@ -1,4 +1,4 @@
-{ lib, stdenv, ocamlPackages }:
+{ lib, stdenv, ocamlPackages, gitignoreSource }:
 
 with ocamlPackages;
 
@@ -6,7 +6,7 @@ let
   buildH2 = args: buildDunePackage ({
     version = "0.6.0-dev";
     doCheck = true;
-    src = lib.cleanSource ./..;
+    src = gitignoreSource ./..;
   } // args);
 
 # TODO: h2-async, h2-mirage
