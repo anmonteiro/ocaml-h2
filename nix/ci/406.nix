@@ -1,1 +1,1 @@
-import ./.. { ocamlVersion = "4_06"; }
+import ./test.nix { ocamlVersion = "4_06"; }
