@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ocamlVersion: [406, 407, 408, 409]
+        ocamlVersion: [4_06, 4_07, 4_08, 4_09]
     steps:
     - uses: actions/checkout@v2
     - name: Checkout submodules
