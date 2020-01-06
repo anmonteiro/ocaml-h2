@@ -21,6 +21,9 @@ jobs:
     - uses: cachix/cachix-action@v3
       with:
         name: anmonteiro
-        file: nix/ci/${{ matrix.ocamlVersion }}.nix
+        skipNixBuild: true
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
+      shell: bash
+      run: nix-build ./nix/ci/test.nix --argstr ocamlVersion ${{ matrix.ocamlVersion }}
+
 
