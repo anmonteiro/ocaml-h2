@@ -37,19 +37,19 @@ in
     checkPhase = ''
       dune build spec/lwt_h2spec_string.exe
       nohup dune exec spec/lwt_h2spec_string.exe &
-      sleep 1
+      sleep 2
       ${h2spec}/bin/h2spec --strict -p 8080
       kill $(${pkgs.lsof}/bin/lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
 
       dune build spec/lwt_h2spec_bigstring.exe
       nohup dune exec spec/lwt_h2spec_bigstring.exe &
-      sleep 1
+      sleep 2
       ${h2spec}/bin/h2spec --strict -p 8080
       kill $(${pkgs.lsof}/bin/lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
 
       dune build spec/lwt_h2spec_streaming.exe
       nohup dune exec spec/lwt_h2spec_streaming.exe &
-      sleep 1
+      sleep 2
       ${h2spec}/bin/h2spec --strict -p 8080 --timeout 3
       kill $(${pkgs.lsof}/bin/lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
 
