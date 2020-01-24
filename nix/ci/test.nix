@@ -1,11 +1,10 @@
 { ocamlVersion }:
 
 let
-  sources = import ../sources.nix { inherit ocamlVersion; };
-  inherit (sources) pkgs ocamlPackages;
-  inherit (pkgs) lib stdenv fetchTarball;
+  pkgs = import ../sources.nix { inherit ocamlVersion; };
+  inherit (pkgs) lib stdenv fetchTarball ocamlPackages;
 
-  h2Pkgs = import ./.. { inherit sources ocamlVersion; };
+  h2Pkgs = import ./.. { inherit ocamlVersion; };
   h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
   h2spec = stdenv.mkDerivation {
     name = "h2spec";
