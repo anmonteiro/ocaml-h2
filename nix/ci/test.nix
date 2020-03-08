@@ -54,6 +54,6 @@ in
       kill $(${pkgs.lsof}/bin/lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
 
       # Check code is formatted with OCamlformat
-      dune build @fmt
+      ${if (lib.versionOlder "4.07" ocaml.version) then "dune build @fmt" else ""}
     '';
   }
