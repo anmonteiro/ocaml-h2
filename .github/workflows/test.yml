@@ -20,7 +20,7 @@ jobs:
         git submodule sync --recursive
         git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive --depth=1
     - uses: cachix/install-nix-action@v7
-    - uses: cachix/cachix-action@v4
+    - uses: cachix/cachix-action@v5
       with:
         name: anmonteiro
         skipNixBuild: true
