@@ -1,14 +1,14 @@
-# nix-build -E \
-#  'with import <nixpkgs> { overlays = [(import ./.)];}; pkgs.bs-platform'
 { ocamlVersion ? "4_09" }:
 
 let
   overlays = builtins.fetchTarball {
-    url = https://github.com/anmonteiro/nix-overlays/archive/98b6ee7.tar.gz;
-    sha256 = "12vqdghlz2v7ln28jmrnxy210zv5x21g8kw2s0dvszfmz0p2inkh";
+    url = https://github.com/anmonteiro/nix-overlays/archive/b89a287.tar.gz;
+    sha256 = "11p8s2h44iav1l2hsylbwpwn32d50kzpfa33v0gdic7cripn1sdn";
   };
 
-  pkgs = import <nixpkgs> {
+in
+
+  import "${overlays}/sources.nix" {
     overlays = [
       (import overlays)
       (self: super: {
@@ -16,7 +16,5 @@ let
             (super.callPackage "${overlays}/ocaml" {});
       })
     ];
-  };
+  }
 
-in
-  pkgs

@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ocamlVersion: [4_06, 4_07, 4_08, 4_09]
+        ocamlVersion: [4_07, 4_08, 4_09]
     steps:
     - uses: actions/checkout@v2
     - name: Checkout submodules
@@ -19,8 +19,8 @@ jobs:
         auth_header="$(git config --local --get http.https://github.com/.extraheader)"
         git submodule sync --recursive
         git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive --depth=1
-    - uses: cachix/install-nix-action@v6
-    - uses: cachix/cachix-action@v3
+    - uses: cachix/install-nix-action@v7
+    - uses: cachix/cachix-action@v4
       with:
         name: anmonteiro
         skipNixBuild: true
