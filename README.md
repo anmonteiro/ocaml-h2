@@ -301,7 +301,7 @@ let () =
        * stream-level in H2 and HTTP/2 in general here:
        * https://anmonteiro.com/ocaml-h2/h2/H2/Client_connection/index.html#val-create)
        * and the file descriptor that we created above. *)
-      Client.TLS.create_connection ~error_handler socket >>= fun connection ->
+      Client.TLS.create_connection_with_default ~error_handler socket >>= fun connection ->
       (* Once the connection has been created, we can initiate our request. For
        * that, we call the `request` function, which will send the request that
        * we created to the server, and direct its response to either the
