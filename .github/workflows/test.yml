@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ocamlVersion: [4_07, 4_08, 4_09]
+        ocamlVersion: [4_07, 4_08, 4_09, 4_10]
     steps:
     - uses: actions/checkout@v2
     - name: Checkout submodules
@@ -20,13 +20,10 @@ jobs:
         git submodule sync --recursive
         git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive --depth=1
     - uses: cachix/install-nix-action@v7
-    - uses: cachix/cachix-action@v4
+    - uses: cachix/cachix-action@v5
       with:
         name: anmonteiro
-        skipNixBuild: true
+        file: ./nix/ci/test.nix
+        nixBuildArgs: --argstr ocamlVersion ${{ matrix.ocamlVersion }}
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-    - name: Build / Test
-      shell: bash
-      run: nix-build ./nix/ci/test.nix --argstr ocamlVersion ${{ matrix.ocamlVersion }}
-
 
