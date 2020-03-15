@@ -2,8 +2,8 @@
 
 let
   overlays = builtins.fetchTarball {
-    url = https://github.com/anmonteiro/nix-overlays/archive/1c81969.tar.gz;
-    sha256 = "00nnbdqsw0h0ynbx4k9z7ar8xkpy4ip1633zi88gr0i7vak5rmq6";
+    url = https://github.com/anmonteiro/nix-overlays/archive/a065d44.tar.gz;
+    sha256 = "1ny92i6k5igcqnzw2i4bjh4l0d58n3sk1ha1gx03sl2fxhdmfgs4";
   };
 
 in
