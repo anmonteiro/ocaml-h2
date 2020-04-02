@@ -3,6 +3,8 @@ Unreleased
 
 - h2-async: add Async adapter
   ([#94](https://github.com/anmonteiro/httpaf/pull/94))
+- h2-lwt: Close the communication channel after shutting down the client
+  ([#108](https://github.com/anmonteiro/httpaf/pull/108))
 
 0.5.0 2019-12-19
 --------------
