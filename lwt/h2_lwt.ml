@@ -211,7 +211,10 @@ module Client (Io : IO) = struct
 
   type socket = Io.socket
 
-  type t = Client_connection.t
+  type t =
+    { connection : Client_connection.t
+    ; socket : socket
+    }
 
   let start_read_write_loops ~config connection socket =
     let read_buffer = Buffer.create config.Config.read_buffer_size in
@@ -267,7 +270,7 @@ module Client (Io : IO) = struct
     Lwt.async (fun () ->
         Lwt.join [ read_loop_exited; write_loop_exited ] >>= fun () ->
         Io.close socket);
-    Lwt.return connection
+    Lwt.return { connection; socket }
 
   let create_connection
       ?(config = Config.default) ?push_handler ~error_handler socket
@@ -298,11 +301,13 @@ module Client (Io : IO) = struct
     | Error msg ->
       Lwt_result.fail msg
 
-  let request = Client_connection.request
+  let request t = Client_connection.request t.connection
 
-  let ping = Client_connection.ping
+  let ping t = Client_connection.ping t.connection
 
-  let shutdown = Client_connection.shutdown
+  let shutdown t =
+    Client_connection.shutdown t.connection;
+    Io.close t.socket
 
-  let is_closed = Client_connection.is_closed
+  let is_closed t = Client_connection.is_closed t.connection
 end

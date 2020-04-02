@@ -122,7 +122,7 @@ module type Client = sig
 
   val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
 
-  val shutdown : t -> unit
+  val shutdown : t -> unit Lwt.t
 
   val is_closed : t -> bool
 end

@@ -78,6 +78,14 @@ module Headers_tests = struct
          (Headers.of_list [ "c", "d"; "e", "f"; "a", "b"; "g", "h" ])
          "a"
          "x"
+      |> Headers.to_list);
+    check
+      "replace middle element"
+      [ "e", "f"; "c", "z"; "a", "b" ]
+      (Headers.replace
+         (Headers.of_list [ "e", "f"; "c", "d"; "a", "b" ])
+         "c"
+         "z"
       |> Headers.to_list)
 
   let suite =
