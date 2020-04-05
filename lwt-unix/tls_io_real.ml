@@ -40,20 +40,22 @@ module Io :
 
   type addr = Unix.sockaddr
 
+  let close = Tls_lwt.Unix.close
+
   let read tls bigstring ~off ~len =
     Lwt.catch
-      (fun () -> Tls_lwt.Unix.read_bytes tls bigstring off len)
+      (fun () ->
+        Tls_lwt.Unix.read_bytes tls bigstring off len >|= function
+        | 0 ->
+          `Eof
+        | n ->
+          `Ok n)
       (function
         | Unix.Unix_error (Unix.EBADF, _, _) as exn ->
           Lwt.fail exn
         | exn ->
-          Lwt.async (fun () -> Tls_lwt.Unix.close tls);
+          Lwt.async (fun () -> close tls);
           Lwt.fail exn)
-    >>= fun bytes_read ->
-    if bytes_read = 0 then
-      Lwt.return `Eof
-    else
-      Lwt.return (`Ok bytes_read)
 
   let writev tls iovecs =
     Lwt.catch
@@ -72,11 +74,9 @@ module Io :
         | exn ->
           Lwt.fail exn)
 
-  let shutdown_send tls = ignore (Tls_lwt.Unix.close_tls tls)
+  let shutdown_send _tls = ()
 
-  let shutdown_receive tls = ignore (Tls_lwt.Unix.close_tls tls)
-
-  let close = Tls_lwt.Unix.close
+  let shutdown_receive _tls = ()
 
   let state tls =
     match Tls_lwt.Unix.epoch tls with `Error -> `Error | `Ok _ -> `Open
