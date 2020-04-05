@@ -5,6 +5,10 @@ Unreleased
   ([#94](https://github.com/anmonteiro/httpaf/pull/94))
 - h2-lwt: Close the communication channel after shutting down the client
   ([#108](https://github.com/anmonteiro/httpaf/pull/108))
+- h2-lwt-unix: fix premature SSL termination in the SSL / TLS runtimes
+  ([#109](https://github.com/anmonteiro/httpaf/pull/109))
+- h2-lwt-unix: TLS runtime: adapt to TLS v0.11.0
+  ([#109](https://github.com/anmonteiro/httpaf/pull/109))
 
 0.5.0 2019-12-19
 --------------

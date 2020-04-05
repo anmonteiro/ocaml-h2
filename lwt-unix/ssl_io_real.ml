@@ -40,23 +40,37 @@ module Io :
 
   type addr = Unix.sockaddr
 
+  let close ssl =
+    Lwt_ssl.ssl_shutdown ssl >>= fun () ->
+    Lwt.catch
+      (fun () -> Lwt.wrap2 Lwt_ssl.shutdown ssl Unix.SHUTDOWN_ALL)
+      (function
+        | Unix.Unix_error (Unix.ENOTCONN, _, _) ->
+          Lwt.return_unit
+        | exn ->
+          Lwt.fail exn)
+    >>= fun () ->
+    let fd = Lwt_ssl.get_fd ssl in
+    match Lwt_unix.state fd with
+    | Lwt_unix.Closed ->
+      Lwt.return_unit
+    | _ ->
+      Lwt.catch (fun () -> Lwt_ssl.close ssl) (fun _exn -> Lwt.return_unit)
+
   let read ssl bigstring ~off ~len =
     Lwt.catch
       (fun () ->
-        (* Lwt_unix.blocking (Lwt_ssl.get_fd socket) >>= fun _ -> *)
-        Lwt_ssl.read_bytes ssl bigstring off len)
+        Lwt_ssl.read_bytes ssl bigstring off len >|= function
+        | 0 ->
+          `Eof
+        | n ->
+          `Ok n)
       (function
         | Unix.Unix_error (Unix.EBADF, _, _) as exn ->
           Lwt.fail exn
         | exn ->
-          Lwt.async (fun () ->
-              Lwt_ssl.ssl_shutdown ssl >>= fun () -> Lwt_ssl.close ssl);
+          Lwt.async (fun () -> close ssl);
           Lwt.fail exn)
-    >>= fun bytes_read ->
-    if bytes_read = 0 then
-      Lwt.return `Eof
-    else
-      Lwt.return (`Ok bytes_read)
 
   let writev ssl iovecs =
     Lwt.catch
@@ -74,17 +88,16 @@ module Io :
         | exn ->
           Lwt.fail exn)
 
-  let shutdown_send ssl =
-    ignore
-      ( Lwt_ssl.ssl_shutdown ssl >|= fun () ->
-        Lwt_ssl.shutdown ssl Unix.SHUTDOWN_SEND )
+  (* From RFC8446§6.1:
+   *   The client and the server must share knowledge that the connection is
+   *   ending in order to avoid a truncation attack.
+   *
+   * Note: In the SSL / TLS runtimes we can't just shutdown one part of the
+   * full-duplex connection, as both sides must know that the underlying TLS
+   * conection is closing. *)
+  let shutdown_send _ssl = ()
 
-  let shutdown_receive ssl =
-    ignore
-      ( Lwt_ssl.ssl_shutdown ssl >|= fun () ->
-        Lwt_ssl.shutdown ssl Unix.SHUTDOWN_RECEIVE )
-
-  let close = Lwt_ssl.close
+  let shutdown_receive _ssl = ()
 
   let state ssl =
     match Lwt_unix.state (Lwt_ssl.get_fd ssl) with

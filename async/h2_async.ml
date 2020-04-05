@@ -324,7 +324,8 @@ module Make_client (Io : IO) = struct
         Client_connection.yield_writer connection writer_thread
       | `Close _ ->
         (* Log.Global.printf "write_close(%d)%!" (Fd.to_int_exn fd); *)
-        Ivar.fill write_complete ()
+        Ivar.fill write_complete ();
+        Io.shutdown_send socket
     in
     let conn_monitor = Monitor.create () in
     Scheduler.within ~monitor:conn_monitor reader_thread;
