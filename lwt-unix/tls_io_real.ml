@@ -82,9 +82,12 @@ module Io :
     match Tls_lwt.Unix.epoch tls with `Error -> `Error | `Ok _ -> `Open
 end
 
+let null_auth ~host:_ _ = Ok None
+
 let make_client socket =
-  X509_lwt.authenticator `No_authentication_I'M_STUPID >>= fun authenticator ->
-  let config = Tls.Config.client ~authenticator ~alpn_protocols:[ "h2" ] () in
+  let config =
+    Tls.Config.client ~authenticator:null_auth ~alpn_protocols:[ "h2" ] ()
+  in
   Tls_lwt.Unix.client_of_fd config socket
 
 (* This function does not perform error handling and will therefore crash a

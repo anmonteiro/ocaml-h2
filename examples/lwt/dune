@@ -1,6 +1,12 @@
 (executables
- (names lwt_h2c lwt_echo_server2 lwt_https_server lwt_get lwt_post)
- (libraries base64 h2 httpaf httpaf-lwt-unix h2-lwt-unix lwt lwt.unix))
+ (names lwt_echo_server2 lwt_https_server lwt_get lwt_post)
+ (modules lwt_echo_server2 lwt_https_server lwt_get lwt_post)
+ (libraries h2-lwt-unix lwt.unix))
+
+(executable
+ (name lwt_h2c)
+ (libraries httpaf-lwt-unix h2-lwt-unix lwt.unix)
+ (modules lwt_h2c))
 
 (alias
  (name examples)
