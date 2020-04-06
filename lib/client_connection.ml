@@ -73,8 +73,7 @@ type t =
   ; pending_pings : (unit -> unit) Queue.t
   ; error_handler : error -> unit
   ; push_handler : Request.t -> (response_handler, unit) result
-  ; wakeup_writer : (unit -> unit) ref
-  ; wakeup_stream : unit -> unit
+  ; mutable wakeup_writer : Optional_thunk.t
         (* From RFC7540§4.3:
          *   Header compression is stateful. One compression context and one
          *   decompression context are used for the entire connection. *)
@@ -84,26 +83,18 @@ type t =
 
 let default_push_handler = Sys.opaque_identity (fun _ -> Ok (fun _ _ -> ()))
 
-let is_shutdown t = Reader.is_closed t.reader && Writer.is_closed t.writer
-
 let is_closed t = Reader.is_closed t.reader && Writer.is_closed t.writer
 
 let on_wakeup_writer t k =
-  if is_shutdown t then
+  if is_closed t then
     failwith "on_wakeup_writer on closed conn"
   else
-    t.wakeup_writer := k
+    t.wakeup_writer <- Optional_thunk.some k
 
-let default_wakeup_writer = Sys.opaque_identity (fun () -> ())
-
-let _wakeup_writer wakeup_ref =
-  let f = !wakeup_ref in
-  wakeup_ref := default_wakeup_writer;
-  f ()
-
-let wakeup_writer t = _wakeup_writer t.wakeup_writer
-
-let wakeup_stream t () = wakeup_writer (Lazy.force t)
+let wakeup_writer t =
+  let f = t.wakeup_writer in
+  t.wakeup_writer <- Optional_thunk.none;
+  Optional_thunk.call_if_some f
 
 let shutdown_reader t = Reader.force_close t.reader
 
@@ -189,7 +180,7 @@ let set_error_and_handle t stream error error_code =
   wakeup_writer t
 
 let report_exn t exn =
-  if not (is_shutdown t) then
+  if not (is_closed t) then
     let additional_debug_data = Printexc.to_string exn in
     report_connection_error t ~additional_debug_data Error_code.InternalError
 
@@ -254,7 +245,7 @@ let handle_push_promise_headers t respd headers =
             , { Respd.request
               ; request_body
               ; response_handler
-              ; wakeup_writer = t.wakeup_stream
+              ; wakeup_writer = t.wakeup_writer
               } )
       | Error _ ->
         (* From RFC7540§6.6:
@@ -1210,9 +1201,8 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
       ; reader = Reader.client_frames connection_preface_handler frame_handler
       ; writer = Writer.create settings.max_frame_size
       ; streams = Scheduler.make_root ()
-      ; wakeup_writer = ref default_wakeup_writer
-      ; wakeup_stream =
-          wakeup_stream t
+      ; wakeup_writer =
+          Optional_thunk.none
           (* From RFC7540§4.3:
            *   Header compression is stateful. One compression context and one
            *   decompression context are used for the entire connection. *)
@@ -1300,7 +1290,7 @@ let create_h2c
              *   it is completely sent. *)
           ; request_body = Body.empty
           ; response_handler
-          ; wakeup_writer = t.wakeup_stream
+          ; wakeup_writer = t.wakeup_writer
           } );
     wakeup_writer t;
     Ok t
@@ -1311,7 +1301,7 @@ let request t request ~error_handler ~response_handler =
   let max_frame_size = t.settings.max_frame_size in
   let respd = create_and_add_stream t ~error_handler in
   let request_body =
-    Body.create (Bigstringaf.create max_frame_size) t.wakeup_stream
+    Body.create (Bigstringaf.create max_frame_size) t.wakeup_writer
   in
   let frame_info =
     Writer.make_frame_info
@@ -1327,7 +1317,7 @@ let request t request ~error_handler ~response_handler =
           , { request
             ; request_body
             ; response_handler
-            ; wakeup_writer = t.wakeup_stream
+            ; wakeup_writer = t.wakeup_writer
             } ));
   wakeup_writer t;
   (* Closing the request body puts the stream in the half-closed (local) state.

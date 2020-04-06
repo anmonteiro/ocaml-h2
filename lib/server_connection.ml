@@ -75,8 +75,7 @@ type t =
          * we haven't eceived an acknowledgment from the client. *)
   ; mutable unacked_settings : int
   ; mutable did_send_go_away : bool
-  ; wakeup_writer : (unit -> unit) ref
-  ; wakeup_stream : unit -> unit
+  ; mutable wakeup_writer : Optional_thunk.t
         (* From RFC7540§4.3:
          *   Header compression is stateful. One compression context and one
          *   decompression context are used for the entire connection. *)
@@ -90,16 +89,12 @@ let on_wakeup_writer t k =
   if is_closed t then
     failwith "on_wakeup_writer on closed conn"
   else
-    t.wakeup_writer := k
+    t.wakeup_writer <- Optional_thunk.some k
 
-let default_wakeup_writer = Sys.opaque_identity (fun () -> ())
-
-let _wakeup_writer wakeup_ref =
-  let f = !wakeup_ref in
-  wakeup_ref := default_wakeup_writer;
-  f ()
-
-let wakeup_writer t = _wakeup_writer t.wakeup_writer
+let wakeup_writer t =
+  let f = t.wakeup_writer in
+  t.wakeup_writer <- Optional_thunk.none;
+  Optional_thunk.call_if_some f
 
 let shutdown_reader t = Reader.force_close t.reader
 
@@ -443,7 +438,7 @@ let process_first_headers_block t frame_header reqd headers_block =
     Reqd.create_active_stream
       t.hpack_encoder
       t.config.response_body_buffer_size
-      t.wakeup_stream
+      t.wakeup_writer
       (create_push_stream t)
   in
   reqd.Stream.state <-
@@ -1101,8 +1096,6 @@ let settings_from_config
   ; enable_push = enable_server_push
   }
 
-let wakeup_stream t () = wakeup_writer (Lazy.force t)
-
 let write_connection_preface t =
   (* Check if the settings for the connection are different than the default
    * HTTP/2 settings. In the event that they are, we need to send a non-empty
@@ -1215,8 +1208,7 @@ let create_generic ~h2c ~config ~error_handler request_handler =
       ; receiving_headers_for_stream = None
       ; did_send_go_away = false
       ; unacked_settings = 0
-      ; wakeup_writer = ref default_wakeup_writer
-      ; wakeup_stream = wakeup_stream t
+      ; wakeup_writer = Optional_thunk.none
       ; hpack_encoder = Hpack.Encoder.(create settings.header_table_size)
       ; hpack_decoder = Hpack.Decoder.(create settings.header_table_size)
       }
@@ -1242,7 +1234,7 @@ let handle_h2c_request t headers request_body_iovecs =
       Reqd.create_active_stream
         t.hpack_encoder
         t.config.response_body_buffer_size
-        (fun () -> wakeup_writer t)
+        t.wakeup_writer
         (create_push_stream t)
     in
     t.max_client_stream_id <- reqd.Stream.id;
