@@ -41,14 +41,12 @@ type _ t =
   ; mutable on_eof : unit -> unit
   ; mutable on_read : Bigstringaf.t -> off:int -> len:int -> unit
   ; buffered_bytes : int ref
-  ; ready_to_write : unit -> unit
+  ; ready_to_write : Optional_thunk.t
   }
 
 let default_on_eof = Sys.opaque_identity (fun () -> ())
 
 let default_on_read = Sys.opaque_identity (fun _ ~off:_ ~len:_ -> ())
-
-let default_ready_to_write = Sys.opaque_identity (fun () -> ())
 
 let create buffer ready_to_write =
   { faraday = Faraday.of_bigstring buffer
@@ -61,13 +59,13 @@ let create buffer ready_to_write =
   }
 
 let create_empty () =
-  let t = create Bigstringaf.empty default_ready_to_write in
+  let t = create Bigstringaf.empty Optional_thunk.none in
   Faraday.close t.faraday;
   t
 
 let empty = create_empty ()
 
-let ready_to_write t = t.ready_to_write ()
+let ready_to_write t = Optional_thunk.call_if_some t.ready_to_write
 
 let write_char t c =
   Faraday.write_char t.faraday c;

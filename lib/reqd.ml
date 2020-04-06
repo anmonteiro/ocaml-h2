@@ -72,7 +72,7 @@ type active_stream =
          * trailer headers are emitted. *)
   ; mutable trailers_parser : partial_headers option
   ; mutable trailers : Headers.t option
-  ; wakeup_writer : unit -> unit
+  ; wakeup_writer : Optional_thunk.t
   ; create_push_stream :
       unit -> (t, [ `Push_disabled | `Stream_ids_exhausted ]) result
   }
@@ -191,7 +191,7 @@ let send_fixed_response t s response data =
       s.response_state <- Fixed { response; iovec }
     else
       s.response_state <- Complete response;
-    s.wakeup_writer ()
+    Optional_thunk.call_if_some s.wakeup_writer
   | Streaming _ ->
     failwith "h2.Reqd.respond_with_*: response already started"
   | Fixed _ | Complete _ ->
@@ -238,7 +238,7 @@ let send_streaming_response ~flush_headers_immediately t s response =
     Writer.write_response_headers t.writer s.encoder frame_info response;
     if s.wait_for_first_flush then Writer.yield t.writer;
     s.response_state <- Streaming (response, response_body);
-    s.wakeup_writer ();
+    Optional_thunk.call_if_some s.wakeup_writer;
     response_body
   | Streaming _ ->
     failwith "h2.Reqd.respond_with_streaming: response already started"
@@ -305,7 +305,7 @@ let start_push_stream t s request =
      * might immediately call one of the `respond_with` functions and expect
      * the stream to be in the `Reserved` state. *)
     promised_reqd.state <- Reserved (request_info, active_stream);
-    wakeup_writer ();
+    Optional_thunk.call_if_some wakeup_writer;
     Ok promised_reqd
   | Error e ->
     Error (e :> [ `Push_disabled | `Stream_cant_push | `Stream_ids_exhausted ])
