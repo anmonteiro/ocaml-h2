@@ -12,14 +12,9 @@ jobs:
         ocamlVersion: [4_07, 4_08, 4_09, 4_10]
     steps:
     - uses: actions/checkout@v2
-    - name: Checkout submodules
-      shell: bash
-      run: |
-        # https://github.com/actions/checkout#checkout-submodules
-        auth_header="$(git config --local --get http.https://github.com/.extraheader)"
-        git submodule sync --recursive
-        git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive --depth=1
-    - uses: cachix/install-nix-action@v7
+      with:
+        submodules: 'recursive'
+    - uses: cachix/install-nix-action@v8
     - uses: cachix/cachix-action@v5
       with:
         name: anmonteiro
