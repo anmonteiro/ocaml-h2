@@ -2,16 +2,16 @@ Unreleased
 --------------
 
 - h2-async: add Async adapter
-  ([#94](https://github.com/anmonteiro/httpaf/pull/94))
+  ([#94](https://github.com/anmonteiro/ocaml-h2/pull/94))
 - h2-lwt: Close the communication channel after shutting down the client
-  ([#108](https://github.com/anmonteiro/httpaf/pull/108))
+  ([#108](https://github.com/anmonteiro/ocaml-h2/pull/108))
 - h2-lwt-unix: fix premature SSL termination in the SSL / TLS runtimes
-  ([#109](https://github.com/anmonteiro/httpaf/pull/109))
+  ([#109](https://github.com/anmonteiro/ocaml-h2/pull/109))
 - h2-lwt-unix: TLS runtime: adapt to TLS v0.11.0
-  ([#109](https://github.com/anmonteiro/httpaf/pull/109))
+  ([#109](https://github.com/anmonteiro/ocaml-h2/pull/109))
 - h2-lwt-unix: feed EOF to the state machine if the socket has been closed --
   this is especially important on the client because it allows connections to
-  terminate cleanly. ([#112](https://github.com/anmonteiro/httpaf/pull/112))
+  terminate cleanly. ([#112](https://github.com/anmonteiro/ocaml-h2/pull/112))
 
 0.5.0 2019-12-19
 --------------
