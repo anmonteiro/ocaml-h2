@@ -9,6 +9,9 @@ Unreleased
   ([#109](https://github.com/anmonteiro/httpaf/pull/109))
 - h2-lwt-unix: TLS runtime: adapt to TLS v0.11.0
   ([#109](https://github.com/anmonteiro/httpaf/pull/109))
+- h2-lwt-unix: feed EOF to the state machine if the socket has been closed --
+  this is especially important on the client because it allows connections to
+  terminate cleanly. ([#112](https://github.com/anmonteiro/httpaf/pull/112))
 
 0.5.0 2019-12-19
 --------------
