@@ -51,8 +51,8 @@ module Io :
         | n ->
           `Ok n)
       (function
-        | Unix.Unix_error (Unix.EBADF, _, _) as exn ->
-          Lwt.fail exn
+        | Unix.Unix_error (Unix.EBADF, _, _) ->
+          Lwt.return `Eof
         | exn ->
           Lwt.async (fun () -> close tls);
           Lwt.fail exn)

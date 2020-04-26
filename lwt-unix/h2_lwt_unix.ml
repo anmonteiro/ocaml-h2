@@ -60,18 +60,19 @@ struct
 
   let read fd bigstring ~off ~len =
     Lwt.catch
-      (fun () -> Lwt_bytes.read fd bigstring off len)
+      (fun () ->
+        Lwt_bytes.read fd bigstring off len >|= function
+        | 0 ->
+          `Eof
+        | n ->
+          `Ok n)
       (function
-        | Unix.Unix_error (Unix.EBADF, _, _) as exn ->
-          Lwt.fail exn
+        | Unix.Unix_error (Unix.EBADF, _, _) ->
+          (* If the socket is closed we need to feed EOF to the state machine. *)
+          Lwt.return `Eof
         | exn ->
-          Lwt.async (fun () -> Lwt_unix.close fd);
+          Lwt.async (fun () -> close fd);
           Lwt.fail exn)
-    >>= fun bytes_read ->
-    if bytes_read = 0 then
-      Lwt.return `Eof
-    else
-      Lwt.return (`Ok bytes_read)
 
   let writev = Faraday_lwt_unix.writev_of_fd
 

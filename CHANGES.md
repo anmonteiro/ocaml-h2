@@ -2,13 +2,16 @@ Unreleased
 --------------
 
 - h2-async: add Async adapter
-  ([#94](https://github.com/anmonteiro/httpaf/pull/94))
+  ([#94](https://github.com/anmonteiro/ocaml-h2/pull/94))
 - h2-lwt: Close the communication channel after shutting down the client
-  ([#108](https://github.com/anmonteiro/httpaf/pull/108))
+  ([#108](https://github.com/anmonteiro/ocaml-h2/pull/108))
 - h2-lwt-unix: fix premature SSL termination in the SSL / TLS runtimes
-  ([#109](https://github.com/anmonteiro/httpaf/pull/109))
+  ([#109](https://github.com/anmonteiro/ocaml-h2/pull/109))
 - h2-lwt-unix: TLS runtime: adapt to TLS v0.11.0
-  ([#109](https://github.com/anmonteiro/httpaf/pull/109))
+  ([#109](https://github.com/anmonteiro/ocaml-h2/pull/109))
+- h2-lwt-unix: feed EOF to the state machine if the socket has been closed --
+  this is especially important on the client because it allows connections to
+  terminate cleanly. ([#112](https://github.com/anmonteiro/ocaml-h2/pull/112))
 
 0.5.0 2019-12-19
 --------------
@@ -23,27 +26,27 @@ Unreleased
   secure connection and performs the TLS handshake / accept, and one that is
   more "raw", i.e. leaves that responsibility to the caller. Also exposes the
   `socket` type to make it easier to abstract over HTTP / HTTPS
-  ([#84](https://github.com/anmonteiro/httpaf/pull/84))
+  ([#84](https://github.com/anmonteiro/ocaml-h2/pull/84))
 - h2-lwt, h2-lwt-unix, h2-mirage: Improve the `H2_lwt.IO` interface, don't
   require a `report_exn` function, only a `state` function that returns the
-  socket state ([#85](https://github.com/anmonteiro/httpaf/pull/85))
+  socket state ([#85](https://github.com/anmonteiro/ocaml-h2/pull/85))
 - h2, h2-lwt, h2-lwt-unix, h2-mirage: Add support for starting HTTP/2 for
   "http" URIs. Covers [section 3.2](https://tools.ietf.org/html/rfc7540#section-3.2)
   of the HTTP/2 specification
-  ([#87](https://github.com/anmonteiro/httpaf/pull/87))
+  ([#87](https://github.com/anmonteiro/ocaml-h2/pull/87))
 - h2: Fix misinterpretation of the spec where h2 would consider a request /
   response malformed if it had a non-zero `content-length` header and no DATA
-  frames ([#89](https://github.com/anmonteiro/httpaf/pull/89))
+  frames ([#89](https://github.com/anmonteiro/ocaml-h2/pull/89))
 - h2: Add `Request.body_length` and `Response.body_length`
-  ([#90](https://github.com/anmonteiro/httpaf/pull/90))
+  ([#90](https://github.com/anmonteiro/ocaml-h2/pull/90))
 - h2: Fix a bug that caused DATA frames to be incorrectly chunked when
   returning a streaming response
-  ([#91](https://github.com/anmonteiro/httpaf/pull/91))
+  ([#91](https://github.com/anmonteiro/ocaml-h2/pull/91))
 - h2: Drain pending bytes after getting a `Close` report from the runtime
-  ([#92](https://github.com/anmonteiro/httpaf/pull/92))
+  ([#92](https://github.com/anmonteiro/ocaml-h2/pull/92))
 - h2: Report connection errors for unknown frames that exceed the maximum
   payload size -- they may not be speaking HTTP/2
- ([#93](https://github.com/anmonteiro/httpaf/pull/93))
+ ([#93](https://github.com/anmonteiro/ocaml-h2/pull/93))
 
 0.4.0 2019-11-05
 --------------
