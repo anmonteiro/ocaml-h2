@@ -58,7 +58,7 @@ type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [ `write ] Body.t) -> unit
 
 type t =
-  { settings : Settings.t
+  { mutable settings : Settings.t
   ; reader : Reader.frame
   ; writer : Writer.t
   ; config : Config.t
@@ -803,70 +803,75 @@ let apply_settings_list t settings =
    *   that parameter. Parameters are processed in the order in which they
    *   appear, and a receiver of a SETTINGS frame does not need to maintain
    *   any state other than the current value of its parameters. *)
-  List.iter
-    (function
-      | Settings.HeaderTableSize, x ->
-        (* From RFC7540§6.5.2:
-         *   Allows the sender to inform the remote endpoint of the maximum
-         *   size of the header compression table used to decode header
-         *   blocks, in octets. *)
-        t.settings.header_table_size <- x;
-        Hpack.Encoder.set_capacity t.hpack_encoder x
-      | EnablePush, x ->
-        (* We've already verified that this setting is either 0 or 1 in the
-         * call to `Settings.check_settings_list` above. *)
-        t.settings.enable_push <- x == 1
-      | MaxConcurrentStreams, x ->
-        t.settings.max_concurrent_streams <- x
-      | InitialWindowSize, new_val ->
-        (* From RFC7540§6.9.2:
-         *   [...] a SETTINGS frame can alter the initial flow-control
-         *   window size for streams with active flow-control windows (that
-         *   is, streams in the "open" or "half-closed (remote)" state).
-         *   When the value of SETTINGS_INITIAL_WINDOW_SIZE changes, a
-         *   receiver MUST adjust the size of all stream flow-control
-         *   windows that it maintains by the difference between the new
-         *   value and the old value. *)
-        let old_val = t.settings.initial_window_size in
-        t.settings.initial_window_size <- new_val;
-        let growth = new_val - old_val in
-        let exception Local in
-        (match
-           Scheduler.iter
-             ~f:(fun stream ->
-               (* From RFC7540§6.9.2:
-                *   An endpoint MUST treat a change to
-                *   SETTINGS_INITIAL_WINDOW_SIZE that causes any
-                *   flow-control window to exceed the maximum size as a
-                *   connection error (Section 5.4.1) of type
-                *   FLOW_CONTROL_ERROR. *)
-               if not (Scheduler.add_flow stream growth) then
-                 raise Local)
-             t.streams
-         with
-        | () ->
-          ()
-        | exception Local ->
-          report_connection_error
-            t
-            ~additional_debug_data:
-              (Format.sprintf
-                 "Window size for stream would exceed %d"
-                 Settings.WindowSize.max_window_size)
-            Error_code.FlowControlError)
-      | MaxFrameSize, x ->
-        (* XXX: We're probably not abiding entirely by this. If we get a
-         * MAX_FRAME_SIZE setting we'd need to reallocate the read buffer?
-         * This will need support from the I/O runtimes. *)
-        t.settings.max_frame_size <- x;
-        Scheduler.iter
-          ~f:(fun (Stream { descriptor; _ }) ->
-            if Reqd.requires_output descriptor then
-              descriptor.max_frame_size <- x)
-          t.streams
-      | MaxHeaderListSize, x ->
-        t.settings.max_header_list_size <- Some x)
-    settings
+  let new_settings =
+    List.fold_left
+      (fun (acc : Settings.t) item ->
+        match item with
+        | Settings.HeaderTableSize, x ->
+          (* From RFC7540§6.5.2:
+           *   Allows the sender to inform the remote endpoint of the maximum
+           *   size of the header compression table used to decode header
+           *   blocks, in octets. *)
+          Hpack.Encoder.set_capacity t.hpack_encoder x;
+          { acc with header_table_size = x }
+        | EnablePush, x ->
+          (* We've already verified that this setting is either 0 or 1 in the
+           * call to `Settings.check_settings_list` above. *)
+          { acc with enable_push = x == 1 }
+        | MaxConcurrentStreams, x ->
+          { acc with max_concurrent_streams = x }
+        | InitialWindowSize, new_val ->
+          (* From RFC7540§6.9.2:
+           *   [...] a SETTINGS frame can alter the initial flow-control
+           *   window size for streams with active flow-control windows (that
+           *   is, streams in the "open" or "half-closed (remote)" state).
+           *   When the value of SETTINGS_INITIAL_WINDOW_SIZE changes, a
+           *   receiver MUST adjust the size of all stream flow-control
+           *   windows that it maintains by the difference between the new
+           *   value and the old value. *)
+          let old_val = acc.initial_window_size in
+          let growth = new_val - old_val in
+          let exception Local in
+          (match
+             Scheduler.iter
+               ~f:(fun stream ->
+                 (* From RFC7540§6.9.2:
+                  *   An endpoint MUST treat a change to
+                  *   SETTINGS_INITIAL_WINDOW_SIZE that causes any
+                  *   flow-control window to exceed the maximum size as a
+                  *   connection error (Section 5.4.1) of type
+                  *   FLOW_CONTROL_ERROR. *)
+                 if not (Scheduler.add_flow stream growth) then
+                   raise Local)
+               t.streams
+           with
+          | () ->
+            ()
+          | exception Local ->
+            report_connection_error
+              t
+              ~additional_debug_data:
+                (Format.sprintf
+                   "Window size for stream would exceed %d"
+                   Settings.WindowSize.max_window_size)
+              Error_code.FlowControlError);
+          { acc with initial_window_size = new_val }
+        | MaxFrameSize, x ->
+          (* XXX: We're probably not abiding entirely by this. If we get a
+           * MAX_FRAME_SIZE setting we'd need to reallocate the read buffer?
+           * This will need support from the I/O runtimes. *)
+          Scheduler.iter
+            ~f:(fun (Stream { descriptor; _ }) ->
+              if Reqd.requires_output descriptor then
+                descriptor.max_frame_size <- x)
+            t.streams;
+          { acc with max_frame_size = x }
+        | MaxHeaderListSize, x ->
+          { acc with max_header_list_size = Some x })
+      t.settings
+      settings
+  in
+  t.settings <- new_settings
 
 let write_settings_frame t ~ack settings =
   let flags =
@@ -1081,21 +1086,6 @@ let default_error_handler ?request:_ error handle =
   Body.write_string body message;
   Body.close_writer body
 
-let settings_from_config
-    { Config.read_buffer_size
-    ; max_concurrent_streams
-    ; initial_window_size
-    ; enable_server_push
-    ; _
-    }
-  =
-  { Settings.default_settings with
-    max_frame_size = read_buffer_size
-  ; max_concurrent_streams
-  ; initial_window_size
-  ; enable_push = enable_server_push
-  }
-
 let write_connection_preface t =
   (* Check if the settings for the connection are different than the default
    * HTTP/2 settings. In the event that they are, we need to send a non-empty
@@ -1122,7 +1112,7 @@ let write_connection_preface t =
     send_window_update t t.streams diff
 
 let create_generic ~h2c ~config ~error_handler request_handler =
-  let settings = settings_from_config config in
+  let settings = Config.to_settings config in
   let writer = Writer.create settings.max_frame_size in
   let rec connection_preface_handler recv_frame settings_list =
     let t = Lazy.force t in
@@ -1313,12 +1303,15 @@ let create_h2c
     | Ok h2_headers ->
       (match Settings.of_base64 settings with
       | Ok upgrade_settings ->
-        (match Settings.check_settings_list upgrade_settings with
+        let settings_list =
+          Settings.settings_for_the_connection upgrade_settings
+        in
+        (match Settings.check_settings_list settings_list with
         | Ok () ->
           let t =
             create_generic ~h2c:true ~config ~error_handler request_handler
           in
-          apply_settings_list t upgrade_settings;
+          apply_settings_list t settings_list;
           (* From RFC7540§3.5:
            *   The first HTTP/2 frame sent by the server MUST be a server
            *   connection preface (Section 3.5) consisting of a SETTINGS

@@ -73,3 +73,18 @@ let default =
        *   stream-level flow control. *)
   ; initial_window_size = Settings.WindowSize.default_initial_window_size
   }
+
+let to_settings
+    { read_buffer_size
+    ; max_concurrent_streams
+    ; initial_window_size
+    ; enable_server_push
+    ; _
+    }
+  =
+  { Settings.default_settings with
+    max_frame_size = read_buffer_size
+  ; max_concurrent_streams
+  ; initial_window_size
+  ; enable_push = enable_server_push
+  }
