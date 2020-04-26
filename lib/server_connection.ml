@@ -1101,13 +1101,9 @@ let write_connection_preface t =
   write_settings_frame ~ack:false t settings;
   (* If a higher value for initial window size is configured, add more
    * tokens to the connection (we have no streams at this point). *)
-  if
-    t.settings.initial_window_size
-    > Settings.default_settings.initial_window_size
-  then
+  if t.settings.initial_window_size > Settings.default.initial_window_size then
     let diff =
-      t.settings.initial_window_size
-      - Settings.default_settings.initial_window_size
+      t.settings.initial_window_size - Settings.default.initial_window_size
     in
     send_window_update t t.streams diff
 

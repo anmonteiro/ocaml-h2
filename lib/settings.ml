@@ -173,7 +173,7 @@ type t =
   }
 
 (* From RFC7540§11.3 *)
-let default_settings =
+let default =
   { header_table_size = 0x1000
   ; enable_push =
       true
@@ -188,27 +188,25 @@ let default_settings =
 
 let settings_for_the_connection settings =
   let settings_list =
-    if settings.max_frame_size <> default_settings.max_frame_size then
+    if settings.max_frame_size <> default.max_frame_size then
       [ MaxFrameSize, settings.max_frame_size ]
     else
       []
   in
   let settings_list =
-    if
-      settings.max_concurrent_streams <> default_settings.max_concurrent_streams
-    then
+    if settings.max_concurrent_streams <> default.max_concurrent_streams then
       (MaxConcurrentStreams, settings.max_concurrent_streams) :: settings_list
     else
       settings_list
   in
   let settings_list =
-    if settings.initial_window_size <> default_settings.initial_window_size then
+    if settings.initial_window_size <> default.initial_window_size then
       (InitialWindowSize, settings.initial_window_size) :: settings_list
     else
       settings_list
   in
   let settings_list =
-    if settings.enable_push <> default_settings.enable_push then
+    if settings.enable_push <> default.enable_push then
       (EnablePush, if settings.enable_push then 1 else 0) :: settings_list
     else
       settings_list
@@ -279,7 +277,7 @@ let of_settings_list settings =
         { acc with max_frame_size = x }
       | MaxHeaderListSize, x ->
         { acc with max_header_list_size = Some x })
-    default_settings
+    default
     settings
 
 let of_base64 encoded =

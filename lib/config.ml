@@ -57,7 +57,7 @@ let default =
      *   The initial value is 2^14 (16,384) octets. The value advertised by an
      *   endpoint MUST be between this initial value and the maximum allowed
      *   frame size (2^24-1 or 16,777,215 octets), inclusive. *)
-    read_buffer_size = Settings.default_settings.max_frame_size
+    read_buffer_size = Settings.default.max_frame_size
   ; request_body_buffer_size = 0x1000 (* Buffer size for request bodies *)
   ; response_body_buffer_size = 0x1000 (* Buffer size for response bodies *)
   ; enable_server_push =
@@ -67,7 +67,7 @@ let default =
        *   will allow. This limit is directional: it applies to the number of
        *   streams that the sender permits the receiver to create. *)
   ; max_concurrent_streams =
-      Settings.default_settings.max_concurrent_streams
+      Settings.default.max_concurrent_streams
       (* From RFC7540§6.5.2:
        *   Indicates the sender's initial window size (in octets) for
        *   stream-level flow control. *)
@@ -82,7 +82,7 @@ let to_settings
     ; _
     }
   =
-  { Settings.default_settings with
+  { Settings.default with
     max_frame_size = read_buffer_size
   ; max_concurrent_streams
   ; initial_window_size

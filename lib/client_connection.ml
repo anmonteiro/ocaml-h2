@@ -1124,13 +1124,10 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
       default_push_handler
   in
   let settings =
-    { Settings.default_settings with
-      max_frame_size = config.read_buffer_size
-    ; max_concurrent_streams = config.max_concurrent_streams
-    ; initial_window_size = config.initial_window_size
-    ; enable_push =
-        (* If the caller is not going to process PUSH_PROMISE frames, just
-         * disable it. *)
+    { (Config.to_settings config) with
+      (* If the caller is not going to process PUSH_PROMISE frames, just
+       * disable it. *)
+      enable_push =
         config.enable_server_push && push_handler != default_push_handler
     }
   in
@@ -1224,13 +1221,9 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
   Writer.write_connection_preface t.writer settings;
   (* If a higher value for initial window size is configured, add more
    * tokens to the connection (we have no streams at this point). *)
-  (if
-   t.settings.initial_window_size
-   > Settings.default_settings.initial_window_size
- then
+  (if t.settings.initial_window_size > Settings.default.initial_window_size then
      let diff =
-       t.settings.initial_window_size
-       - Settings.default_settings.initial_window_size
+       t.settings.initial_window_size - Settings.default.initial_window_size
      in
      send_window_update t t.streams diff);
   t
