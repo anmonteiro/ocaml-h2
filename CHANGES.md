@@ -12,6 +12,8 @@ Unreleased
 - h2-lwt-unix: feed EOF to the state machine if the socket has been closed --
   this is especially important on the client because it allows connections to
   terminate cleanly. ([#112](https://github.com/anmonteiro/ocaml-h2/pull/112))
+- h2: Refactor the `Settings` module API
+  ([#113](https://github.com/anmonteiro/ocaml-h2/pull/113))
 
 0.5.0 2019-12-19
 --------------
