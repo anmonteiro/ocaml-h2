@@ -59,7 +59,7 @@ type response_handler = Response.t -> [ `read ] Body.t -> unit
 type error_handler = error -> unit
 
 type t =
-  { settings : Settings.t
+  { mutable settings : Settings.t
   ; reader : Reader.frame
   ; writer : Writer.t
   ; config : Config.t
@@ -808,67 +808,72 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
        *   that parameter. Parameters are processed in the order in which they
        *   appear, and a receiver of a SETTINGS frame does not need to maintain
        *   any state other than the current value of its parameters. *)
-      List.iter
-        (function
-          | Settings.HeaderTableSize, x ->
-            (* From RFC7540§6.5.2:
-             *   Allows the sender to inform the remote endpoint of the maximum
-             *   size of the header compression table used to decode header
-             *   blocks, in octets. *)
-            t.settings.header_table_size <- x;
-            Hpack.Encoder.set_capacity t.hpack_encoder x
-          | EnablePush, x ->
-            (* We've already verified that this setting is either 0 or 1 in the
-             * call to `Settings.check_settings_list` above. *)
-            t.settings.enable_push <- x == 1
-          | MaxConcurrentStreams, x ->
-            t.settings.max_concurrent_streams <- x
-          | InitialWindowSize, new_val ->
-            (* From RFC7540§6.9.2:
-             *   [...] a SETTINGS frame can alter the initial flow-control
-             *   window size for streams with active flow-control windows (that
-             *   is, streams in the "open" or "half-closed (remote)" state).
-             *   When the value of SETTINGS_INITIAL_WINDOW_SIZE changes, a
-             *   receiver MUST adjust the size of all stream flow-control
-             *   windows that it maintains by the difference between the new
-             *   pvalue and the old value. *)
-            let old_val = t.settings.initial_window_size in
-            t.settings.initial_window_size <- new_val;
-            let growth = new_val - old_val in
-            let exception Local in
-            (match
-               Scheduler.iter
-                 ~f:(fun stream ->
-                   (* From RFC7540§6.9.2:
-                    *   An endpoint MUST treat a change to
-                    *   SETTINGS_INITIAL_WINDOW_SIZE that causes any
-                    *   flow-control window to exceed the maximum size as a
-                    *   connection error (Section 5.4.1) of type
-                    *   FLOW_CONTROL_ERROR. *)
-                   if not (Scheduler.add_flow stream growth) then
-                     raise Local)
-                 t.streams
-             with
-            | () ->
-              ()
-            | exception Local ->
-              report_connection_error
-                t
-                ~additional_debug_data:
-                  (Format.sprintf
-                     "Window size for stream would exceed %d"
-                     Settings.WindowSize.max_window_size)
-                Error_code.FlowControlError)
-          | MaxFrameSize, x ->
-            t.settings.max_frame_size <- x;
-            Scheduler.iter
-              ~f:(fun (Stream { descriptor; _ }) ->
-                if Respd.requires_output descriptor then
-                  descriptor.max_frame_size <- x)
-              t.streams
-          | MaxHeaderListSize, x ->
-            t.settings.max_header_list_size <- Some x)
-        settings;
+      let new_settings =
+        List.fold_left
+          (fun (acc : Settings.t) item ->
+            match item with
+            | Settings.HeaderTableSize, x ->
+              (* From RFC7540§6.5.2:
+               *   Allows the sender to inform the remote endpoint of the maximum
+               *   size of the header compression table used to decode header
+               *   blocks, in octets. *)
+              Hpack.Encoder.set_capacity t.hpack_encoder x;
+              { acc with header_table_size = x }
+            | EnablePush, x ->
+              (* We've already verified that this setting is either 0 or 1 in the
+               * call to `Settings.check_settings_list` above. *)
+              { acc with enable_push = x == 1 }
+            | MaxConcurrentStreams, x ->
+              { acc with max_concurrent_streams = x }
+            | InitialWindowSize, new_val ->
+              (* From RFC7540§6.9.2:
+               *   [...] a SETTINGS frame can alter the initial flow-control
+               *   window size for streams with active flow-control windows (that
+               *   is, streams in the "open" or "half-closed (remote)" state).
+               *   When the value of SETTINGS_INITIAL_WINDOW_SIZE changes, a
+               *   receiver MUST adjust the size of all stream flow-control
+               *   windows that it maintains by the difference between the new
+               *   pvalue and the old value. *)
+              let old_val = t.settings.initial_window_size in
+              let growth = new_val - old_val in
+              let exception Local in
+              (match
+                 Scheduler.iter
+                   ~f:(fun stream ->
+                     (* From RFC7540§6.9.2:
+                      *   An endpoint MUST treat a change to
+                      *   SETTINGS_INITIAL_WINDOW_SIZE that causes any
+                      *   flow-control window to exceed the maximum size as a
+                      *   connection error (Section 5.4.1) of type
+                      *   FLOW_CONTROL_ERROR. *)
+                     if not (Scheduler.add_flow stream growth) then
+                       raise Local)
+                   t.streams
+               with
+              | () ->
+                ()
+              | exception Local ->
+                report_connection_error
+                  t
+                  ~additional_debug_data:
+                    (Format.sprintf
+                       "Window size for stream would exceed %d"
+                       Settings.WindowSize.max_window_size)
+                  Error_code.FlowControlError);
+              { acc with initial_window_size = new_val }
+            | MaxFrameSize, x ->
+              Scheduler.iter
+                ~f:(fun (Stream { descriptor; _ }) ->
+                  if Respd.requires_output descriptor then
+                    descriptor.max_frame_size <- x)
+                t.streams;
+              { acc with max_frame_size = x }
+            | MaxHeaderListSize, x ->
+              { acc with max_header_list_size = Some x })
+          t.settings
+          settings
+      in
+      t.settings <- new_settings;
       let frame_info =
         Writer.make_frame_info
           ~flags:Flags.(set_ack default_flags)
@@ -1119,13 +1124,10 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
       default_push_handler
   in
   let settings =
-    { Settings.default_settings with
-      max_frame_size = config.read_buffer_size
-    ; max_concurrent_streams = config.max_concurrent_streams
-    ; initial_window_size = config.initial_window_size
-    ; enable_push =
-        (* If the caller is not going to process PUSH_PROMISE frames, just
-         * disable it. *)
+    { (Config.to_settings config) with
+      (* If the caller is not going to process PUSH_PROMISE frames, just
+       * disable it. *)
+      enable_push =
         config.enable_server_push && push_handler != default_push_handler
     }
   in
@@ -1219,13 +1221,9 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
   Writer.write_connection_preface t.writer settings;
   (* If a higher value for initial window size is configured, add more
    * tokens to the connection (we have no streams at this point). *)
-  (if
-   t.settings.initial_window_size
-   > Settings.default_settings.initial_window_size
- then
+  (if t.settings.initial_window_size > Settings.default.initial_window_size then
      let diff =
-       t.settings.initial_window_size
-       - Settings.default_settings.initial_window_size
+       t.settings.initial_window_size - Settings.default.initial_window_size
      in
      send_window_update t t.streams diff);
   t

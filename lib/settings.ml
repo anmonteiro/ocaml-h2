@@ -1,5 +1,5 @@
 (*----------------------------------------------------------------------------
- *  Copyright (c) 2019 António Nuno Monteiro
+ *  Copyright (c) 2019-2020 António Nuno Monteiro
  *
  *  All rights reserved.
  *
@@ -164,16 +164,16 @@ let check_settings_list ?(is_client = false) settings =
   loop settings
 
 type t =
-  { mutable header_table_size : int
-  ; mutable enable_push : bool
-  ; mutable max_concurrent_streams : int
-  ; mutable initial_window_size : int
-  ; mutable max_frame_size : int
-  ; mutable max_header_list_size : int option
+  { header_table_size : int
+  ; enable_push : bool
+  ; max_concurrent_streams : int
+  ; initial_window_size : int
+  ; max_frame_size : int
+  ; max_header_list_size : int option
   }
 
 (* From RFC7540§11.3 *)
-let default_settings =
+let default =
   { header_table_size = 0x1000
   ; enable_push =
       true
@@ -188,27 +188,25 @@ let default_settings =
 
 let settings_for_the_connection settings =
   let settings_list =
-    if settings.max_frame_size <> default_settings.max_frame_size then
+    if settings.max_frame_size <> default.max_frame_size then
       [ MaxFrameSize, settings.max_frame_size ]
     else
       []
   in
   let settings_list =
-    if
-      settings.max_concurrent_streams <> default_settings.max_concurrent_streams
-    then
+    if settings.max_concurrent_streams <> default.max_concurrent_streams then
       (MaxConcurrentStreams, settings.max_concurrent_streams) :: settings_list
     else
       settings_list
   in
   let settings_list =
-    if settings.initial_window_size <> default_settings.initial_window_size then
+    if settings.initial_window_size <> default.initial_window_size then
       (InitialWindowSize, settings.initial_window_size) :: settings_list
     else
       settings_list
   in
   let settings_list =
-    if settings.enable_push <> default_settings.enable_push then
+    if settings.enable_push <> default.enable_push then
       (EnablePush, if settings.enable_push then 1 else 0) :: settings_list
     else
       settings_list
@@ -263,19 +261,45 @@ let rec write_settings_payload t settings_list =
     BE.write_uint32 t (Int32.of_int value);
     write_settings_payload t xs
 
+let of_settings_list settings =
+  List.fold_left
+    (fun (acc : t) item ->
+      match item with
+      | HeaderTableSize, x ->
+        { acc with header_table_size = x }
+      | EnablePush, x ->
+        { acc with enable_push = x == 1 }
+      | MaxConcurrentStreams, x ->
+        { acc with max_concurrent_streams = x }
+      | InitialWindowSize, new_val ->
+        { acc with initial_window_size = new_val }
+      | MaxFrameSize, x ->
+        { acc with max_frame_size = x }
+      | MaxHeaderListSize, x ->
+        { acc with max_header_list_size = Some x })
+    default
+    settings
+
 let of_base64 encoded =
   match Base64.decode ~alphabet:Base64.uri_safe_alphabet encoded with
   | Ok settings_payload ->
     let settings_payload_length =
       String.length settings_payload / octets_per_setting
     in
-    Angstrom.parse_string
-      (parse_settings_payload settings_payload_length)
-      settings_payload
+    (match
+       Angstrom.parse_string
+         (parse_settings_payload settings_payload_length)
+         settings_payload
+     with
+    | Ok settings ->
+      Ok (of_settings_list settings)
+    | Error _ as e ->
+      e)
   | Error (`Msg msg) ->
     Error msg
 
-let to_base64 settings =
+let to_base64 t =
+  let settings = settings_for_the_connection t in
   let faraday = Faraday.create (List.length settings * 6) in
   write_settings_payload faraday settings;
   let settings_hex = Faraday.serialize_to_string faraday in
@@ -304,5 +328,5 @@ let pp_hum formatter t =
     Format.fprintf formatter "@[(%S %d)@]" (string_of_key key) value
   in
   Format.fprintf formatter "@[(";
-  Format.pp_print_list pp_elem formatter t;
+  Format.pp_print_list pp_elem formatter (settings_for_the_connection t);
   Format.fprintf formatter ")@]"

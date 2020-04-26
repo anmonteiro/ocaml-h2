@@ -911,7 +911,7 @@ module Server_connection_tests = struct
         "Connection settings were set as per the incoming settings"
         true
         (t.settings
-        = { Settings.default_settings with
+        = { Settings.default with
             enable_push = false
           ; max_concurrent_streams = 2
           });

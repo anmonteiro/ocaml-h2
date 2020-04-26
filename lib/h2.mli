@@ -621,6 +621,28 @@ module Error_code : sig
     | UnknownError_code of int32
 end
 
+(* TODO: needs docs *)
+module Settings : sig
+  type t =
+    { header_table_size : int
+    ; enable_push : bool
+    ; max_concurrent_streams : int
+    ; initial_window_size : int
+    ; max_frame_size : int
+    ; max_header_list_size : int option
+    }
+
+  val default : t
+
+  val of_base64 : string -> (t, string) result
+  (** {{:https://tools.ietf.org/html/rfc7540#section-3.2.1} RFC7540§3.2.1} *)
+
+  val to_base64 : t -> (string, string) result
+  (** {{:https://tools.ietf.org/html/rfc7540#section-3.2.1} RFC7540§3.2.1} *)
+
+  val pp_hum : Format.formatter -> t -> unit
+end
+
 (** {2 HTTP/2 Configuration} *)
 module Config : sig
   type t =
@@ -643,6 +665,8 @@ module Config : sig
   val default : t
   (** [default] is a configuration record with all parameters set to their
       default values. *)
+
+  val to_settings : t -> Settings.t
 end
 
 (** {2 Server Connection} *)
@@ -890,27 +914,4 @@ module Client_connection : sig
       [`Close _] and {!next_write_operation} will do the same will return a
       [`Write _] until all buffered output has been flushed, at which point it
       will return [`Close]. *)
-end
-
-(* TODO: needs docs *)
-module Settings : sig
-  type key =
-    | HeaderTableSize
-    | EnablePush
-    | MaxConcurrentStreams
-    | InitialWindowSize
-    | MaxFrameSize (* this means payload size *)
-    | MaxHeaderListSize
-
-  type value = int
-
-  type settings_list = (key * value) list
-
-  val of_base64 : string -> (settings_list, string) result
-  (** {{:https://tools.ietf.org/html/rfc7540#section-3.2.1} RFC7540§3.2.1} *)
-
-  val to_base64 : settings_list -> (string, string) result
-  (** {{:https://tools.ietf.org/html/rfc7540#section-3.2.1} RFC7540§3.2.1} *)
-
-  val pp_hum : Format.formatter -> settings_list -> unit
 end
