@@ -31,75 +31,22 @@
  *---------------------------------------------------------------------------*)
 
 open Lwt.Infix
-
-module Io :
-  H2_lwt.IO with type socket = Lwt_unix.file_descr and type addr = Unix.sockaddr =
-struct
-  type socket = Lwt_unix.file_descr
-
-  type addr = Unix.sockaddr
-
-  let shutdown socket command =
-    try Lwt_unix.shutdown socket command with
-    | Unix.Unix_error (Unix.ENOTCONN, _, _) ->
-      ()
-
-  let shutdown_send socket =
-    if not (Lwt_unix.state socket = Lwt_unix.Closed) then
-      shutdown socket Unix.SHUTDOWN_SEND
-
-  let shutdown_receive socket =
-    if not (Lwt_unix.state socket = Lwt_unix.Closed) then
-      shutdown socket Unix.SHUTDOWN_RECEIVE
-
-  let close socket =
-    if Lwt_unix.state socket <> Lwt_unix.Closed then
-      Lwt.catch (fun () -> Lwt_unix.close socket) (fun _exn -> Lwt.return_unit)
-    else
-      Lwt.return_unit
-
-  let read fd bigstring ~off ~len =
-    Lwt.catch
-      (fun () ->
-        Lwt_bytes.read fd bigstring off len >|= function
-        | 0 ->
-          `Eof
-        | n ->
-          `Ok n)
-      (function
-        | Unix.Unix_error (Unix.EBADF, _, _) ->
-          (* If the socket is closed we need to feed EOF to the state machine. *)
-          Lwt.return `Eof
-        | exn ->
-          Lwt.async (fun () -> close fd);
-          Lwt.fail exn)
-
-  let writev = Faraday_lwt_unix.writev_of_fd
-
-  let state socket =
-    match Lwt_unix.state socket with
-    | Aborted _ ->
-      `Error
-    | Closed ->
-      `Closed
-    | Opened ->
-      `Open
-end
-
 module Config = H2.Config
 
 module Server = struct
-  include H2_lwt.Server (Io)
+  include H2_lwt.Server (Gluten_lwt_unix.Server)
 
   module TLS = struct
-    include H2_lwt.Server (Tls_io.Io)
+    include H2_lwt.Server (Gluten_lwt_unix.Server.TLS)
 
     let create_connection_handler_with_default
         ~certfile ~keyfile ?config ~request_handler ~error_handler
       =
-      let make_tls_server = Tls_io.make_server ~certfile ~keyfile in
+      let make_tls_server =
+        Gluten_lwt_unix.Server.TLS.create_default ~certfile ~keyfile
+      in
       fun client_addr socket ->
-        make_tls_server socket >>= fun tls_server ->
+        make_tls_server client_addr socket >>= fun tls_server ->
         create_connection_handler
           ?config
           ~request_handler
@@ -109,14 +56,16 @@ module Server = struct
   end
 
   module SSL = struct
-    include H2_lwt.Server (Ssl_io.Io)
+    include H2_lwt.Server (Gluten_lwt_unix.Server.SSL)
 
     let create_connection_handler_with_default
         ~certfile ~keyfile ?config ~request_handler ~error_handler
       =
-      let make_ssl_server = Ssl_io.make_server ~certfile ~keyfile in
+      let make_ssl_server =
+        Gluten_lwt_unix.Server.SSL.create_default ~certfile ~keyfile
+      in
       fun client_addr socket ->
-        make_ssl_server socket >>= fun ssl_server ->
+        make_ssl_server client_addr socket >>= fun ssl_server ->
         create_connection_handler
           ?config
           ~request_handler
@@ -127,25 +76,25 @@ module Server = struct
 end
 
 module Client = struct
-  include H2_lwt.Client (Io)
+  include H2_lwt.Client (Gluten_lwt_unix.Client)
 
   module TLS = struct
-    include H2_lwt.Client (Tls_io.Io)
+    include H2_lwt.Client (Gluten_lwt_unix.Client.TLS)
 
     let create_connection_with_default
         ?config ?push_handler ~error_handler socket
       =
-      Tls_io.make_client socket >>= fun tls_client ->
+      Gluten_lwt_unix.Client.TLS.create_default socket >>= fun tls_client ->
       create_connection ?config ?push_handler ~error_handler tls_client
   end
 
   module SSL = struct
-    include H2_lwt.Client (Ssl_io.Io)
+    include H2_lwt.Client (Gluten_lwt_unix.Client.SSL)
 
     let create_connection_with_default
         ?config ?push_handler ~error_handler socket
       =
-      Ssl_io.make_client socket >>= fun ssl_client ->
+      Gluten_lwt_unix.Client.SSL.create_default socket >>= fun ssl_client ->
       create_connection ?config ?push_handler ~error_handler ssl_client
   end
 end

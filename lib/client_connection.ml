@@ -1373,6 +1373,14 @@ let read t bs ~off ~len = Reader.read_with_more t.reader bs ~off ~len Incomplete
 let read_eof t bs ~off ~len =
   Reader.read_with_more t.reader bs ~off ~len Complete
 
+(* XXX(anmonteiro): this function is here to please the Gluten `RUNTIME`
+ * interface.
+ *
+ * We don't expect this function to ever be called. H2 never issues `Yield`
+ * commands because the connection is multiplexed, and it's therefore always
+ * looking to read frames from the peer. *)
+let yield_reader _t k = k ()
+
 let next_write_operation t =
   flush_request_body t;
   Writer.next t.writer

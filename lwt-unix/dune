@@ -1,21 +1,4 @@
 (library
  (name h2_lwt_unix)
  (public_name h2-lwt-unix)
- (libraries
-  faraday-lwt-unix
-  h2
-  h2-lwt
-  lwt.unix
-  (select
-   ssl_io.ml
-   from
-   (lwt_ssl -> ssl_io_real.ml)
-   (-> ssl_io_dummy.ml))
-  (select
-   tls_io.ml
-   from
-   (tls.lwt -> tls_io_real.ml)
-   (-> tls_io_dummy.ml)))
- (modules h2_lwt_unix tls_io ssl_io)
- (flags
-  (:standard -safe-string)))
+ (libraries faraday-lwt-unix h2 h2-lwt gluten-lwt-unix lwt.unix))

@@ -1,13 +1,14 @@
 open Lwt.Infix
 
 module Http2 = struct
+  open H2
+
   let connection_handler
-      :  Httpaf.Request.t -> Bigstringaf.t H2.IOVec.t list -> Unix.sockaddr
-      -> Lwt_unix.file_descr -> (unit, string) result Lwt.t
+      :  Httpaf.Request.t -> Bigstringaf.t H2.IOVec.t list
+      -> (Server_connection.t, string) result
     =
-    let open H2 in
-    let request_handler : Unix.sockaddr -> Reqd.t -> unit =
-     fun _client_address request_descriptor ->
+    let request_handler : H2.Server_connection.request_handler =
+     fun request_descriptor ->
       let request = Reqd.request request_descriptor in
       match request.meth, request.target with
       | `GET, "/" | `POST, "/" ->
@@ -54,11 +55,7 @@ module Http2 = struct
           (Response.create `Method_not_allowed)
           ""
     in
-    let error_handler
-        :  Unix.sockaddr -> ?request:H2.Request.t -> _
-        -> (Headers.t -> [ `write ] Body.t) -> unit
-      =
-     fun _client_address ?request:_ error start_response ->
+    let error_handler ?request:_ error start_response =
       let response_body = start_response Headers.empty in
       (match error with
       | `Exn exn ->
@@ -69,12 +66,12 @@ module Http2 = struct
       Body.close_writer response_body
     in
     fun http_request request_body ->
-      H2_lwt_unix.Server.create_h2c_connection_handler
+      H2.Server_connection.create_h2c
         ?config:None
         ~http_request
         ~request_body
-        ~request_handler
         ~error_handler
+        request_handler
 end
 
 let connection_handler =
@@ -83,7 +80,7 @@ let connection_handler =
   let module Reqd = Httpaf.Reqd in
   let module Response = Httpaf.Response in
   let module Status = Httpaf.Status in
-  let upgrade_handler request addr socket =
+  let upgrade_handler request upgrade () =
     let off = 0 in
     let len = 3 in
     let body =
@@ -92,10 +89,10 @@ let connection_handler =
       ; { buffer = Bigstringaf.of_string ~off ~len "baz"; off; len }
       ]
     in
-    Http2.connection_handler request body addr socket >|= ignore
-    (* let to_ = Lwt_timeout.create 2 (fun () -> Http2.connection_handler
-       request addr socket |> ignore) in Lwt_timeout.start to_; let x, _ =
-       Lwt.wait () in x >|= fun () -> Format.eprintf "never ending?@." *)
+    let connection =
+      Stdlib.Result.get_ok (Http2.connection_handler request body)
+    in
+    upgrade (Gluten.make (module H2.Server_connection) connection)
   in
   let http_error_handler _client_address ?request:_ error handle =
     let message =
@@ -109,12 +106,13 @@ let connection_handler =
     Body.write_string body message;
     Body.close_writer body
   in
-  let request_handler addr reqd =
+  let request_handler _addr (reqd : Httpaf.Reqd.t Gluten.Reqd.t) =
+    let { Gluten.Reqd.reqd; upgrade } = reqd in
     let headers =
       Headers.of_list [ "Connection", "Upgrade"; "Upgrade", "h2c" ]
     in
     let request = Reqd.request reqd in
-    Reqd.respond_with_upgrade reqd headers (upgrade_handler request addr)
+    Reqd.respond_with_upgrade reqd headers (upgrade_handler request upgrade)
   in
   Httpaf_lwt_unix.Server.create_connection_handler
     ?config:None

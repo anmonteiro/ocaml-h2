@@ -14,6 +14,9 @@ Unreleased
   terminate cleanly. ([#112](https://github.com/anmonteiro/ocaml-h2/pull/112))
 - h2: Refactor the `Settings` module API
   ([#113](https://github.com/anmonteiro/ocaml-h2/pull/113))
+- h2-lwt, h2-lwt-unix: Use [gluten](https://github.com/anmonteiro/gluten) to
+  implement the Lwt-based runtimes
+  ([#114](https://github.com/anmonteiro/ocaml-h2/pull/114))
 
 0.5.0 2019-12-19
 --------------

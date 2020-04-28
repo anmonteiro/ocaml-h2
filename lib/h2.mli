@@ -713,7 +713,7 @@ module Server_connection : sig
       See {{:https://tools.ietf.org/html/rfc7540#section-3.2} RFC7540§3.2} for
       more details. *)
 
-  val next_read_operation : t -> [ `Read | `Close ]
+  val next_read_operation : t -> [> `Read | `Close ]
   (** [next_read_operation t] returns a value describing the next operation that
       the caller should conduct on behalf of the connection. *)
 
@@ -751,6 +751,11 @@ module Server_connection : sig
   (** [yield_writer t continue] registers with the connection to call [continue]
       when writing should resume. {!yield_writer} should be called after
       {!next_write_operation} returns a [`Yield] value. *)
+
+  val yield_reader : t -> (unit -> unit) -> unit
+  (** [yield_reader t continue] immediately calls [continue]. This function *
+      shouldn't generally be called and it's only here to simplify adhering * to
+      the Gluten [RUNTIME] module type. *)
 
   val report_exn : t -> exn -> unit
   (** [report_exn t exn] reports that an error [exn] has been caught and that it
@@ -863,7 +868,7 @@ module Client_connection : sig
       {{:https://tools.ietf.org/html/rfc7540#section-6.8} RFC7540§6.8} for more
       details). *)
 
-  val next_read_operation : t -> [ `Read | `Close ]
+  val next_read_operation : t -> [> `Read | `Close ]
   (** [next_read_operation t] returns a value describing the next operation that
       the caller should conduct on behalf of the connection. *)
 
@@ -901,6 +906,11 @@ module Client_connection : sig
   (** [yield_writer t continue] registers with the connection to call [continue]
       when writing should resume. {!yield_writer} should be called after
       {!next_write_operation} returns a [`Yield] value. *)
+
+  val yield_reader : t -> (unit -> unit) -> unit
+  (** [yield_reader t continue] immediately calls [continue]. This function *
+      shouldn't generally be called and it's only here to simplify adhering * to
+      the Gluten [RUNTIME] module type. *)
 
   val report_exn : t -> exn -> unit
   (** [report_exn t exn] reports that an error [exn] has been caught and that it
