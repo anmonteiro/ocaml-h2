@@ -41,13 +41,10 @@ module Server : sig
        and type addr := Unix.sockaddr
 
   module TLS : sig
-    val create_connection_handler
-      :  ?config:Config.t
-      -> request_handler:(Unix.sockaddr -> Server_connection.request_handler)
-      -> error_handler:(Unix.sockaddr -> Server_connection.error_handler)
-      -> Unix.sockaddr
-      -> Tls_io.descriptor
-      -> unit Lwt.t
+    include
+      H2_lwt.Server
+        with type socket = Gluten_lwt_unix.Server.TLS.socket
+         and type addr := Unix.sockaddr
 
     val create_connection_handler_with_default
       :  certfile:string
@@ -61,13 +58,10 @@ module Server : sig
   end
 
   module SSL : sig
-    val create_connection_handler
-      :  ?config:Config.t
-      -> request_handler:(Unix.sockaddr -> Server_connection.request_handler)
-      -> error_handler:(Unix.sockaddr -> Server_connection.error_handler)
-      -> Unix.sockaddr
-      -> Ssl_io.descriptor
-      -> unit Lwt.t
+    include
+      H2_lwt.Server
+        with type socket = Gluten_lwt_unix.Server.SSL.socket
+         and type addr := Unix.sockaddr
 
     val create_connection_handler_with_default
       :  certfile:string
@@ -82,10 +76,16 @@ module Server : sig
 end
 
 module Client : sig
-  include H2_lwt.Client with type socket = Lwt_unix.file_descr
+  include
+    H2_lwt.Client
+      with type socket = Lwt_unix.file_descr
+       and type runtime = Gluten_lwt_unix.Client.t
 
   module TLS : sig
-    include H2_lwt.Client with type socket = Tls_io.descriptor
+    include
+      H2_lwt.Client
+        with type socket = Gluten_lwt_unix.Client.TLS.socket
+         and type runtime = Gluten_lwt_unix.Client.TLS.t
 
     val create_connection_with_default
       :  ?config:Config.t
@@ -97,7 +97,10 @@ module Client : sig
   end
 
   module SSL : sig
-    include H2_lwt.Client with type socket = Ssl_io.descriptor
+    include
+      H2_lwt.Client
+        with type socket = Gluten_lwt_unix.Client.SSL.socket
+         and type runtime = Gluten_lwt_unix.Client.SSL.t
 
     val create_connection_with_default
       :  ?config:Config.t

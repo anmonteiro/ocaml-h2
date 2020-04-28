@@ -33,8 +33,9 @@
 open Lwt.Infix
 
 module Io :
-  H2_lwt.IO with type socket = Lwt_unix.file_descr and type addr = Unix.sockaddr =
-struct
+  Gluten_lwt.IO
+    with type socket = Lwt_unix.file_descr
+     and type addr = Unix.sockaddr = struct
   type socket = Lwt_unix.file_descr
 
   type addr = Unix.sockaddr
@@ -89,17 +90,19 @@ end
 module Config = H2.Config
 
 module Server = struct
-  include H2_lwt.Server (Io)
+  include H2_lwt.Server (Gluten_lwt_unix.Server)
 
   module TLS = struct
-    include H2_lwt.Server (Tls_io.Io)
+    include H2_lwt.Server (Gluten_lwt_unix.Server.TLS)
 
     let create_connection_handler_with_default
         ~certfile ~keyfile ?config ~request_handler ~error_handler
       =
-      let make_tls_server = Tls_io.make_server ~certfile ~keyfile in
+      let make_tls_server =
+        Gluten_lwt_unix.Server.TLS.create_default ~certfile ~keyfile
+      in
       fun client_addr socket ->
-        make_tls_server socket >>= fun tls_server ->
+        make_tls_server client_addr socket >>= fun tls_server ->
         create_connection_handler
           ?config
           ~request_handler
@@ -109,14 +112,16 @@ module Server = struct
   end
 
   module SSL = struct
-    include H2_lwt.Server (Ssl_io.Io)
+    include H2_lwt.Server (Gluten_lwt_unix.Server.SSL)
 
     let create_connection_handler_with_default
         ~certfile ~keyfile ?config ~request_handler ~error_handler
       =
-      let make_ssl_server = Ssl_io.make_server ~certfile ~keyfile in
+      let make_ssl_server =
+        Gluten_lwt_unix.Server.SSL.create_default ~certfile ~keyfile
+      in
       fun client_addr socket ->
-        make_ssl_server socket >>= fun ssl_server ->
+        make_ssl_server client_addr socket >>= fun ssl_server ->
         create_connection_handler
           ?config
           ~request_handler
@@ -127,25 +132,25 @@ module Server = struct
 end
 
 module Client = struct
-  include H2_lwt.Client (Io)
+  include H2_lwt.Client (Gluten_lwt_unix.Client)
 
   module TLS = struct
-    include H2_lwt.Client (Tls_io.Io)
+    include H2_lwt.Client (Gluten_lwt_unix.Client.TLS)
 
     let create_connection_with_default
         ?config ?push_handler ~error_handler socket
       =
-      Tls_io.make_client socket >>= fun tls_client ->
+      Gluten_lwt_unix.Client.TLS.create_default socket >>= fun tls_client ->
       create_connection ?config ?push_handler ~error_handler tls_client
   end
 
   module SSL = struct
-    include H2_lwt.Client (Ssl_io.Io)
+    include H2_lwt.Client (Gluten_lwt_unix.Client.SSL)
 
     let create_connection_with_default
         ?config ?push_handler ~error_handler socket
       =
-      Ssl_io.make_client socket >>= fun ssl_client ->
+      Gluten_lwt_unix.Client.SSL.create_default socket >>= fun ssl_client ->
       create_connection ?config ?push_handler ~error_handler ssl_client
   end
 end

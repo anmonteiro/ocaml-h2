@@ -32,32 +32,6 @@
 
 open H2
 
-module type IO = sig
-  type socket
-
-  type addr
-
-  val read
-    :  socket
-    -> Bigstringaf.t
-    -> off:int
-    -> len:int
-    -> [ `Eof | `Ok of int ] Lwt.t
-
-  val writev
-    :  socket
-    -> Faraday.bigstring Faraday.iovec list
-    -> [ `Closed | `Ok of int ] Lwt.t
-
-  val shutdown_send : socket -> unit
-
-  val shutdown_receive : socket -> unit
-
-  val close : socket -> unit Lwt.t
-
-  val state : socket -> [ `Open | `Error | `Closed ]
-end
-
 module type Server = sig
   type socket
 
@@ -70,26 +44,18 @@ module type Server = sig
     -> addr
     -> socket
     -> unit Lwt.t
-
-  (* From RFC7540§3.1:
-   *   The string "h2c" identifies the protocol where HTTP/2 is run over
-   *   cleartext TCP. This identifier is used in the HTTP/1.1 Upgrade header
-   *   field and in any place where HTTP/2 over TCP is identified. *)
-  val create_h2c_connection_handler
-    :  ?config:Config.t
-    -> http_request:Httpaf.Request.t
-    -> ?request_body:Bigstringaf.t IOVec.t list
-    -> request_handler:(addr -> Server_connection.request_handler)
-    -> error_handler:(addr -> Server_connection.error_handler)
-    -> addr
-    -> socket
-    -> (unit, string) result Lwt.t
 end
 
 module type Client = sig
-  type t
-
   type socket
+
+  (* The underlying Gluten runtime *)
+  type runtime
+
+  type t =
+    { connection : H2.Client_connection.t
+    ; runtime : runtime
+    }
 
   val create_connection
     :  ?config:Config.t
@@ -98,20 +64,6 @@ module type Client = sig
     -> error_handler:Client_connection.error_handler
     -> socket
     -> t Lwt.t
-
-  (* From RFC7540§3.1:
-   *   The string "h2c" identifies the protocol where HTTP/2 is run over
-   *   cleartext TCP. This identifier is used in the HTTP/1.1 Upgrade header
-   *   field and in any place where HTTP/2 over TCP is identified. *)
-  val create_h2c_connection
-    :  ?config:Config.t
-    -> ?push_handler:
-         (Request.t -> (Client_connection.response_handler, unit) result)
-    -> http_request:Httpaf.Request.t
-    -> error_handler:Client_connection.error_handler
-    -> Client_connection.response_handler * Client_connection.error_handler
-    -> socket
-    -> (t, string) result Lwt.t
 
   val request
     :  t

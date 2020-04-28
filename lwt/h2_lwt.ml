@@ -32,283 +32,64 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
-open H2
 open Lwt.Infix
-
-module Buffer : sig
-  type t
-
-  val create : int -> t
-
-  val get : t -> f:(Bigstringaf.t -> off:int -> len:int -> int) -> int
-
-  val put
-    :  t
-    -> f:(Bigstringaf.t -> off:int -> len:int -> [ `Eof | `Ok of int ] Lwt.t)
-    -> [ `Eof | `Ok of int ] Lwt.t
-end = struct
-  type t =
-    { buffer : Bigstringaf.t
-    ; mutable off : int
-    ; mutable len : int
-    }
-
-  let create size =
-    let buffer = Bigstringaf.create size in
-    { buffer; off = 0; len = 0 }
-
-  let compress t =
-    if t.len = 0 then (
-      t.off <- 0;
-      t.len <- 0)
-    else if t.off > 0 then (
-      Bigstringaf.blit t.buffer ~src_off:t.off t.buffer ~dst_off:0 ~len:t.len;
-      t.off <- 0)
-
-  let get t ~f =
-    let n = f t.buffer ~off:t.off ~len:t.len in
-    t.off <- t.off + n;
-    t.len <- t.len - n;
-    if t.len = 0 then
-      t.off <- 0;
-    n
-
-  let put t ~f =
-    compress t;
-    (* XXX: dinosaure wants a comment here. *)
-    assert (t.off = 0);
-    f t.buffer ~off:(t.off + t.len) ~len:(Bigstringaf.length t.buffer - t.len)
-    (* - t.off *)
-    >|= function
-    | `Eof ->
-      `Eof
-    | `Ok n as ret ->
-      t.len <- t.len + n;
-      ret
-end
-
-module Config = H2.Config
 include H2_lwt_intf
 
-module Server (Io : IO) = struct
-  type socket = Io.socket
-
-  let report_exn connection socket exn =
-    (* This needs to handle two cases. The case where the socket is
-     * still open and we can gracefully respond with an error, and the
-     * case where the client has already left. The second case is more
-     * common when communicating over HTTPS, given that the remote peer
-     * can close the connection without requiring an acknowledgement:
-     *
-     * From RFC5246§7.2.1:
-     *   Unless some other fatal alert has been transmitted, each party
-     *   is required to send a close_notify alert before closing the
-     *   write side of the connection.  The other party MUST respond
-     *   with a close_notify alert of its own and close down the
-     *   connection immediately, discarding any pending writes. It is
-     *   not required for the initiator of the close to wait for the
-     *   responding close_notify alert before closing the read side of
-     *   the connection. *)
-    (match Io.state socket with
-    | `Error | `Closed ->
-      H2.Server_connection.shutdown connection
-    | `Open ->
-      H2.Server_connection.report_exn connection exn);
-    Lwt.return_unit
-
-  let start_read_write_loops ~config connection socket =
-    let read_buffer = Buffer.create config.Config.read_buffer_size in
-    let read_loop_exited, notify_read_loop_exited = Lwt.wait () in
-    let read_loop () =
-      let rec read_loop_step () =
-        match Server_connection.next_read_operation connection with
-        | `Read ->
-          Buffer.put ~f:(Io.read socket) read_buffer >>= ( function
-          | `Eof ->
-            Buffer.get read_buffer ~f:(fun bigstring ~off ~len ->
-                Server_connection.read_eof connection bigstring ~off ~len)
-            |> ignore;
-            read_loop_step ()
-          | `Ok _ ->
-            Buffer.get read_buffer ~f:(fun bigstring ~off ~len ->
-                Server_connection.read connection bigstring ~off ~len)
-            |> ignore;
-            read_loop_step () )
-        | `Close ->
-          Lwt.wakeup_later notify_read_loop_exited ();
-          Io.shutdown_receive socket;
-          Lwt.return_unit
-      in
-      Lwt.async (fun () ->
-          Lwt.catch read_loop_step (report_exn connection socket))
-    in
-    let writev = Io.writev socket in
-    let write_loop_exited, notify_write_loop_exited = Lwt.wait () in
-    let rec write_loop () =
-      let rec write_loop_step () =
-        match Server_connection.next_write_operation connection with
-        | `Write io_vectors ->
-          writev io_vectors >>= fun result ->
-          Server_connection.report_write_result connection result;
-          write_loop_step ()
-        | `Yield ->
-          Server_connection.yield_writer connection write_loop;
-          Lwt.return_unit
-        | `Close _ ->
-          Lwt.wakeup_later notify_write_loop_exited ();
-          Io.shutdown_send socket;
-          Lwt.return_unit
-      in
-      Lwt.async (fun () ->
-          Lwt.catch write_loop_step (report_exn connection socket))
-    in
-    read_loop ();
-    write_loop ();
-    Lwt.join [ read_loop_exited; write_loop_exited ] >>= fun () ->
-    Io.close socket
+module Server (Server_runtime : Gluten_lwt.Server) = struct
+  type socket = Server_runtime.socket
 
   let create_connection_handler
-      ?(config = Config.default)
+      ?(config = H2.Config.default)
       ~request_handler
       ~error_handler
       client_addr
       socket
     =
-    let connection =
-      Server_connection.create
+    let create_connection =
+      H2.Server_connection.create
         ~config
         ~error_handler:(error_handler client_addr)
-        (request_handler client_addr)
     in
-    start_read_write_loops ~config connection socket
-
-  (* Creates an upgraded HTTP/2 connection from an HTTP/1.1 upgrade request. *)
-  let create_h2c_connection_handler
-      ?(config = Config.default)
-      ~http_request
-      ?(request_body = [])
-      ~request_handler
-      ~error_handler
+    Server_runtime.create_connection_handler
+      ~read_buffer_size:config.read_buffer_size
+      ~protocol:(module H2.Server_connection)
+      ~create_protocol:create_connection
+      ~request_handler:(fun addr { Gluten.Reqd.reqd; _ } ->
+        (* XXX(anmonteiro): This is a little weird but a nicer API because
+         * HTTP/2 doesn't support upgrading the connection. *)
+        request_handler addr reqd)
       client_addr
       socket
-    =
-    match
-      Server_connection.create_h2c
-        ~config
-        ~error_handler:(error_handler client_addr)
-        ~http_request
-        ~request_body
-        (request_handler client_addr)
-    with
-    | Ok connection ->
-      Lwt_result.ok (start_read_write_loops ~config connection socket)
-    | Error msg ->
-      Lwt_result.fail msg
 end
 
-module Client (Io : IO) = struct
-  module Client_connection = H2.Client_connection
+module Client (Client_runtime : Gluten_lwt.Client) = struct
+  type socket = Client_runtime.socket
 
-  type socket = Io.socket
+  type runtime = Client_runtime.t
 
   type t =
-    { connection : Client_connection.t
-    ; socket : socket
+    { connection : H2.Client_connection.t
+    ; runtime : runtime
     }
 
-  let start_read_write_loops ~config connection socket =
-    let read_buffer = Buffer.create config.Config.read_buffer_size in
-    let read_loop_exited, notify_read_loop_exited = Lwt.wait () in
-    let read_loop () =
-      let rec read_loop_step () =
-        match Client_connection.next_read_operation connection with
-        | `Read ->
-          Buffer.put ~f:(Io.read socket) read_buffer >>= ( function
-          | `Eof ->
-            Buffer.get read_buffer ~f:(fun bigstring ~off ~len ->
-                Client_connection.read_eof connection bigstring ~off ~len)
-            |> ignore;
-            read_loop_step ()
-          | `Ok _ ->
-            Buffer.get read_buffer ~f:(fun bigstring ~off ~len ->
-                Client_connection.read connection bigstring ~off ~len)
-            |> ignore;
-            read_loop_step () )
-        | `Close ->
-          Lwt.wakeup_later notify_read_loop_exited ();
-          Io.shutdown_receive socket;
-          Lwt.return_unit
-      in
-      Lwt.async (fun () ->
-          Lwt.catch read_loop_step (fun exn ->
-              Client_connection.report_exn connection exn;
-              Lwt.return_unit))
-    in
-    let writev = Io.writev socket in
-    let write_loop_exited, notify_write_loop_exited = Lwt.wait () in
-    let rec write_loop () =
-      let rec write_loop_step () =
-        match Client_connection.next_write_operation connection with
-        | `Write io_vectors ->
-          writev io_vectors >>= fun result ->
-          Client_connection.report_write_result connection result;
-          write_loop_step ()
-        | `Yield ->
-          Client_connection.yield_writer connection write_loop;
-          Lwt.return_unit
-        | `Close _ ->
-          Lwt.wakeup_later notify_write_loop_exited ();
-          Io.shutdown_send socket;
-          Lwt.return_unit
-      in
-      Lwt.async (fun () ->
-          Lwt.catch write_loop_step (fun exn ->
-              Client_connection.report_exn connection exn;
-              Lwt.return_unit))
-    in
-    read_loop ();
-    write_loop ();
-    Lwt.async (fun () ->
-        Lwt.join [ read_loop_exited; write_loop_exited ] >>= fun () ->
-        Io.close socket);
-    Lwt.return { connection; socket }
-
   let create_connection
-      ?(config = Config.default) ?push_handler ~error_handler socket
+      ?(config = H2.Config.default) ?push_handler ~error_handler socket
     =
     let connection =
-      Client_connection.create ~config ?push_handler ~error_handler
+      H2.Client_connection.create ~config ?push_handler ~error_handler
     in
-    start_read_write_loops ~config connection socket
-
-  let create_h2c_connection
-      ?(config = Config.default)
-      ?push_handler
-      ~http_request
-      ~error_handler
-      (response_handler, response_error_handler)
+    Client_runtime.create
+      ~read_buffer_size:config.read_buffer_size
+      ~protocol:(module H2.Client_connection)
+      connection
       socket
-    =
-    match
-      Client_connection.create_h2c
-        ~config
-        ?push_handler
-        ~http_request
-        ~error_handler
-        (response_handler, response_error_handler)
-    with
-    | Ok connection ->
-      Lwt_result.ok (start_read_write_loops ~config connection socket)
-    | Error msg ->
-      Lwt_result.fail msg
+    >|= fun runtime -> { runtime; connection }
 
-  let request t = Client_connection.request t.connection
+  let request t = H2.Client_connection.request t.connection
 
-  let ping t = Client_connection.ping t.connection
+  let ping t = H2.Client_connection.ping t.connection
 
-  let shutdown t =
-    Client_connection.shutdown t.connection;
-    Io.close t.socket
+  let shutdown t = Client_runtime.shutdown t.runtime
 
-  let is_closed t = Client_connection.is_closed t.connection
+  let is_closed t = Client_runtime.is_closed t.runtime
 end
