@@ -31,62 +31,6 @@
  *---------------------------------------------------------------------------*)
 
 open Lwt.Infix
-
-module Io :
-  Gluten_lwt.IO
-    with type socket = Lwt_unix.file_descr
-     and type addr = Unix.sockaddr = struct
-  type socket = Lwt_unix.file_descr
-
-  type addr = Unix.sockaddr
-
-  let shutdown socket command =
-    try Lwt_unix.shutdown socket command with
-    | Unix.Unix_error (Unix.ENOTCONN, _, _) ->
-      ()
-
-  let shutdown_send socket =
-    if not (Lwt_unix.state socket = Lwt_unix.Closed) then
-      shutdown socket Unix.SHUTDOWN_SEND
-
-  let shutdown_receive socket =
-    if not (Lwt_unix.state socket = Lwt_unix.Closed) then
-      shutdown socket Unix.SHUTDOWN_RECEIVE
-
-  let close socket =
-    if Lwt_unix.state socket <> Lwt_unix.Closed then
-      Lwt.catch (fun () -> Lwt_unix.close socket) (fun _exn -> Lwt.return_unit)
-    else
-      Lwt.return_unit
-
-  let read fd bigstring ~off ~len =
-    Lwt.catch
-      (fun () ->
-        Lwt_bytes.read fd bigstring off len >|= function
-        | 0 ->
-          `Eof
-        | n ->
-          `Ok n)
-      (function
-        | Unix.Unix_error (Unix.EBADF, _, _) ->
-          (* If the socket is closed we need to feed EOF to the state machine. *)
-          Lwt.return `Eof
-        | exn ->
-          Lwt.async (fun () -> close fd);
-          Lwt.fail exn)
-
-  let writev = Faraday_lwt_unix.writev_of_fd
-
-  let state socket =
-    match Lwt_unix.state socket with
-    | Aborted _ ->
-      `Error
-    | Closed ->
-      `Closed
-    | Opened ->
-      `Open
-end
-
 module Config = H2.Config
 
 module Server = struct
