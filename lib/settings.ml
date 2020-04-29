@@ -288,6 +288,7 @@ let of_base64 encoded =
     in
     (match
        Angstrom.parse_string
+         ~consume:All
          (parse_settings_payload settings_payload_length)
          settings_payload
      with
