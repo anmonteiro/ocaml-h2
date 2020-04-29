@@ -45,19 +45,16 @@ module Server (Server_runtime : Gluten_lwt.Server) = struct
       client_addr
       socket
     =
-    let create_connection =
+    let connection =
       H2.Server_connection.create
         ~config
         ~error_handler:(error_handler client_addr)
+        (request_handler client_addr)
     in
     Server_runtime.create_connection_handler
       ~read_buffer_size:config.read_buffer_size
       ~protocol:(module H2.Server_connection)
-      ~create_protocol:create_connection
-      ~request_handler:(fun addr { Gluten.Reqd.reqd; _ } ->
-        (* XXX(anmonteiro): This is a little weird but a nicer API because
-         * HTTP/2 doesn't support upgrading the connection. *)
-        request_handler addr reqd)
+      connection
       client_addr
       socket
 end
