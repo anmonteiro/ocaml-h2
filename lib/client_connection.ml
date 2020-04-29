@@ -762,7 +762,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *)
       (* XXX(anmonteiro): When we add logging support, add something here. *)
       ()
-    | Active (_, _active_request), Error_code.NoError ->
+    | Active _, Error_code.NoError ->
       (* If we're active (i.e. not done sending the request body), finish the
        * stream, in order to mark it for cleanup.
        *
