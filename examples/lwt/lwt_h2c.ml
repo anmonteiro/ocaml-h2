@@ -106,8 +106,8 @@ let connection_handler =
     Body.write_string body message;
     Body.close_writer body
   in
-  let request_handler _addr (reqd : Httpaf.Reqd.t Gluten.Reqd.t) =
-    let { Gluten.Reqd.reqd; upgrade } = reqd in
+  let request_handler _addr (reqd : Httpaf.Reqd.t Gluten.reqd) =
+    let { Gluten.reqd; upgrade } = reqd in
     let headers =
       Headers.of_list [ "Connection", "Upgrade"; "Upgrade", "h2c" ]
     in
