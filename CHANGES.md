@@ -19,6 +19,9 @@ Unreleased
   ([#114](https://github.com/anmonteiro/ocaml-h2/pull/114))
 - h2: set a lower bound on Angstrom 0.14.0
   ([#118](https://github.com/anmonteiro/ocaml-h2/pull/118))
+- h2: in the client implementation, don't report an error if the server has
+  sent an `RST_STREAM` frame after sending a complete response
+  ([#119](https://github.com/anmonteiro/ocaml-h2/pull/119)).
 
 0.5.0 2019-12-19
 --------------
