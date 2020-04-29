@@ -739,14 +739,38 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
   let { Frame.stream_id; _ } = frame_header in
   match Scheduler.find t.streams stream_id with
   | Some respd ->
-    (match respd.state with
-    | Idle ->
+    (match respd.state, error_code with
+    | Idle, _ ->
       (* From RFC7540§6.4:
        *   RST_STREAM frames MUST NOT be sent for a stream in the "idle"
        *   state. If a RST_STREAM frame identifying an idle stream is
        *   received, the recipient MUST treat this as a connection error
        *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
       report_connection_error t Error_code.ProtocolError
+    | Closed _, Error_code.NoError ->
+      (* From RFC7540§8.1:
+       *   A server can send a complete response prior to the client sending an
+       *   entire request if the response does not depend on any portion of the
+       *   request that has not been sent and received. When this is true, a
+       *   server MAY request that the client abort transmission of a request
+       *   without error by sending a RST_STREAM with an error code of NO_ERROR
+       *   after sending a complete response (i.e., a frame with the END_STREAM
+       *   flag).
+       *
+       * If we're done sending the request there's nothing to do here, allow
+       * the stream to finish successfully.
+       *)
+      (* XXX(anmonteiro): When we add logging support, add something here. *)
+      ()
+    | Active _, Error_code.NoError ->
+      (* If we're active (i.e. not done sending the request body), finish the
+       * stream, in order to mark it for cleanup.
+       *
+       * Note: we don't close the request body here because the client may be
+       * in the process of writing to it, and while we're not going to send
+       * those bytes to the output channel, we don't want to fail when writing
+       * either. *)
+      Stream.finish_stream respd (ResetByThem error_code)
     | _ ->
       (* From RFC7540§6.4:
        *   The RST_STREAM frame fully terminates the referenced stream and

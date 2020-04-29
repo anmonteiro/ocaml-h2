@@ -180,13 +180,16 @@ module Client_connection_tests = struct
     | `Yield | `Close _ ->
       Alcotest.fail "Expected client connection to issue a `Write operation"
 
-  let flush_request t =
-    let _, lenv = flush_pending_writes t in
-    report_write_result t (`Ok lenv);
+  let writer_yielded t =
     Alcotest.(check write_operation)
       "Writer yields"
       `Yield
       (next_write_operation t)
+
+  let flush_request t =
+    let _, lenv = flush_pending_writes t in
+    report_write_result t (`Ok lenv);
+    writer_yielded t
 
   let write_eof t = report_write_result t `Closed
 
@@ -948,6 +951,114 @@ module Client_connection_tests = struct
     write_eof t;
     writer_closed t ~unread:lenv
 
+  let test_request_rst_stream_no_error () =
+    let t = create_and_handle_preface () in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let handler_called = ref false in
+    let response_handler _response _response_body = handler_called := true in
+    let error_handler_called = ref false in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~error_handler:(fun _ ->
+          error_handler_called := true;
+          Alcotest.fail "Didn't expect error handler to be called.")
+        ~response_handler
+    in
+    flush_request t;
+    Body.close_writer request_body;
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
+    let frame = List.hd frames in
+    Alcotest.(check int)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      (Frame.FrameType.serialize Data)
+      Frame.(frame.frame_header.frame_type |> FrameType.serialize);
+    Alcotest.(check bool)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      true
+      (Flags.test_end_stream frame.frame_header.flags);
+    report_write_result t (`Ok lenv);
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    read_response
+      t
+      hpack_encoder
+      ~flags:Flags.(default_flags |> set_end_header)
+      (Response.create `OK ~headers:(Headers.of_list [ "content-length", "3" ]));
+    read_response_body t "foo";
+    let rst_stream =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = RSTStream
+          }
+      ; frame_payload = Frame.RSTStream Error_code.NoError
+      }
+    in
+    read_frames t [ rst_stream ];
+    Alcotest.(check bool) "Response handler called" true !handler_called;
+    Alcotest.(check bool) "error handler not called" false !error_handler_called
+
+  let test_request_body_rst_stream_no_error () =
+    let t = create_and_handle_preface () in
+    let request =
+      Request.create
+        ~scheme:"http"
+        ~headers:(Headers.of_list [ "content-length", "5" ])
+        `GET
+        "/"
+    in
+    let handler_called = ref false in
+    let response_handler _response _response_body = handler_called := true in
+    let error_handler_called = ref false in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~error_handler:(fun _ ->
+          error_handler_called := true;
+          Alcotest.fail "Didn't expect error handler to be called.")
+        ~response_handler
+    in
+    flush_request t;
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    read_response
+      t
+      hpack_encoder
+      ~flags:Flags.(default_flags |> set_end_header)
+      (Response.create `OK ~headers:(Headers.of_list [ "content-length", "3" ]));
+    read_response_body t "foo";
+    let rst_stream =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = RSTStream
+          }
+      ; frame_payload = Frame.RSTStream Error_code.NoError
+      }
+    in
+    read_frames t [ rst_stream ];
+    Alcotest.(check bool) "Response handler called" true !handler_called;
+    Alcotest.(check bool) "error handler not called" false !error_handler_called;
+    (* Send the rest of the request body. *)
+    Body.write_string request_body "hello";
+    Body.close_writer request_body;
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check (list int))
+      "Only writes are WINDOW_UPDATE frames"
+      (List.map
+         Frame.FrameType.serialize
+         Frame.FrameType.[ WindowUpdate; WindowUpdate ])
+      (List.map
+         (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+           Frame.FrameType.serialize frame_type)
+         frames);
+    report_write_result t (`Ok lenv);
+    writer_yielded t
+
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
@@ -979,6 +1090,12 @@ module Client_connection_tests = struct
       , `Quick
       , test_nonzero_content_length_no_data_frames )
     ; "premature remote close with pending bytes", `Quick, test_unexpected_eof
+    ; ( "request, server sends RST_STREAM with NO_ERROR"
+      , `Quick
+      , test_request_rst_stream_no_error )
+    ; ( "request, server sends RST_STREAM with NO_ERROR"
+      , `Quick
+      , test_request_body_rst_stream_no_error )
     ]
 end
 
