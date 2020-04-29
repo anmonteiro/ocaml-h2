@@ -1,4 +1,4 @@
-(lang dune 1.5)
+(lang dune 1.7)
 (using fmt 1.1)
 (name h2)
 
