@@ -17,6 +17,8 @@ Unreleased
 - h2-lwt, h2-lwt-unix: Use [gluten](https://github.com/anmonteiro/gluten) to
   implement the Lwt-based runtimes
   ([#114](https://github.com/anmonteiro/ocaml-h2/pull/114))
+- h2: set a lower bound on Angstrom 0.14.0
+  ([#118](https://github.com/anmonteiro/ocaml-h2/pull/118))
 
 0.5.0 2019-12-19
 --------------
