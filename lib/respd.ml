@@ -61,7 +61,7 @@ type response_info =
 
 type active_request =
   { request : Request.t
-  ; request_body : [ `read ] Body.t
+  ; request_body : [ `writer ] Body.t
   ; response_handler : response_handler
   ; wakeup_writer : Optional_thunk.t
   }
@@ -227,7 +227,7 @@ let report_error t error error_code =
     (* Not allowed to send RST_STREAM frames in these states *)
     ignore (_report_error t error error_code)
 
-let close_request_body { request_body; _ } = Body.close_reader request_body
+let close_request_body { request_body; _ } = Body.close_writer request_body
 
 let error_code t =
   match fst t.error_code with #error as error -> Some error | `Ok -> None
