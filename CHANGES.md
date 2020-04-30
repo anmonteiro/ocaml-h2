@@ -1,4 +1,4 @@
-Unreleased
+0.6.0 2020-04-29
 --------------
 
 - h2-async: add Async adapter
