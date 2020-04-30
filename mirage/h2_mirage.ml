@@ -30,81 +30,16 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
-open Lwt.Infix
-
-module Make_IO (Flow : Mirage_flow.S) :
-  H2_lwt.IO with type socket = Flow.flow and type addr = unit = struct
+module Server (Flow : Mirage_flow.S) = struct
   type socket = Flow.flow
 
-  type addr = unit
-
-  let shutdown flow = Flow.close flow
-
-  let shutdown_receive flow = Lwt.async (fun () -> shutdown flow)
-
-  let shutdown_send flow = Lwt.async (fun () -> shutdown flow)
-
-  let close flow = shutdown flow
-
-  let read flow bigstring ~off ~len:_ =
-    Lwt.catch
-      (fun () ->
-        Flow.read flow >|= function
-        | Ok (`Data buf) ->
-          Bigstringaf.blit
-            buf.buffer
-            ~src_off:buf.off
-            bigstring
-            ~dst_off:off
-            ~len:buf.len;
-          `Ok buf.len
-        | Ok `Eof ->
-          `Eof
-        | Error error ->
-          raise (Failure (Format.asprintf "%a" Flow.pp_error error)))
-      (fun exn -> shutdown flow >>= fun () -> Lwt.fail exn)
-
-  let writev flow iovecs =
-    let cstruct_iovecs =
-      List.map
-        (fun { Faraday.buffer; off; len } ->
-          Cstruct.of_bigarray ~off ~len buffer)
-        iovecs
-    in
-    Lwt.catch
-      (fun () ->
-        Flow.writev flow cstruct_iovecs >|= fun x ->
-        match x with
-        | Ok () ->
-          `Ok (Cstruct.lenv cstruct_iovecs)
-        | Error `Closed ->
-          `Closed
-        | Error other_error ->
-          raise (Failure (Format.asprintf "%a" Flow.pp_write_error other_error)))
-      (fun exn -> shutdown flow >>= fun () -> Lwt.fail exn)
-
-  let state _flow = `Open
-end
-
-module Server (Flow : Mirage_flow.S) = struct
-  type flow = Flow.flow
-
-  include H2_lwt.Server (Make_IO (Flow))
+  module Server_runtime = H2_lwt.Server (Gluten_mirage.Server (Flow))
 
   let create_connection_handler ?config ~request_handler ~error_handler flow =
     let request_handler () = request_handler in
     let error_handler () = error_handler in
-    create_connection_handler ?config ~request_handler ~error_handler () flow
-
-  let create_h2c_connection_handler
-      ?config ~http_request ?request_body ~request_handler ~error_handler flow
-    =
-    let request_handler () = request_handler in
-    let error_handler () = error_handler in
-    create_h2c_connection_handler
+    Server_runtime.create_connection_handler
       ?config
-      ~http_request
-      ?request_body
       ~request_handler
       ~error_handler
       ()
@@ -114,25 +49,14 @@ end
 (* Almost like the `H2_lwt.Server` module type but we don't need the client
  * address argument in Mirage. It's somewhere else. *)
 module type Server = sig
-  open H2
-
-  type flow
+  type socket
 
   val create_connection_handler
-    :  ?config:Config.t
-    -> request_handler:Server_connection.request_handler
-    -> error_handler:Server_connection.error_handler
-    -> flow
+    :  ?config:H2.Config.t
+    -> request_handler:H2.Server_connection.request_handler
+    -> error_handler:H2.Server_connection.error_handler
+    -> socket
     -> unit Lwt.t
-
-  val create_h2c_connection_handler
-    :  ?config:Config.t
-    -> http_request:Httpaf.Request.t
-    -> ?request_body:Bigstringaf.t IOVec.t list
-    -> request_handler:Server_connection.request_handler
-    -> error_handler:Server_connection.error_handler
-    -> flow
-    -> (unit, string) result Lwt.t
 end
 
 module Server_with_conduit = struct
@@ -149,14 +73,6 @@ module Server_with_conduit = struct
     Lwt.return listen
 end
 
-module type Client = sig
-  type flow
+module type Client = H2_lwt.Client
 
-  include H2_lwt.Client with type socket := flow
-end
-
-module Client (Flow : Mirage_flow.S) = struct
-  type flow = Flow.flow
-
-  include H2_lwt.Client (Make_IO (Flow))
-end
+module Client (Flow : Mirage_flow.S) = H2_lwt.Client (Gluten_mirage.Client (Flow))

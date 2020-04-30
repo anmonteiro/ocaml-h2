@@ -12,25 +12,29 @@ let secrets = generic_kv_ro "../../../certificates"
 
 let server =
   let packages =
-    [ package ~sublibs:[ "mirage" ] "tls"
+    [ package "tls-mirage"
     ; package ~pin:"git+https://github.com/anmonteiro/httpaf#fork" "httpaf"
     ; package ~pin:"git+https://github.com/anmonteiro/httpaf#fork" "httpaf-lwt"
     ; package
         ~pin:"git+https://github.com/anmonteiro/httpaf#fork"
         "httpaf-mirage"
-    ; package
-        ~pin:"git+https://github.com/anmonteiro/httpaf#fork"
-        "httpaf-lwt-unix"
-    ; package "h2-mirage"
+    ; package ~pin:"file://../../.." "h2"
+    ; package ~pin:"file://../../.." "h2-lwt"
+    ; package ~pin:"file://../../.." "h2-mirage"
     ]
   in
   foreign
     ~packages
-    ~deps:[ abstract nocrypto ]
     "Unikernel.Make"
-    (stackv4 @-> kv_ro @-> console @-> pclock @-> job)
+    (random @-> stackv4 @-> kv_ro @-> console @-> pclock @-> job)
 
 let () =
   register
     "alpn_unikernel"
-    [ server $ stack $ secrets $ default_console $ default_posix_clock ]
+    [ server
+      $ default_random
+      $ stack
+      $ secrets
+      $ default_console
+      $ default_posix_clock
+    ]
