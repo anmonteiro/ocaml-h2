@@ -1,7 +1,7 @@
 open Httpaf
 
-let redirect_handler : ('a, 'io) Reqd.t -> unit =
- fun request_descriptor ->
+let redirect_handler : Reqd.t Gluten.reqd -> unit =
+ fun { Gluten.reqd; _ } ->
   let response =
     Response.create
       ~headers:
@@ -9,7 +9,7 @@ let redirect_handler : ('a, 'io) Reqd.t -> unit =
            [ "Location", "https://localhost:9443"; "Connection", "close" ])
       `Moved_permanently
   in
-  Reqd.respond_with_string request_descriptor response ""
+  Reqd.respond_with_string reqd response ""
 
 let redirect_error_handler
     : ?request:Request.t -> _ -> (Headers.t -> [ `write ] Body.t) -> unit
@@ -18,9 +18,9 @@ let redirect_error_handler
   let response_body = start_response Headers.empty in
   Body.close_writer response_body
 
-let request_handler : ('a, 'io) Reqd.t -> unit =
- fun request_descriptor ->
-  let { Request.headers; _ } = Reqd.request request_descriptor in
+let request_handler : Reqd.t Gluten.reqd -> unit =
+ fun { Gluten.reqd; _ } ->
+  let { Request.headers; _ } = Reqd.request reqd in
   let response_content_type =
     match Headers.get headers "Content-Type" with
     | Some request_content_type ->
@@ -38,7 +38,7 @@ let request_handler : ('a, 'io) Reqd.t -> unit =
            ])
       `OK
   in
-  Reqd.respond_with_string request_descriptor response response_body
+  Reqd.respond_with_string reqd response response_body
 
 let error_handler
     : ?request:Request.t -> _ -> (Headers.t -> [ `write ] Body.t) -> unit

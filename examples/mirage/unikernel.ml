@@ -7,7 +7,7 @@ module Dispatch (C : Mirage_console.S) (Http2 : HTTP2) = struct
   let log c fmt = Printf.ksprintf (C.log c) fmt
 
   let get_content c path =
-    log c "Replying: %s" path >|= fun () -> "Hello from the httpaf unikernel"
+    log c "Replying: %s" path >|= fun () -> "Hello from the h2 unikernel"
 
   let dispatcher c reqd =
     let { Request.target; _ } = Reqd.request reqd in

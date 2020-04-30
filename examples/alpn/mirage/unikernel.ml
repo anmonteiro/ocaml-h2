@@ -45,6 +45,7 @@ module Dispatch (Http : HTTP) (Https : HTTP) (Http2 : HTTP2) = struct
 end
 
 module Make
+    (Random : Mirage_random.S)
     (S : Mirage_stack.V4)
     (KEYS : Mirage_kv.RO)
     (C : Mirage_console.S)
@@ -88,9 +89,9 @@ struct
            Tls.Config.Ciphers.supported)
       ()
 
-  let start stack keys c _clock () =
+  let start _random stack keys c _clock =
     tls_init keys >>= fun tls_config ->
-    log c "started unikernel listen" >>= fun () ->
+    log c "started unikernel listen (http: 8080, https: 9443)" >>= fun () ->
     S.listen_tcpv4 stack ~port:8080 D.redirect;
     S.listen_tcpv4 stack ~port:9443 (fun flow ->
         with_tls tls_config flow ~f:(fun flow ->
