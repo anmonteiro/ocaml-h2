@@ -62,7 +62,7 @@ in
     h2-mirage = buildH2 {
       pname = "h2-mirage";
       doCheck = false;
-      propagatedBuildInputs = [
+      propagatedBuildInputs = with h2Packages; [
         conduit-mirage
         h2-lwt
         gluten-mirage

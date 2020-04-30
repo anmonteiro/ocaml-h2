@@ -24,7 +24,7 @@ depends: [
   "httpaf"
 ]
 synopsis:
-  "A high-performance, memory-efficient, and scalable HTTP/2 library for for OCaml"
+  "A high-performance, memory-efficient, and scalable HTTP/2 library for OCaml"
 description: """
 h2 is an implementation of the HTTP/2 specification entirely in OCaml. It
 is based on the concepts in http/af, and therefore uses the Angstrom and
