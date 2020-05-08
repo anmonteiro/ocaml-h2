@@ -24,6 +24,10 @@
   ([#119](https://github.com/anmonteiro/ocaml-h2/pull/119)).
 - h2-mirage: Use [gluten](https://github.com/anmonteiro/gluten) to implement
   h2-mirage ([#120](https://github.com/anmonteiro/ocaml-h2/pull/120))
+- h2-lwt-unix: fix a regression that prevented the SSL / TLS runtimes to
+  negotiate an HTTP/2 connection over the ALPN extension of TLS, in their
+  default implementations
+  ([#122](https://github.com/anmonteiro/ocaml-h2/pull/122))
 
 0.5.0 2019-12-19
 --------------

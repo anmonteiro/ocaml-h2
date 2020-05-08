@@ -86,58 +86,6 @@ let create_active_response response response_body =
     ; trailers = None
     }
 
-let request t =
-  match t.state with
-  | Idle | Reserved (WaitingForPeer | PartialHeaders _ | FullHeaders) ->
-    failwith "h2.Respd.request: request is not active"
-  | Reserved (ActiveMessage { request; _ }) ->
-    request
-  | Active (_, { request; _ }) ->
-    request
-  | Closed _ ->
-    failwith "h2.Respd.request: request has ended"
-
-let request_body t =
-  match t.state with
-  | Idle | Reserved (WaitingForPeer | PartialHeaders _ | FullHeaders) ->
-    failwith "h2.Respd.request: request is not active"
-  | Reserved (ActiveMessage { request_body; _ }) ->
-    request_body
-  | Active (_, { request_body; _ }) ->
-    request_body
-  | Closed _ ->
-    failwith "h2.Respd.request: request has ended"
-
-let response t =
-  match t.state with
-  | Idle ->
-    None
-  | Reserved _ ->
-    None
-  | Active
-      ( ( Open (ActiveMessage { response; _ })
-        | HalfClosed (ActiveMessage { response; _ }) )
-      , _ ) ->
-    Some response
-  | Active ((Open _ | HalfClosed _), _) ->
-    None
-  | Closed _ ->
-    None
-
-let response_exn t =
-  match t.state with
-  | Idle | Reserved _ ->
-    failwith "h2.Respd.response_exn: response has not arrived"
-  | Active
-      ( ( Open (ActiveMessage { response; _ })
-        | HalfClosed (ActiveMessage { response; _ }) )
-      , _ ) ->
-    response
-  | Active ((Open _ | HalfClosed _), _) ->
-    failwith "h2.Respd.response_exn: response has not arrived"
-  | Closed _ ->
-    assert false
-
 let response_body_exn t =
   match t.state with
   | Idle | Reserved _ ->
@@ -150,7 +98,7 @@ let response_body_exn t =
   | Active ((Open _ | HalfClosed _), _) ->
     failwith "h2.Respd.response_exn: response has not arrived"
   | Closed _ ->
-    assert false
+    failwith "h2.Respd.response_exn: stream already closed"
 
 (* let close_stream t =
  *match t.error_code with
@@ -227,8 +175,6 @@ let report_error t error error_code =
     (* Not allowed to send RST_STREAM frames in these states *)
     ignore (_report_error t error error_code)
 
-let close_request_body { request_body; _ } = Body.close_writer request_body
-
 let error_code t =
   match fst t.error_code with #error as error -> Some error | `Ok -> None
 
@@ -247,13 +193,6 @@ let requires_output t =
     false
   | Closed _ ->
     false
-
-let write_buffer_data writer ~off ~len frame_info buffer =
-  match buffer with
-  | `String str ->
-    Writer.write_data writer ~off ~len frame_info str
-  | `Bigstring bstr ->
-    Writer.schedule_data writer ~off ~len frame_info bstr
 
 let flush_request_body t ~max_bytes =
   match t.state with

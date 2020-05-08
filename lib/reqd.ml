@@ -419,8 +419,6 @@ let try_with t f : (unit, exn) Result.result =
 
 (* Private API, not exposed to the user through h2.mli *)
 
-let close_request_body { request_body; _ } = Body.close_reader request_body
-
 let error_code t =
   match fst t.error_code with #error as error -> Some error | `Ok -> None
 
