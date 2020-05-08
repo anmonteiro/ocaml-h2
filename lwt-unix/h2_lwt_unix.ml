@@ -46,7 +46,8 @@ module Server = struct
         Gluten_lwt_unix.Server.TLS.create_default ~certfile ~keyfile
       in
       fun client_addr socket ->
-        make_tls_server client_addr socket >>= fun tls_server ->
+        make_tls_server ~alpn_protocols:[ "h2" ] client_addr socket
+        >>= fun tls_server ->
         create_connection_handler
           ?config
           ~request_handler
@@ -65,7 +66,8 @@ module Server = struct
         Gluten_lwt_unix.Server.SSL.create_default ~certfile ~keyfile
       in
       fun client_addr socket ->
-        make_ssl_server client_addr socket >>= fun ssl_server ->
+        make_ssl_server ~alpn_protocols:[ "h2" ] client_addr socket
+        >>= fun ssl_server ->
         create_connection_handler
           ?config
           ~request_handler
@@ -84,7 +86,8 @@ module Client = struct
     let create_connection_with_default
         ?config ?push_handler ~error_handler socket
       =
-      Gluten_lwt_unix.Client.TLS.create_default socket >>= fun tls_client ->
+      Gluten_lwt_unix.Client.TLS.create_default ~alpn_protocols:[ "h2" ] socket
+      >>= fun tls_client ->
       create_connection ?config ?push_handler ~error_handler tls_client
   end
 
@@ -94,7 +97,8 @@ module Client = struct
     let create_connection_with_default
         ?config ?push_handler ~error_handler socket
       =
-      Gluten_lwt_unix.Client.SSL.create_default socket >>= fun ssl_client ->
+      Gluten_lwt_unix.Client.SSL.create_default ~alpn_protocols:[ "h2" ] socket
+      >>= fun ssl_client ->
       create_connection ?config ?push_handler ~error_handler ssl_client
   end
 end
