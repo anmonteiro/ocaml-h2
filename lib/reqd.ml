@@ -72,7 +72,6 @@ type active_stream =
          * trailer headers are emitted. *)
   ; mutable trailers_parser : partial_headers option
   ; mutable trailers : Headers.t option
-  ; wakeup_writer : Optional_thunk.t
   ; create_push_stream :
       unit -> (t, [ `Push_disabled | `Stream_ids_exhausted ]) result
   }
@@ -85,16 +84,13 @@ and t = (state, [ `Ok | error ], error_handler) Stream.stream
 let create_active_request request request_body =
   { request; request_body; request_body_bytes = Int64.zero }
 
-let create_active_stream
-    encoder body_buffer_size wakeup_writer create_push_stream
-  =
+let create_active_stream encoder body_buffer_size create_push_stream =
   { body_buffer_size
   ; encoder
   ; response_state = Waiting
   ; wait_for_first_flush = true
   ; trailers_parser = None
   ; trailers = None
-  ; wakeup_writer
   ; create_push_stream
   }
 
@@ -191,7 +187,7 @@ let send_fixed_response t s response data =
       s.response_state <- Fixed { response; iovec }
     else
       s.response_state <- Complete response;
-    Optional_thunk.call_if_some s.wakeup_writer
+    Writer.wakeup t.writer
   | Streaming _ ->
     failwith "h2.Reqd.respond_with_*: response already started"
   | Fixed _ | Complete _ ->
@@ -234,11 +230,15 @@ let send_streaming_response ~flush_headers_immediately t s response =
       Writer.make_frame_info ~max_frame_size:t.max_frame_size t.id
     in
     let response_body_buffer = Bigstringaf.create s.body_buffer_size in
-    let response_body = Body.create response_body_buffer s.wakeup_writer in
+    let response_body =
+      Body.create
+        response_body_buffer
+        (Optional_thunk.some (fun () -> Writer.wakeup t.writer))
+    in
     Writer.write_response_headers t.writer s.encoder frame_info response;
     if s.wait_for_first_flush then Writer.yield t.writer;
     s.response_state <- Streaming (response, response_body);
-    Optional_thunk.call_if_some s.wakeup_writer;
+    Writer.wakeup t.writer;
     response_body
   | Streaming _ ->
     failwith "h2.Reqd.respond_with_streaming: response already started"
@@ -283,18 +283,12 @@ let start_push_stream t s request =
       frame_info
       ~promised_id:promised_reqd.id
       request;
-    let { encoder; body_buffer_size; create_push_stream; wakeup_writer; _ } =
-      s
-    in
+    let { encoder; body_buffer_size; create_push_stream; _ } = s in
     (* From RFC7540§8.2:
      *   Promised requests [...] MUST NOT include a request body. *)
     let request_info = create_active_request request Body.empty in
     let active_stream =
-      create_active_stream
-        encoder
-        body_buffer_size
-        wakeup_writer
-        create_push_stream
+      create_active_stream encoder body_buffer_size create_push_stream
     in
     (* From RFC7540§8.2.1:
      *   Sending a PUSH_PROMISE frame creates a new stream and puts the stream
@@ -305,7 +299,7 @@ let start_push_stream t s request =
      * might immediately call one of the `respond_with` functions and expect
      * the stream to be in the `Reserved` state. *)
     promised_reqd.state <- Reserved (request_info, active_stream);
-    Optional_thunk.call_if_some wakeup_writer;
+    Writer.wakeup t.writer;
     Ok promised_reqd
   | Error e ->
     Error (e :> [ `Push_disabled | `Stream_cant_push | `Stream_ids_exhausted ])

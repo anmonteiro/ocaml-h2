@@ -75,7 +75,6 @@ type t =
          * we haven't eceived an acknowledgment from the client. *)
   ; mutable unacked_settings : int
   ; mutable did_send_go_away : bool
-  ; mutable wakeup_writer : Optional_thunk.t
         (* From RFC7540§4.3:
          *   Header compression is stateful. One compression context and one
          *   decompression context are used for the entire connection. *)
@@ -85,16 +84,7 @@ type t =
 
 let is_closed t = Reader.is_closed t.reader && Writer.is_closed t.writer
 
-let on_wakeup_writer t k =
-  if is_closed t then
-    failwith "on_wakeup_writer on closed conn"
-  else
-    t.wakeup_writer <- Optional_thunk.some k
-
-let wakeup_writer t =
-  let f = t.wakeup_writer in
-  t.wakeup_writer <- Optional_thunk.none;
-  Optional_thunk.call_if_some f
+let wakeup_writer t = Writer.wakeup t.writer
 
 let shutdown_reader t = Reader.force_close t.reader
 
@@ -285,7 +275,7 @@ let handle_headers t ~end_stream reqd active_stream headers =
             in
             Body.create
               (Bigstringaf.create buffer_size)
-              active_stream.wakeup_writer
+              (Optional_thunk.some (fun () -> Writer.wakeup t.writer))
         in
         let request_info = Reqd.create_active_request request request_body in
         if end_stream then (
@@ -438,7 +428,6 @@ let process_first_headers_block t frame_header reqd headers_block =
     Reqd.create_active_stream
       t.hpack_encoder
       t.config.response_body_buffer_size
-      t.wakeup_writer
       (create_push_stream t)
   in
   reqd.Stream.state <-
@@ -1194,7 +1183,6 @@ let create_generic ~h2c ~config ~error_handler request_handler =
       ; receiving_headers_for_stream = None
       ; did_send_go_away = false
       ; unacked_settings = 0
-      ; wakeup_writer = Optional_thunk.none
       ; hpack_encoder = Hpack.Encoder.(create settings.header_table_size)
       ; hpack_decoder = Hpack.Decoder.(create settings.header_table_size)
       }
@@ -1220,7 +1208,6 @@ let handle_h2c_request t headers request_body_iovecs =
       Reqd.create_active_stream
         t.hpack_encoder
         t.config.response_body_buffer_size
-        t.wakeup_writer
         (create_push_stream t)
     in
     t.max_client_stream_id <- reqd.Stream.id;
@@ -1381,4 +1368,4 @@ let yield_writer t k =
   if Writer.is_closed t.writer then
     k ()
   else
-    on_wakeup_writer t k
+    Writer.on_wakeup_writer t.writer k
