@@ -73,7 +73,6 @@ type t =
   ; pending_pings : (unit -> unit) Queue.t
   ; error_handler : error -> unit
   ; push_handler : Request.t -> (response_handler, unit) result
-  ; mutable wakeup_writer : Optional_thunk.t
         (* From RFC7540§4.3:
          *   Header compression is stateful. One compression context and one
          *   decompression context are used for the entire connection. *)
@@ -84,17 +83,6 @@ type t =
 let default_push_handler = Sys.opaque_identity (fun _ -> Ok (fun _ _ -> ()))
 
 let is_closed t = Reader.is_closed t.reader && Writer.is_closed t.writer
-
-let on_wakeup_writer t k =
-  if is_closed t then
-    failwith "on_wakeup_writer on closed conn"
-  else
-    t.wakeup_writer <- Optional_thunk.some k
-
-let wakeup_writer t =
-  let f = t.wakeup_writer in
-  t.wakeup_writer <- Optional_thunk.none;
-  Optional_thunk.call_if_some f
 
 let shutdown_reader t = Reader.force_close t.reader
 
@@ -153,7 +141,7 @@ let report_error t = function
            * shutting down. *)
           shutdown_rw t);
       t.did_send_go_away <- true;
-      wakeup_writer t)
+      Writer.wakeup t.writer)
   | StreamError (stream_id, error) ->
     (match Scheduler.find t.streams stream_id with
     | Some respd ->
@@ -165,7 +153,7 @@ let report_error t = function
          * FRAME_SIZE_ERROR. *)
         let frame_info = Writer.make_frame_info stream_id in
         Writer.write_rst_stream t.writer frame_info error);
-    wakeup_writer t
+    Writer.wakeup t.writer
 
 let report_connection_error t ?(additional_debug_data = "") error =
   report_error t (ConnectionError (error, additional_debug_data))
@@ -177,7 +165,7 @@ let shutdown t = report_connection_error t Error_code.NoError
 
 let set_error_and_handle t stream error error_code =
   Respd.report_error stream error error_code;
-  wakeup_writer t
+  Writer.wakeup t.writer
 
 let report_exn t exn =
   if not (is_closed t) then
@@ -242,11 +230,7 @@ let handle_push_promise_headers t respd headers =
         respd.state <-
           Active
             ( HalfClosed Stream.WaitingForPeer
-            , { Respd.request
-              ; request_body
-              ; response_handler
-              ; wakeup_writer = t.wakeup_writer
-              } )
+            , { Respd.request; request_body; response_handler } )
       | Error _ ->
         (* From RFC7540§6.6:
          *   Recipients of PUSH_PROMISE frames can choose to reject promised
@@ -294,7 +278,7 @@ let handle_response_headers t respd ~end_stream active_request headers =
           in
           Body.create
             (Bigstringaf.create buffer_size)
-            active_request.Respd.wakeup_writer
+            (Optional_thunk.some (fun () -> Writer.wakeup t.writer))
       in
       let new_response_state =
         Respd.create_active_response response response_body
@@ -576,7 +560,7 @@ let send_window_update
         send_window_update_frame stream_id n
     in
     loop n;
-    wakeup_writer t)
+    Writer.wakeup t.writer)
 
 let process_data_frame t { Frame.frame_header; _ } bstr =
   let open Scheduler in
@@ -908,7 +892,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
        *   frame MUST be empty. *)
       Writer.write_settings t.writer frame_info [];
       t.unacked_settings <- t.unacked_settings + 1;
-      wakeup_writer t
+      Writer.wakeup t.writer
     | Error error ->
       report_error t error
 
@@ -1019,7 +1003,7 @@ let process_ping_frame t { Frame.frame_header; _ } payload =
      *   a PING frame with the ACK flag set in response, with an identical
      *   payload. *)
     Writer.write_ping t.writer frame_info payload;
-    wakeup_writer t
+    Writer.wakeup t.writer
 
 let process_goaway_frame t _frame payload =
   let _last_stream_id, _error, debug_data = payload in
@@ -1048,7 +1032,7 @@ let add_window_increment
     if new_flow > 0 then
       (* Don't bother waking up the writer if the new flow doesn't allow
        * the stream to write. *)
-      wakeup_writer t)
+      Writer.wakeup t.writer)
   else if Stream_identifier.is_connection stream_id then
     report_connection_error
       t
@@ -1226,9 +1210,8 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
       ; push_handler
       ; reader = Reader.client_frames connection_preface_handler frame_handler
       ; writer = Writer.create settings.max_frame_size
-      ; streams = Scheduler.make_root ()
-      ; wakeup_writer =
-          Optional_thunk.none
+      ; streams =
+          Scheduler.make_root ()
           (* From RFC7540§4.3:
            *   Header compression is stateful. One compression context and one
            *   decompression context are used for the entire connection. *)
@@ -1312,9 +1295,8 @@ let create_h2c
              *   it is completely sent. *)
           ; request_body = Body.empty
           ; response_handler
-          ; wakeup_writer = t.wakeup_writer
           } );
-    wakeup_writer t;
+    Writer.wakeup t.writer;
     Ok t
   | Error msg ->
     Error msg
@@ -1323,7 +1305,9 @@ let request t request ~error_handler ~response_handler =
   let max_frame_size = t.settings.max_frame_size in
   let respd = create_and_add_stream t ~error_handler in
   let request_body =
-    Body.create (Bigstringaf.create max_frame_size) t.wakeup_writer
+    Body.create
+      (Bigstringaf.create max_frame_size)
+      (Optional_thunk.some (fun () -> Writer.wakeup t.writer))
   in
   let frame_info =
     Writer.make_frame_info
@@ -1334,14 +1318,8 @@ let request t request ~error_handler ~response_handler =
   Writer.write_request_headers t.writer t.hpack_encoder frame_info request;
   Writer.flush t.writer (fun () ->
       respd.state <-
-        Active
-          ( Open WaitingForPeer
-          , { request
-            ; request_body
-            ; response_handler
-            ; wakeup_writer = t.wakeup_writer
-            } ));
-  wakeup_writer t;
+        Active (Open WaitingForPeer, { request; request_body; response_handler }));
+  Writer.wakeup t.writer;
   (* Closing the request body puts the stream in the half-closed (local) state.
    * This is handled by {!Respd.flush_request_body}, which transitions the
    * state once it verifies that there's no more data to send for the
@@ -1371,7 +1349,7 @@ let ping t ?payload ?(off = 0) callback =
   let frame_info = Writer.make_frame_info Stream_identifier.connection in
   Queue.add callback t.pending_pings;
   Writer.write_ping t.writer frame_info ~off payload;
-  wakeup_writer t
+  Writer.wakeup t.writer
 
 let next_read_operation t =
   if Reader.is_closed t.reader then shutdown_reader t;
@@ -1413,6 +1391,6 @@ let yield_writer t k =
   if Writer.is_closed t.writer then
     k ()
   else
-    on_wakeup_writer t k
+    Writer.on_wakeup_writer t.writer k
 
 let report_write_result t result = Writer.report_result t.writer result

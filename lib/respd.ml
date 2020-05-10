@@ -63,7 +63,6 @@ type active_request =
   { request : Request.t
   ; request_body : [ `writer ] Body.t
   ; response_handler : response_handler
-  ; wakeup_writer : Optional_thunk.t
   }
 
 type active_state =

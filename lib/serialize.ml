@@ -326,6 +326,7 @@ module Writer = struct
            * being closed before all buffered output could be written. Useful
            * for detecting error cases. *)
     ; headers_block_buffer : Bigstringaf.t
+    ; mutable wakeup : Optional_thunk.t
     }
 
   let create buffer_size =
@@ -335,6 +336,7 @@ module Writer = struct
     ; encoder
     ; drained_bytes = 0
     ; headers_block_buffer = Bigstringaf.create 0x1000
+    ; wakeup = Optional_thunk.none
     }
 
   let faraday t = t.encoder
@@ -560,6 +562,19 @@ module Writer = struct
 
   let write_go_away t frame_info ~debug_data ~last_stream_id error =
     write_go_away_frame t.encoder frame_info last_stream_id error debug_data
+
+  let on_wakeup_writer t k =
+    if Faraday.is_closed t.encoder then
+      failwith "on_wakeup_writer on closed conn"
+    else if Optional_thunk.is_some t.wakeup then
+      failwith "on_wakeup: only one callback can be registered at a time"
+    else
+      t.wakeup <- Optional_thunk.some k
+
+  let wakeup t =
+    let f = t.wakeup in
+    t.wakeup <- Optional_thunk.none;
+    Optional_thunk.call_if_some f
 
   let flush t f = flush t.encoder f
 
