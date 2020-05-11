@@ -28,6 +28,8 @@
   negotiate an HTTP/2 connection over the ALPN extension of TLS, in their
   default implementations
   ([#122](https://github.com/anmonteiro/ocaml-h2/pull/122))
+- h2-async: Use [gluten](https://github.com/anmonteiro/gluten) to implement
+  h2-async ([#125](https://github.com/anmonteiro/ocaml-h2/pull/125))
 
 0.5.0 2019-12-19
 --------------
