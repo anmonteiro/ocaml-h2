@@ -1,0 +1,8 @@
+(executables
+ (libraries h2 h2-async async core)
+ (names async_https_echo_post))
+
+(alias
+ (name examples)
+ (deps
+  (glob_files *.exe)))
