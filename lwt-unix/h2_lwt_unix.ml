@@ -43,11 +43,13 @@ module Server = struct
         ~certfile ~keyfile ?config ~request_handler ~error_handler
       =
       let make_tls_server =
-        Gluten_lwt_unix.Server.TLS.create_default ~certfile ~keyfile
+        Gluten_lwt_unix.Server.TLS.create_default
+          ~alpn_protocols:[ "h2" ]
+          ~certfile
+          ~keyfile
       in
       fun client_addr socket ->
-        make_tls_server ~alpn_protocols:[ "h2" ] client_addr socket
-        >>= fun tls_server ->
+        make_tls_server client_addr socket >>= fun tls_server ->
         create_connection_handler
           ?config
           ~request_handler
@@ -63,11 +65,13 @@ module Server = struct
         ~certfile ~keyfile ?config ~request_handler ~error_handler
       =
       let make_ssl_server =
-        Gluten_lwt_unix.Server.SSL.create_default ~certfile ~keyfile
+        Gluten_lwt_unix.Server.SSL.create_default
+          ~alpn_protocols:[ "h2" ]
+          ~certfile
+          ~keyfile
       in
       fun client_addr socket ->
-        make_ssl_server ~alpn_protocols:[ "h2" ] client_addr socket
-        >>= fun ssl_server ->
+        make_ssl_server client_addr socket >>= fun ssl_server ->
         create_connection_handler
           ?config
           ~request_handler
