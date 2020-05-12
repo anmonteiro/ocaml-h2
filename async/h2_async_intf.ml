@@ -1,5 +1,5 @@
 (*----------------------------------------------------------------------------
- *  Copyright (c) 2019 António Nuno Monteiro
+ *  Copyright (c) 2019-2020 António Nuno Monteiro
  *
  *  All rights reserved.
  *
@@ -33,33 +33,6 @@
 open Async
 open H2
 
-module type IO = sig
-  type socket
-
-  type addr
-
-  val read
-    :  socket
-    -> Bigstringaf.t
-    -> off:int
-    -> len:int
-    -> [ `Eof | `Ok of int ] Deferred.t
-  (** The region [(off, off + len)] is where read bytes can be written to *)
-
-  val writev
-    :  socket
-    -> Faraday.bigstring Faraday.iovec list
-    -> [ `Closed | `Ok of int ] Deferred.t
-
-  val shutdown_send : socket -> unit
-
-  val shutdown_receive : socket -> unit
-
-  val close : socket -> unit Deferred.t
-
-  val state : socket -> [ `Open | `Error | `Closed ]
-end
-
 module type Server = sig
   type socket
 
@@ -75,9 +48,14 @@ module type Server = sig
 end
 
 module type Client = sig
-  type t
-
   type socket
+
+  type runtime
+
+  type t =
+    { connection : Client_connection.t
+    ; runtime : runtime
+    }
 
   val create_connection
     :  ?config:Config.t
@@ -86,20 +64,6 @@ module type Client = sig
     -> error_handler:Client_connection.error_handler
     -> socket
     -> t Deferred.t
-
-  (* From RFC7540§3.1:
-   *   The string "h2c" identifies the protocol where HfTTP/2 is run over
-   *   cleartext TCP. This identifier is used in the HTTP/1.1 Upgrade header
-   *   field and in any place where HTTP/2 over TCP is identified. *)
-  val create_h2c_connection
-    :  ?config:Config.t
-    -> ?push_handler:
-         (Request.t -> (Client_connection.response_handler, unit) result)
-    -> http_request:Httpaf.Request.t
-    -> error_handler:Client_connection.error_handler
-    -> Client_connection.response_handler * Client_connection.error_handler
-    -> socket
-    -> (t, string) Deferred.Result.t
 
   val request
     :  t
@@ -110,7 +74,7 @@ module type Client = sig
 
   val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
 
-  val shutdown : t -> unit
+  val shutdown : t -> unit Deferred.t
 
   val is_closed : t -> bool
 end
