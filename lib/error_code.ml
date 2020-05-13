@@ -88,7 +88,7 @@ type t =
   (* From RFC7540§7:
    *   HTTP_1_1_REQUIRED (0xd): The endpoint requires that HTTP/1.1 be used
    *   instead of HTTP/2. *)
-  | HTTP11Required
+  | HTTP_1_1_Required
   (* From RFC7540§7:
    *   Unknown or unsupported error codes MUST NOT trigger any special
    *   behavior. These MAY be treated by an implementation as being
@@ -125,7 +125,7 @@ let serialize = function
     0xbl
   | InadequateSecurity ->
     0xcl
-  | HTTP11Required ->
+  | HTTP_1_1_Required ->
     0xdl
   | UnknownError_code id ->
     id
@@ -158,6 +158,40 @@ let parse = function
   | 0xcl ->
     InadequateSecurity
   | 0xdl ->
-    HTTP11Required
+    HTTP_1_1_Required
   | id ->
     UnknownError_code id
+
+let to_string = function
+  | NoError ->
+    "NO_ERROR (0x0)"
+  | ProtocolError ->
+    "PROTOCOL_ERROR (0x1)"
+  | InternalError ->
+    "INTERNAL_ERROR (0x2)"
+  | FlowControlError ->
+    "FLOW_CONTROL_ERROR (0x3)"
+  | SettingsTimeout ->
+    "SETTINGS_TIMEOUT (0x4)"
+  | StreamClosed ->
+    "STREAM_CLOSED (0x5)"
+  | FrameSizeError ->
+    "FRAME_SIZE_ERROR (0x6)"
+  | RefusedStream ->
+    "REFUSED_STREAM (0x7)"
+  | Cancel ->
+    "CANCEL (0x8)"
+  | CompressionError ->
+    "COMPRESSION_ERROR (0x9)"
+  | ConnectError ->
+    "CONNECT_ERROR (0xa)"
+  | EnhanceYourCalm ->
+    "ENHANCE_YOUR_CALM (0xb)"
+  | InadequateSecurity ->
+    "INADEQUATE_SECURITY (0xc)"
+  | HTTP_1_1_Required ->
+    "HTTP_1_1_REQUIRED (0xd)"
+  | UnknownError_code id ->
+    Format.asprintf "UNKNOWN_ERROR (0x%lx)" id
+
+let pp_hum formatter t = Format.fprintf formatter "%s" (to_string t)

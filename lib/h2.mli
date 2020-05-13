@@ -613,12 +613,16 @@ module Error_code : sig
     (* From RFC7540§7:
      *   HTTP_1_1_REQUIRED (0xd): The endpoint requires that HTTP/1.1 be used
      *   instead of HTTP/2. *)
-    | HTTP11Required
+    | HTTP_1_1_Required
     (* From RFC7540§7:
      *   Unknown or unsupported error codes MUST NOT trigger any special
      *   behavior. These MAY be treated by an implementation as being
      *   equivalent to INTERNAL_ERROR. *)
     | UnknownError_code of int32
+
+  val to_string : t -> string
+
+  val pp_hum : Format.formatter -> t -> unit
 end
 
 (* TODO: needs docs *)
