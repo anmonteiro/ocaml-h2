@@ -1,8 +1,18 @@
+Unreleased
+---------------
+- h2-async: add Async adapter
+  ([#94](https://github.com/anmonteiro/ocaml-h2/pull/94))
+- h2-async: Use [gluten](https://github.com/anmonteiro/gluten) to implement
+  h2-async ([#125](https://github.com/anmonteiro/ocaml-h2/pull/125))
+- h2-mirage: Use [gluten](https://github.com/anmonteiro/gluten) to implement
+  h2-mirage ([#120](https://github.com/anmonteiro/ocaml-h2/pull/120))
+- h2: Don't put parser in error state when force-closing
+  ([#127](https://github.com/anmonteiro/ocaml-h2/pull/127))
+
+
 0.6.0 2020-04-29
 --------------
 
-- h2-async: add Async adapter
-  ([#94](https://github.com/anmonteiro/ocaml-h2/pull/94))
 - h2-lwt: Close the communication channel after shutting down the client
   ([#108](https://github.com/anmonteiro/ocaml-h2/pull/108))
 - h2-lwt-unix: fix premature SSL termination in the SSL / TLS runtimes
@@ -22,14 +32,10 @@
 - h2: in the client implementation, don't report an error if the server has
   sent an `RST_STREAM` frame after sending a complete response
   ([#119](https://github.com/anmonteiro/ocaml-h2/pull/119)).
-- h2-mirage: Use [gluten](https://github.com/anmonteiro/gluten) to implement
-  h2-mirage ([#120](https://github.com/anmonteiro/ocaml-h2/pull/120))
 - h2-lwt-unix: fix a regression that prevented the SSL / TLS runtimes to
   negotiate an HTTP/2 connection over the ALPN extension of TLS, in their
   default implementations
   ([#122](https://github.com/anmonteiro/ocaml-h2/pull/122))
-- h2-async: Use [gluten](https://github.com/anmonteiro/gluten) to implement
-  h2-async ([#125](https://github.com/anmonteiro/ocaml-h2/pull/125))
 
 0.5.0 2019-12-19
 --------------
