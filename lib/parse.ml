@@ -632,8 +632,7 @@ module Reader = struct
     (match more with Complete -> t.closed <- true | Incomplete -> ());
     consumed
 
-  let force_close t =
-    ignore (read_with_more t Bigstringaf.empty ~off:0 ~len:0 Complete : int)
+  let force_close t = t.closed <- true
 
   let fail_to_string marks err = String.concat " > " marks ^ ": " ^ err
 
@@ -670,6 +669,28 @@ module Reader = struct
 
   let next t =
     match t.parse_state with
+    | Fail error ->
+      (match error with
+      | `Error e ->
+        `Error e
+      | `Error_code error_code ->
+        next_from_error t error_code
+      | `Parse (marks, msg) ->
+        let error_code =
+          match marks, msg with
+          | [ "frame_payload" ], "not enough input" ->
+            (* From RFC7540§4.2:
+             *   An endpoint MUST send an error code of FRAME_SIZE_ERROR if a
+             *   frame exceeds the size defined in SETTINGS_MAX_FRAME_SIZE,
+             *   exceeds any limit defined for the frame type, or is too small
+             *   to contain mandatory frame data. *)
+            Error_code.FrameSizeError
+          | _ ->
+            Error_code.ProtocolError
+        in
+        next_from_error t ~msg:(fail_to_string marks msg) error_code)
+    | _ when t.closed ->
+      `Close
     | Partial _ ->
       `Read
     | Initial ->
@@ -677,22 +698,4 @@ module Reader = struct
         `Close
       else
         `Read
-    | Fail (`Error e) ->
-      `Error e
-    | Fail (`Error_code error_code) ->
-      next_from_error t error_code
-    | Fail (`Parse (marks, msg)) ->
-      let error_code =
-        match marks, msg with
-        | [ "frame_payload" ], "not enough input" ->
-          (* From RFC7540§4.2:
-           *   An endpoint MUST send an error code of FRAME_SIZE_ERROR if a
-           *   frame exceeds the size defined in SETTINGS_MAX_FRAME_SIZE,
-           *   exceeds any limit defined for the frame type, or is too small to
-           *   contain mandatory frame data. *)
-          Error_code.FrameSizeError
-        | _ ->
-          Error_code.ProtocolError
-      in
-      next_from_error t ~msg:(fail_to_string marks msg) error_code
 end
