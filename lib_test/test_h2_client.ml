@@ -75,6 +75,9 @@ module Client_connection_tests = struct
 
   let write_operation = Alcotest.of_pp Write_operation.pp_hum
 
+  let reader_closed ?(msg = "Reader closed") t =
+    Alcotest.(check read_operation) msg `Close (next_read_operation t)
+
   let default_error_handler _ = assert false
 
   let test_initial_reader_state () =
@@ -98,10 +101,7 @@ module Client_connection_tests = struct
     in
     let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
     Alcotest.(check int) "read_eof with no input returns 0" 0 c;
-    Alcotest.(check read_operation)
-      "Shutting down a reader closes it"
-      `Close
-      (next_read_operation t);
+    reader_closed ~msg:"Shutting down a reader closes it" t;
     let t =
       create
         ?config:None
@@ -112,10 +112,7 @@ module Client_connection_tests = struct
     Alcotest.(check int) "read with no input returns 0" 0 c;
     let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
     Alcotest.(check int) "read_eof with no input returns 0" 0 c;
-    Alcotest.(check read_operation)
-      "Shutting down a reader closes it"
-      `Close
-      (next_read_operation t)
+    reader_closed ~msg:"Shutting down a reader closes it" t
 
   let preface =
     let writer = Writer.create 0x400 in
@@ -280,11 +277,7 @@ module Client_connection_tests = struct
       (`Error
         Error.(ConnectionError (ProtocolError, "Invalid connection preface")))
       (Reader.next t.reader);
-    Alcotest.check
-      read_operation
-      "Reader issues a `Close operation"
-      `Close
-      (next_read_operation t);
+    reader_closed t;
     Alcotest.(check bool) "Error handler got called" true !error_handler_called
 
   let test_inadequate_security () =
@@ -321,11 +314,7 @@ module Client_connection_tests = struct
       "There was a connection error of type InadequateSecurity"
       (`Error Error.(ConnectionError (InadequateSecurity, "fail")))
       (Reader.next t.reader);
-    Alcotest.check
-      read_operation
-      "Reader issues a `Close operation"
-      `Close
-      (next_read_operation t);
+    reader_closed t;
     Alcotest.(check bool) "Error handler got called" true !error_handler_called
 
   let test_simple_get_request () =
@@ -1059,6 +1048,51 @@ module Client_connection_tests = struct
     report_write_result t (`Ok lenv);
     writer_yielded t
 
+  let test_connection_shutdown () =
+    let t = create_and_handle_preface () in
+    let request =
+      Request.create
+        ~scheme:"http"
+        ~headers:(Headers.of_list [ "content-length", "5" ])
+        `GET
+        "/"
+    in
+    let handler_called = ref false in
+    let response_handler _response _response_body = handler_called := true in
+    let error_handler_called = ref false in
+    let body =
+      Client_connection.request
+        t
+        request
+        ~error_handler:(fun _ ->
+          error_handler_called := true;
+          Alcotest.fail "Didn't expect error handler to be called.")
+        ~response_handler
+    in
+    flush_request t;
+    Body.close_writer body;
+    let _frames, lenv = flush_pending_writes t in
+    Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
+    report_write_result t (`Ok lenv);
+    writer_yielded t;
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    read_response
+      t
+      hpack_encoder
+      ~flags:Flags.(default_flags |> set_end_header)
+      (Response.create `OK ~headers:(Headers.of_list [ "content-length", "3" ]));
+    shutdown t;
+    let frames, lenv = flush_pending_writes t in
+    let frame = List.hd frames in
+    Alcotest.(check bool)
+      "Issues a GoAway frame of type ProtocolError"
+      true
+      Frame.FrameType.(
+        serialize frame.frame_header.frame_type = serialize GoAway);
+    report_write_result t (`Ok lenv);
+    writer_closed t;
+    reader_closed t
+
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
@@ -1096,6 +1130,7 @@ module Client_connection_tests = struct
     ; ( "request, server sends RST_STREAM with NO_ERROR"
       , `Quick
       , test_request_body_rst_stream_no_error )
+    ; "test connection shutdown", `Quick, test_connection_shutdown
     ]
 end
 

@@ -161,7 +161,12 @@ let report_connection_error t ?(additional_debug_data = "") error =
 let report_stream_error t stream_id error =
   report_error t (StreamError (stream_id, error))
 
-let shutdown t = report_connection_error t Error_code.NoError
+let shutdown t =
+  (* From RFC7540§6.8:
+   *   A server that is attempting to gracefully shut down a connection SHOULD
+   *   send an initial GOAWAY frame with the last stream identifier set to
+   *   2^31-1 and a NO_ERROR code. *)
+  report_connection_error t Error_code.NoError
 
 let set_error_and_handle t stream error error_code =
   Respd.report_error stream error error_code;
