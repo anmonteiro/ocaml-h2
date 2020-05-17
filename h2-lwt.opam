@@ -14,7 +14,7 @@ depends: [
   "h2" {= version}
   "dune" {>= "1.7"}
   "lwt"
-  "gluten-lwt" {>= "0.2.0"}
+  "gluten-lwt" {>= "0.2.1"}
 ]
 synopsis: "Lwt support for h2"
 description: """
