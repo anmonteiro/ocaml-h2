@@ -1,5 +1,8 @@
 Unreleased
 ---------------
+
+0.6.1 2020-05-16
+---------------
 - h2-async: add Async adapter
   ([#94](https://github.com/anmonteiro/ocaml-h2/pull/94))
 - h2-async: Use [gluten](https://github.com/anmonteiro/gluten) to implement
@@ -8,7 +11,6 @@ Unreleased
   h2-mirage ([#120](https://github.com/anmonteiro/ocaml-h2/pull/120))
 - h2: Don't put parser in error state when force-closing
   ([#127](https://github.com/anmonteiro/ocaml-h2/pull/127))
-
 
 0.6.0 2020-04-29
 --------------

@@ -1,3 +1,4 @@
+{ release-mode ? false }:
 
 let
   pkgs = import ./nix/sources.nix {};
@@ -6,9 +7,18 @@ let
   h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
 
 in
-  (pkgs.mkShell {
+  with pkgs;
+  (mkShell {
     inputsFrom = lib.attrValues h2Drvs;
-    buildInputs = with pkgs.ocamlPackages; [ merlin pkgs.ocamlformat ];
+    buildInputs =
+      (if release-mode then [
+        cacert
+        curl
+        ocamlPackages.dune-release
+        git
+        opam
+      ] else [])
+      ++ (with ocamlPackages; [ merlin ocamlformat ]);
   }).overrideAttrs (o : {
     propagatedBuildInputs = lib.filter
       (drv: drv.pname == null || !(lib.any (name: name == drv.pname) (lib.attrNames h2Drvs)))
