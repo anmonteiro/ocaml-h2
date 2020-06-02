@@ -6,21 +6,22 @@ let
 
   h2Pkgs = import ./.. { inherit ocamlVersion; };
   h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
-  h2spec = stdenv.mkDerivation {
+  h2spec = stdenv.mkDerivation rec {
     name = "h2spec";
+    version = "2.5.0";
     src = builtins.fetchurl {
-      url = https://github.com/summerwind/h2spec/releases/download/v2.4.0/h2spec_linux_amd64.tar.gz;
-      sha256 = "0566d35q5lgql07v7a21yrvgj8w2qymqxd1c3fqrvmria8g6iyjz";
+      url = "https://github.com/summerwind/h2spec/releases/download/v${version}/h2spec_linux_amd64.tar.gz";
+      sha256 = "1za8r8fz57w68qmx4r9drd1wj44w7h6dnpcadp1j7sqn790i4l4g";
     };
     phases = ["unpackPhase" "installPhase" "fixupPhase"];
     nativeBuildInputs = [ pkgs.autoPatchelfHook ];
     unpackPhase = ''
-      mkdir h2spec-2.4.0
-      tar -C h2spec-2.4.0 -xzf $src
+      mkdir h2spec-${version}
+      tar -C h2spec-${version} -xzf $src
     '';
     installPhase = ''
       mkdir -p $out/bin
-      cp h2spec-2.4.0/* $out/bin
+      cp h2spec-${version}/* $out/bin
       chmod +x $out/bin/h2spec
     '';
   };
