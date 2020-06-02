@@ -44,7 +44,6 @@
 
 (** {2 Basic HTTP Types} *)
 
-module Method : module type of Httpaf.Method
 (** Request Method
 
     The request method token is the primary source of request semantics; it
@@ -56,6 +55,7 @@ module Method : module type of Httpaf.Method
 
     This module is a proxy to [Httpaf.Method] and is included in h2 for
     convenience. *)
+module Method : module type of Httpaf.Method
 
 (** Response Status Codes
 
@@ -79,10 +79,6 @@ module Status : sig
        and type standard := Httpaf.Status.standard
        and type t := Httpaf.Status.t
 
-  type client_error =
-    [ Httpaf.Status.client_error
-    | `Misdirected_request
-    ]
   (** The 4xx (Client Error) class of status code indicates that the client
       seems to have erred.
 
@@ -92,11 +88,11 @@ module Status : sig
       In addition to http/af, this type also includes the 421 (Misdirected
       Request) tag. See {{:https://tools.ietf.org/html/rfc7540#section-9.1.2}
       RFC7540§9.1.2} for more details. *)
-
-  type standard =
-    [ Httpaf.Status.standard
-    | client_error
+  type client_error =
+    [ Httpaf.Status.client_error
+    | `Misdirected_request
     ]
+
   (** The status codes defined in the HTTP/1.1 RFCs, excluding the
       [Switching Protocols] status and including the [Misdirected Request] as
       per the HTTP/2 RFC.
@@ -104,12 +100,16 @@ module Status : sig
       See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1}
       and {{:https://tools.ietf.org/html/rfc7540#section-9.1.2} RFC7540§9.1.2}
       for more details. *)
+  type standard =
+    [ Httpaf.Status.standard
+    | client_error
+    ]
 
+  (** The standard codes along with support for custom codes. *)
   type t =
     [ standard
     | `Code of int
     ]
-  (** The standard codes along with support for custom codes. *)
 
   val default_reason_phrase : standard -> string
   (** [default_reason_phrase standard] is the example reason phrase provided by
@@ -195,14 +195,14 @@ end
     See {{:https://tools.ietf.org/html/rfc7230#section-3.2} RFC7230§3.2} for
     more details. *)
 module Headers : sig
-  type t
   (** The type of a group of header fields. *)
+  type t
 
-  type name = string
   (** The type of a lowercase header name. *)
+  type name = string
 
-  type value = string
   (** The type of a header value. *)
+  type value = string
 
   (** {3 Constructor} *)
 
@@ -467,8 +467,8 @@ module Response : sig
   val pp_hum : Format.formatter -> t -> unit
 end
 
-module IOVec : module type of Httpaf.IOVec
 (** IOVec *)
+module IOVec : module type of Httpaf.IOVec
 
 (** {2 Request Descriptor} *)
 module Reqd : sig
