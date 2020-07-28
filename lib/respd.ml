@@ -217,3 +217,20 @@ let deliver_trailer_headers t headers =
     s.trailers <- Some headers
   | _ ->
     assert false
+
+let flush_response_body t =
+  match t.state with
+  | Idle | Reserved _ ->
+    failwith "h2.Respd.response_exn: response has not arrived"
+  | Active
+      ( ( Open (ActiveMessage { response_body; _ })
+        | HalfClosed (ActiveMessage { response_body; _ }) )
+      , _ ) ->
+    if Body.has_pending_output response_body then (
+      try Body.execute_read response_body with
+      | exn ->
+        report_error t (`Exn exn) InternalError)
+  | Active ((Open _ | HalfClosed _), _) ->
+    failwith "h2.Respd.response_exn: response has not arrived"
+  | Closed _ ->
+    failwith "h2.Respd.response_exn: stream already closed"

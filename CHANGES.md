@@ -1,6 +1,9 @@
 Unreleased
 ---------------
 
+- h2: client / server: execute request/response body reads as data frames
+  arrive ([#130](https://github.com/anmonteiro/ocaml-h2/pull/130))
+
 0.6.1 2020-05-16
 ---------------
 - h2-async: add Async adapter

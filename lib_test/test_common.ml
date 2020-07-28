@@ -1,5 +1,11 @@
 open H2__
 
+module Option = struct
+  let get = function Some x -> x | None -> failwith "Option.get: None"
+
+  let map f = function Some x -> Some (f x) | None -> None
+end
+
 let read_all path =
   let file = open_in path in
   try really_input_string file (in_channel_length file) with

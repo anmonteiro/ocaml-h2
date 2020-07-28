@@ -588,12 +588,13 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
       in
       response_info.response_body_bytes <-
         Int64.(add response_body_bytes (of_int (Bigstringaf.length bstr)));
-      if not Scheduler.(allowed_to_receive t.streams stream payload_length) then
+      if not Scheduler.(allowed_to_receive t.streams stream payload_length) then (
         (* From RFC7540§6.9:
          *  A receiver MAY respond with a stream error (Section 5.4.2) or
          *  connection error (Section 5.4.1) of type FLOW_CONTROL_ERROR if it
          *  is unable to accept a frame. *)
-        report_stream_error t stream_id Error_code.FlowControlError
+        send_window_update t t.streams payload_length;
+        report_stream_error t stream_id Error_code.FlowControlError)
       else (
         Scheduler.deduct_inflow stream payload_length;
         match Message.body_length response.headers with
@@ -632,6 +633,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
           if not (Faraday.is_closed faraday) then (
             Faraday.schedule_bigstring faraday bstr;
             if end_stream then Body.close_reader response_body);
+          Respd.flush_response_body descriptor;
           if end_stream && not (Respd.requires_output descriptor) then
             (* From RFC7540§6.1:
              *   When set, bit 0 indicates that this frame is the last that
