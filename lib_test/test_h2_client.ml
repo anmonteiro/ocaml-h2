@@ -1093,6 +1093,65 @@ module Client_connection_tests = struct
     writer_closed t;
     reader_closed t
 
+  let test_reading_response_body () =
+    let t = create_and_handle_preface () in
+    let request =
+      Request.create
+        ~scheme:"http"
+        ~headers:(Headers.of_list [ "content-length", "5" ])
+        `GET
+        "/"
+    in
+    let body_read_called = ref false in
+    let body_eof_called = ref false in
+    let response_handler _response response_body =
+      Body.schedule_read
+        response_body
+        ~on_eof:ignore
+        ~on_read:(fun _bs ~off:_ ~len:_ ->
+          body_read_called := true;
+          Alcotest.(check bool)
+            "Response body isn't closed (yet) when reading"
+            false
+            (Body.is_closed response_body);
+          Body.schedule_read
+            ~on_read:(fun _ ~off:_ ~len:_ ->
+              Body.schedule_read
+                ~on_read:(fun _ ~off:_ ~len:_ -> ())
+                ~on_eof:(fun () -> body_eof_called := true)
+                response_body)
+            ~on_eof:ignore
+            response_body)
+    in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~error_handler:default_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    Body.close_writer request_body;
+    let _, lenv = flush_pending_writes t in
+    report_write_result t (`Ok lenv);
+    writer_yielded t;
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    read_response
+      t
+      hpack_encoder
+      ~flags:Flags.(default_flags |> set_end_header)
+      (Response.create `OK ~headers:(Headers.of_list [ "content-length", "6" ]));
+    read_response_body t "foo" ~flags:Flags.(default_flags);
+    read_response_body t "bar";
+    Alcotest.(check bool)
+      "Response body read handler called"
+      true
+      !body_read_called;
+    Alcotest.(check bool)
+      "Response body EOF handler called"
+      true
+      !body_eof_called
+
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
@@ -1131,6 +1190,7 @@ module Client_connection_tests = struct
       , `Quick
       , test_request_body_rst_stream_no_error )
     ; "test connection shutdown", `Quick, test_connection_shutdown
+    ; "test reading the response body", `Quick, test_reading_response_body
     ]
 end
 

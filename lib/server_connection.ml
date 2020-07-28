@@ -592,12 +592,13 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
               (of_int (Bigstringaf.length bstr)));
         let request = request_info.request in
         if not Scheduler.(allowed_to_receive t.streams stream payload_length)
-        then
+        then (
           (* From RFC7540§6.9:
            *  A receiver MAY respond with a stream error (Section 5.4.2) or
            *  connection error (Section 5.4.1) of type FLOW_CONTROL_ERROR if it
            *  is unable to accept a frame. *)
-          report_stream_error t stream_id Error_code.FlowControlError
+          send_window_update t t.streams payload_length;
+          report_stream_error t stream_id Error_code.FlowControlError)
         else (
           Scheduler.deduct_inflow stream payload_length;
           match Message.body_length request.headers with
@@ -646,7 +647,8 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
             let faraday = Body.unsafe_faraday request_body in
             if not (Faraday.is_closed faraday) then (
               Faraday.schedule_bigstring faraday bstr;
-              if end_stream then Body.close_reader request_body))
+              if end_stream then Body.close_reader request_body);
+            Reqd.flush_request_body descriptor)
       | Idle ->
         (* From RFC7540§5.1:
          *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on

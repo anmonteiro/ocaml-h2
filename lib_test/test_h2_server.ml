@@ -159,8 +159,8 @@ module Server_connection_tests = struct
       request;
     Faraday.serialize_to_string (Serialize.Writer.faraday writer)
 
-  let read_request t request =
-    let request_string = request_to_string request in
+  let read_request ?body t request =
+    let request_string = request_to_string ?body request in
     read_string t request_string
 
   let response_to_string t ?body response =
@@ -194,8 +194,10 @@ module Server_connection_tests = struct
     let len = String.length str in
     Alcotest.(check (option string))
       msg
-      (Some str)
-      (next_write_operation t |> Write_operation.to_write_as_string);
+      (Some (str |> hex_of_string))
+      (next_write_operation t
+      |> Write_operation.to_write_as_string
+      |> Option.map hex_of_string);
     report_write_result t (`Ok len)
 
   let write_response t ?body response =
@@ -316,7 +318,7 @@ module Server_connection_tests = struct
       continuation_length
       read_continuation
 
-  let write_frames conn frames =
+  let read_frames conn frames =
     List.iter
       (fun frame ->
         let frame_wire = Test_common.serialize_frame frame in
@@ -346,7 +348,7 @@ module Server_connection_tests = struct
   let test_continuation_frame () =
     let t = create_and_handle_preface ~error_handler default_request_handler in
     let headers, continuation = header_and_continuation_frames in
-    write_frames t [ headers; continuation ];
+    read_frames t [ headers; continuation ];
     write_response t (Response.create `OK);
     let new_headers =
       { headers with
@@ -357,7 +359,7 @@ module Server_connection_tests = struct
           }
       }
     in
-    write_frames t [ new_headers ];
+    read_frames t [ new_headers ];
     check_response t
 
   let test_continuation_frame_another_stream () =
@@ -368,7 +370,7 @@ module Server_connection_tests = struct
         frame_header = { continuation.frame_header with stream_id = 3l }
       }
     in
-    write_frames t [ headers; continuation ];
+    read_frames t [ headers; continuation ];
     match next_write_operation t with
     | `Write iovecs ->
       let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
@@ -556,7 +558,7 @@ module Server_connection_tests = struct
       ; frame_payload = Frame.Priority Priority.default_priority
       }
     in
-    write_frames t [ priority ];
+    read_frames t [ priority ];
     let open Scheduler in
     let (Connection root) = t.streams in
     let root_children = root.children |> PriorityQueue.to_list in
@@ -576,7 +578,7 @@ module Server_connection_tests = struct
           }
       }
     in
-    write_frames t [ headers ];
+    read_frames t [ headers ];
     let open Scheduler in
     let new_root_children = root.children |> PriorityQueue.to_list in
     let (Stream { descriptor; _ }) = new_root_children |> List.hd |> snd in
@@ -621,7 +623,7 @@ module Server_connection_tests = struct
             )
       }
     in
-    write_frames t [ headers; second_headers ];
+    read_frames t [ headers; second_headers ];
     let open Scheduler in
     let (Stream first_stream) = Scheduler.get_node t.streams 1l |> opt_exn in
     let first_stream_children =
@@ -990,6 +992,73 @@ module Server_connection_tests = struct
           ConnectionError (FrameSizeError, "frame_payload: not enough input")))
       (Reader.next t.reader)
 
+  let test_reading_request_body () =
+    let body_read_called = ref false in
+    let body_eof_called = ref false in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let response =
+      Response.create `OK ~headers:(Headers.of_list [ "content-length", "0" ])
+    in
+    let request_handler reqd =
+      let request_body = Reqd.request_body reqd in
+      Body.schedule_read
+        request_body
+        ~on_eof:ignore
+        ~on_read:(fun _bs ~off:_ ~len:_ ->
+          body_read_called := true;
+          Alcotest.(check bool)
+            "Response body isn't closed (yet) when reading"
+            false
+            (Body.is_closed request_body);
+          Body.schedule_read
+            ~on_read:(fun _ ~off:_ ~len:_ ->
+              Body.schedule_read
+                ~on_read:(fun _ ~off:_ ~len:_ -> ())
+                ~on_eof:(fun () ->
+                  body_eof_called := true;
+                  Reqd.respond_with_string reqd response "")
+                request_body)
+            ~on_eof:ignore
+            request_body)
+    in
+    let t = create_and_handle_preface ~error_handler request_handler in
+    read_request ~body:"request body" t request;
+    let data_frame =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = Data
+          }
+      ; frame_payload = Frame.Data (Bigstringaf.of_string ~off:0 ~len:3 "foo")
+      }
+    in
+    read_frames t [ data_frame ];
+    read_frames
+      t
+      [ { data_frame with
+          frame_header =
+            { data_frame.frame_header with
+              flags = Flags.(default_flags |> set_end_stream)
+            }
+        }
+      ];
+    let window_update_and_response_frames =
+      next_write_operation t |> Write_operation.to_write_as_string |> Option.get
+    in
+    report_write_result
+      t
+      (`Ok (String.length window_update_and_response_frames));
+    writer_yields t;
+    Alcotest.(check bool)
+      "Response body read handler called"
+      true
+      !body_read_called;
+    Alcotest.(check bool)
+      "Response body EOF handler called"
+      true
+      !body_eof_called
+
   (* TODO: test for trailer headers. *)
   (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
   let suite =
@@ -1040,6 +1109,9 @@ module Server_connection_tests = struct
     ; ( "frame size error unknown frame"
       , `Quick
       , test_read_frame_size_error_unknown_frame )
+    ; ( "reading the request body as it arrives"
+      , `Quick
+      , test_reading_request_body )
     ]
 end
 

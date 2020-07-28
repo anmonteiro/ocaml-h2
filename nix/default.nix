@@ -43,7 +43,7 @@ in
       h2-lwt = buildH2 {
         pname = "h2-lwt";
         doCheck = false;
-        propagatedBuildInputs = [ h2 lwt4 gluten-lwt ];
+        propagatedBuildInputs = [ h2 lwt gluten-lwt ];
       };
 
       h2-lwt-unix = buildH2 {
