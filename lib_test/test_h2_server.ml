@@ -1059,6 +1059,47 @@ module Server_connection_tests = struct
       true
       !body_eof_called
 
+  let test_flow_control () =
+    let body_read_called = ref false in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let request_handler reqd =
+      let request_body = Reqd.request_body reqd in
+      Body.schedule_read
+        request_body
+        ~on_eof:ignore
+        ~on_read:(fun _bs ~off:_ ~len:_ -> body_read_called := true)
+    in
+    let t = create_and_handle_preface ~error_handler request_handler in
+    read_request ~body:"request body" t request;
+    let data_frame =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.(default_flags |> set_end_stream)
+          ; frame_type = Data
+          }
+      ; frame_payload = Frame.Data (Bigstringaf.of_string ~off:0 ~len:3 "foo")
+      }
+    in
+    read_frames t [ data_frame ];
+    match next_write_operation t with
+    | `Write iovecs ->
+      let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
+      Alcotest.(check (list int))
+        "Only writes are WINDOW_UPDATE frames"
+        (List.map
+           Frame.FrameType.serialize
+           Frame.FrameType.[ WindowUpdate; WindowUpdate ])
+        (List.map
+           (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+             Frame.FrameType.serialize frame_type)
+           frames);
+      report_write_result t (`Ok (IOVec.lengthv iovecs));
+      Alcotest.(check bool) "Response handler called" true !body_read_called;
+      writer_yields t
+    | _ ->
+      assert false
+
   (* TODO: test for trailer headers. *)
   (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
   let suite =
@@ -1112,6 +1153,7 @@ module Server_connection_tests = struct
     ; ( "reading the request body as it arrives"
       , `Quick
       , test_reading_request_body )
+    ; "flow control", `Quick, test_flow_control
     ]
 end
 

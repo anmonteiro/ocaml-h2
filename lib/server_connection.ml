@@ -177,6 +177,29 @@ let on_close_stream t id ~active closed =
     t.current_client_streams <- t.current_client_streams - 1;
   Scheduler.mark_for_removal t.streams id closed
 
+let send_window_update
+    : type a. t -> a Scheduler.PriorityTreeNode.node -> int -> unit
+  =
+ fun t stream n ->
+  let send_window_update_frame stream_id n =
+    let valid_inflow = Scheduler.add_inflow stream n in
+    assert valid_inflow;
+    let frame_info = Writer.make_frame_info stream_id in
+    Writer.write_window_update t.writer frame_info n
+  in
+  if n > 0 then (
+    let max_window_size = Settings.WindowSize.max_window_size in
+    let stream_id = Scheduler.stream_id stream in
+    let rec loop n =
+      if n > max_window_size then (
+        send_window_update_frame stream_id max_window_size;
+        loop (n - max_window_size))
+      else
+        send_window_update_frame stream_id n
+    in
+    loop n;
+    wakeup_writer t)
+
 let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
   if not t.settings.enable_push then
     (* From RFC7540§6.6:
@@ -205,14 +228,18 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
         t.error_handler
         (on_close_stream t pushed_stream_id)
     in
-    Scheduler.add
-      t.streams (* TODO: *)
-                (* ?priority *)
-      ~initial_window_size:t.settings.initial_window_size
-      reqd;
+    let _stream =
+      Scheduler.add
+        t.streams (* TODO: *)
+                  (* ?priority *)
+        ~initial_send_window_size:t.settings.initial_window_size
+        ~initial_recv_window_size:t.config.initial_window_size
+        reqd
+    in
     Ok reqd
 
-let handle_headers t ~end_stream reqd active_stream headers =
+let handle_headers t ~end_stream stream active_stream headers =
+  let (Scheduler.Stream { descriptor = reqd; _ }) = stream in
   (* From RFC7540§5.1.2:
    *   Endpoints MUST NOT exceed the limit set by their peer. An endpoint that
    *   receives a HEADERS frame that causes its advertised concurrent stream
@@ -273,9 +300,20 @@ let handle_headers t ~end_stream reqd active_stream headers =
                  * value for [request_body_buffer_size]. *)
                 t.config.request_body_buffer_size
             in
-            Body.create
+            Body.create_reader
               (Bigstringaf.create buffer_size)
-              (Optional_thunk.some (fun () -> Writer.wakeup t.writer))
+              ~done_reading:(fun len ->
+                (* From RFC7540§6.9.1:
+                 *   The receiver of a frame sends a WINDOW_UPDATE frame as it
+                 *   consumes data and frees up space in flow-control windows.
+                 *   Separate WINDOW_UPDATE frames are sent for the stream- and
+                 *   connection-level flow-control windows. *)
+                match reqd.state with
+                | Active _ ->
+                  send_window_update t t.streams len;
+                  send_window_update t stream len
+                | Idle | Reserved _ | Closed _ ->
+                  ())
         in
         let request_info = Reqd.create_active_request request request_body in
         if end_stream then (
@@ -294,13 +332,14 @@ let handle_headers t ~end_stream reqd active_stream headers =
 let handle_headers_block
     t
     ?(is_trailers = false)
-    reqd
+    stream
     active_stream
     partial_headers
     flags
     headers_block
   =
   let open AB in
+  let (Scheduler.Stream { descriptor = reqd; _ }) = stream in
   let end_headers = Flags.test_end_header flags in
   (* From RFC7540§6.10:
    *   An endpoint receiving HEADERS, PUSH_PROMISE, or CONTINUATION
@@ -332,7 +371,7 @@ let handle_headers_block
         handle_headers
           t
           ~end_stream:partial_headers.end_stream
-          reqd
+          stream
           active_stream
           headers)
       else if Headers.trailers_valid headers then (
@@ -386,13 +425,16 @@ let open_stream t ?priority stream_id =
           t.error_handler
           (on_close_stream t stream_id)
       in
-      Scheduler.add
-        t.streams
-        ?priority
-        ~initial_window_size:t.settings.initial_window_size
-        reqd;
-      Some reqd
-    | Some (Scheduler.Stream stream) ->
+      let stream =
+        Scheduler.add
+          t.streams
+          ?priority
+          ~initial_send_window_size:t.settings.initial_window_size
+          ~initial_recv_window_size:t.config.initial_window_size
+          reqd
+      in
+      Some stream
+    | Some (Scheduler.Stream node as stream) ->
       (* From RFC7540§6.9.2:
        *   Both endpoints can adjust the initial window size for new streams
        *   by including a value for SETTINGS_INITIAL_WINDOW_SIZE in the
@@ -400,11 +442,15 @@ let open_stream t ?priority stream_id =
        *
        * Note: we already have the stream in the priority tree, and the
        * default initial window size for new streams could have changed
-       * between adding the (idle) stream and opening it. *)
-      stream.flow <- t.settings.initial_window_size;
-      Some stream.descriptor
+       * between adding the (idle) stream and opening it.
+       *
+       * Note: `inflow` doesn't change, that's set by us statically via config.
+       *)
+      node.flow <- t.settings.initial_window_size;
+      Some stream
 
-let process_first_headers_block t frame_header reqd headers_block =
+let process_first_headers_block t frame_header stream headers_block =
+  let (Scheduler.Stream { descriptor = reqd; _ }) = stream in
   let { Frame.stream_id; flags; _ } = frame_header in
   let end_headers = Flags.test_end_header flags in
   let headers_block_length = Bigstringaf.length headers_block in
@@ -434,9 +480,16 @@ let process_first_headers_block t frame_header reqd headers_block =
     Active (Open (PartialHeaders partial_headers), active_stream);
   if not end_headers then
     t.receiving_headers_for_stream <- Some stream_id;
-  handle_headers_block t reqd active_stream partial_headers flags headers_block
+  handle_headers_block
+    t
+    stream
+    active_stream
+    partial_headers
+    flags
+    headers_block
 
-let process_trailer_headers t reqd active_stream frame_header headers_block =
+let process_trailer_headers t stream active_stream frame_header headers_block =
+  let (Scheduler.Stream { descriptor = reqd; _ }) = stream in
   let { Frame.stream_id; flags; _ } = frame_header in
   let end_stream = Flags.test_end_stream flags in
   if not end_stream then
@@ -461,7 +514,7 @@ let process_trailer_headers t reqd active_stream frame_header headers_block =
     (* trailer headers: RFC7230§4.4 *)
     handle_trailer_headers
       t
-      reqd
+      stream
       active_stream
       partial_headers
       flags
@@ -485,14 +538,14 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
        *   stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
       report_stream_error t stream_id Error_code.ProtocolError
     | _ ->
-      (match Scheduler.find t.streams stream_id with
+      (match Scheduler.get_node t.streams stream_id with
       | None ->
         (match open_stream t ?priority stream_id with
         | Some reqd ->
           process_first_headers_block t frame_header reqd headers_block
         | None ->
           ())
-      | Some reqd ->
+      | Some (Scheduler.Stream { descriptor = reqd; _ } as stream) ->
         (match reqd.state with
         | Idle ->
           (* From RFC7540§6.2:
@@ -512,7 +565,7 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
         | Active (Open (FullHeaders | ActiveMessage _), active_stream) ->
           process_trailer_headers
             t
-            reqd
+            stream
             active_stream
             frame_header
             headers_block
@@ -539,29 +592,6 @@ let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
            *   a frame with the END_STREAM flag set MUST treat that as a
            *   connection error (Section 5.4.1) of type STREAM_CLOSED [...]. *)
           report_connection_error t Error_code.StreamClosed))
-
-let send_window_update
-    : type a. t -> a Scheduler.PriorityTreeNode.node -> int -> unit
-  =
- fun t stream n ->
-  let send_window_update_frame stream_id n =
-    let valid_inflow = Scheduler.add_inflow stream n in
-    assert valid_inflow;
-    let frame_info = Writer.make_frame_info stream_id in
-    Writer.write_window_update t.writer frame_info n
-  in
-  if n > 0 then (
-    let max_window_size = Settings.WindowSize.max_window_size in
-    let stream_id = Scheduler.stream_id stream in
-    let rec loop n =
-      if n > max_window_size then (
-        send_window_update_frame stream_id max_window_size;
-        loop (n - max_window_size))
-      else
-        send_window_update_frame stream_id n
-    in
-    loop n;
-    wakeup_writer t)
 
 let process_data_frame t { Frame.frame_header; _ } bstr =
   let open Scheduler in
@@ -616,11 +646,6 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
             set_error_and_handle t descriptor `Bad_request ProtocolError
           | _ ->
             let end_stream = Flags.test_end_stream flags in
-            (* XXX(anmonteiro): should we only give back flow control after we
-             * delivered EOF to the request body? There's a potential flow
-             * control issue right now where we're handing out connection-level
-             * flow control tokens on the receipt of every DATA frame. This
-             * might allow clients to send an unbounded number of bytes. *)
             if end_stream then
               if
                 (* From RFC7540§6.1:
@@ -641,9 +666,11 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
              *   The receiver of a frame sends a WINDOW_UPDATE frame as it
              *   consumes data and frees up space in flow-control windows.
              *   Separate WINDOW_UPDATE frames are sent for the stream- and
-             *   connection-level flow-control windows. *)
-            send_window_update t t.streams payload_length;
-            send_window_update t stream payload_length;
+             *   connection-level flow-control windows.
+             *
+             * Note: we send these WINDOW_UPDATE frames once the body bytes
+             * have been surfaced to the application. This is done in the
+             * record field `done_reading` of `Body.t`. *)
             let faraday = Body.unsafe_faraday request_body in
             if not (Faraday.is_closed faraday) then (
               Faraday.schedule_bigstring faraday bstr;
@@ -728,11 +755,15 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
             t.error_handler
             (on_close_stream t stream_id)
         in
-        Scheduler.add
-          t.streams
-          ~priority
-          ~initial_window_size:t.settings.initial_window_size
-          reqd
+        let _stream =
+          Scheduler.add
+            t.streams
+            ~priority
+            ~initial_send_window_size:t.settings.initial_window_size
+            ~initial_recv_window_size:t.config.initial_window_size
+            reqd
+        in
+        ()
 
 let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
   let { Frame.stream_id; _ } = frame_header in
@@ -1024,9 +1055,9 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
      *   type PROTOCOL_ERROR. *)
     report_connection_error t Error_code.ProtocolError
   else
-    match Scheduler.find t.streams stream_id with
-    | Some stream ->
-      (match stream.state with
+    match Scheduler.get_node t.streams stream_id with
+    | Some (Stream { descriptor; _ } as stream) ->
+      (match descriptor.state with
       | Active (Open (PartialHeaders partial_headers), active_stream) ->
         handle_headers_block
           t
@@ -1082,6 +1113,13 @@ let write_connection_preface t =
    * HTTP/2 settings. In the event that they are, we need to send a non-empty
    * SETTINGS frame advertising our configuration. *)
   let settings = Settings.settings_for_the_connection t.settings in
+  (* XXX(anmonteiro): same as in the client. Revert
+   * [t.settings.initial_window_size] to the spec-default value until we
+   * receive a setting for it. *)
+  t.settings <-
+    { t.settings with
+      initial_window_size = Settings.default.initial_window_size
+    };
   (* Now send the connection preface, including our settings for the
    * connection.
    *
@@ -1092,9 +1130,9 @@ let write_connection_preface t =
   write_settings_frame ~ack:false t settings;
   (* If a higher value for initial window size is configured, add more
    * tokens to the connection (we have no streams at this point). *)
-  if t.settings.initial_window_size > Settings.default.initial_window_size then
+  if t.config.initial_window_size > Settings.default.initial_window_size then
     let diff =
-      t.settings.initial_window_size - Settings.default.initial_window_size
+      t.config.initial_window_size - Settings.default.initial_window_size
     in
     send_window_update t t.streams diff
 
@@ -1205,7 +1243,7 @@ let handle_h2c_request t headers request_body_iovecs =
    *   identifier of 1 (see Section 5.1.1) with default priority values
    *   (Section 5.3.5). *)
   match open_stream t 1l with
-  | Some reqd ->
+  | Some (Stream { descriptor = reqd; _ } as stream) ->
     let active_stream =
       Reqd.create_active_stream
         t.hpack_encoder
@@ -1215,7 +1253,7 @@ let handle_h2c_request t headers request_body_iovecs =
     t.max_client_stream_id <- reqd.Stream.id;
     let lengthv = Httpaf.IOVec.lengthv request_body_iovecs in
     let end_stream = lengthv = 0 in
-    handle_headers t ~end_stream reqd active_stream headers;
+    handle_headers t ~end_stream stream active_stream headers;
     let request = Reqd.request reqd in
     let request_body = Reqd.request_body reqd in
     let request_info = Reqd.create_active_request request request_body in

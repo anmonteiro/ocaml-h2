@@ -41,31 +41,39 @@ type _ t =
   ; mutable on_eof : unit -> unit
   ; mutable on_read : Bigstringaf.t -> off:int -> len:int -> unit
   ; buffered_bytes : int ref
-  ; ready_to_write : Optional_thunk.t
+  ; done_reading : int -> unit
+  ; ready_to_write : unit -> unit
   }
+
+let default_done_reading = Sys.opaque_identity (fun _ -> ())
 
 let default_on_eof = Sys.opaque_identity (fun () -> ())
 
 let default_on_read = Sys.opaque_identity (fun _ ~off:_ ~len:_ -> ())
 
-let create buffer ready_to_write =
+let _create buffer ~done_reading ~ready_to_write =
   { faraday = Faraday.of_bigstring buffer
   ; read_scheduled = false
   ; write_final_data_frame = true
   ; on_eof = default_on_eof
   ; on_read = default_on_read
   ; buffered_bytes = ref 0
+  ; done_reading
   ; ready_to_write
   }
 
+let create_reader = _create ~ready_to_write:ignore
+
+let create_writer = _create ~done_reading:default_done_reading
+
 let create_empty () =
-  let t = create Bigstringaf.empty Optional_thunk.none in
+  let t = create_reader Bigstringaf.empty ~done_reading:default_done_reading in
   Faraday.close t.faraday;
   t
 
 let empty = create_empty ()
 
-let ready_to_write t = Optional_thunk.call_if_some t.ready_to_write
+let ready_to_write t = t.ready_to_write ()
 
 let write_char t c =
   Faraday.write_char t.faraday c;
@@ -113,6 +121,9 @@ let rec do_execute_read t on_eof on_read =
     let { Httpaf.IOVec.buffer; off; len } = iovec in
     Faraday.shift t.faraday len;
     on_read buffer ~off ~len;
+    (* Application is done reading, we can give flow control tokens back to the
+     * peer. *)
+    t.done_reading len;
     execute_read t
 
 and execute_read t =

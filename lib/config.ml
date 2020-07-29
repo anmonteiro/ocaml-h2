@@ -58,20 +58,20 @@ let default =
      *   endpoint MUST be between this initial value and the maximum allowed
      *   frame size (2^24-1 or 16,777,215 octets), inclusive. *)
     read_buffer_size = Settings.default.max_frame_size
-  ; request_body_buffer_size = 0x1000 (* Buffer size for request bodies *)
-  ; response_body_buffer_size = 0x1000 (* Buffer size for response bodies *)
-  ; enable_server_push =
-      true
-      (* From RFC7540§6.5.2:
-       *   Indicates the maximum number of concurrent streams that the sender
-       *   will allow. This limit is directional: it applies to the number of
-       *   streams that the sender permits the receiver to create. *)
-  ; max_concurrent_streams =
-      Settings.default.max_concurrent_streams
-      (* From RFC7540§6.5.2:
-       *   Indicates the sender's initial window size (in octets) for
-       *   stream-level flow control. *)
-  ; initial_window_size = Settings.WindowSize.default_initial_window_size
+  ; (* Buffer size for request bodies *) request_body_buffer_size = 0x1000
+  ; (* Buffer size for response bodies *) response_body_buffer_size = 0x1000
+  ; enable_server_push = true
+  ; (* From RFC7540§6.5.2:
+     *   Indicates the maximum number of concurrent streams that the sender
+     *   will allow. This limit is directional: it applies to the number of
+     *   streams that the sender permits the receiver to create. *)
+    max_concurrent_streams = Settings.default.max_concurrent_streams
+  ; (* Indicates the initial window size when receiving data from remote
+     * streams. In other words, represents the amount of octets that the H2
+     * endpoint is willing to receive from the peer. Cannot be lower than
+     * 65535 (the default). *)
+    (* TODO(anmonteiro): validate the default somewhere. *)
+    initial_window_size = Settings.WindowSize.default_initial_window_size
   }
 
 let to_settings

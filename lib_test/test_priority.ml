@@ -55,11 +55,13 @@ let repeat (Scheduler.PriorityTreeNode.Connection root) queue num =
   loop queue num []
 
 let add_stream root ?priority reqd =
-  Scheduler.add
-    root
-    ?priority
-    ~initial_window_size:Settings.WindowSize.default_initial_window_size
-    reqd
+  ignore
+  @@ Scheduler.add
+       root
+       ?priority
+       ~initial_recv_window_size:Settings.WindowSize.default_initial_window_size
+       ~initial_send_window_size:Settings.WindowSize.default_initial_window_size
+       reqd
 
 let test_priority_queue () =
   let root = Scheduler.make_root ~capacity:1000 () in

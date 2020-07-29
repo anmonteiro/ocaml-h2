@@ -143,7 +143,9 @@ module Make (Streamd : StreamDescriptor) = struct
       ; marked_for_removal = []
       }
 
-  let create ~parent ~initial_window_size descriptor =
+  let create
+      ~parent ~initial_send_window_size ~initial_recv_window_size descriptor
+    =
     Stream
       { descriptor
       ; t_last = 0
@@ -157,8 +159,8 @@ module Make (Streamd : StreamDescriptor) = struct
       ; priority = Priority.default_priority
       ; parent
       ; children = PriorityQueue.empty
-      ; flow = initial_window_size
-      ; inflow = initial_window_size
+      ; flow = initial_send_window_size
+      ; inflow = initial_recv_window_size
       }
 
   let pq_add stream_id node pq = PriorityQueue.add stream_id node pq
@@ -289,16 +291,29 @@ module Make (Streamd : StreamDescriptor) = struct
         set_parent stream_node ~exclusive new_parent);
       stream.priority <- priority)
 
-  let add (Connection root as t) ?priority ~initial_window_size descriptor =
-    let stream = create ~parent:(Parent t) ~initial_window_size descriptor in
+  let add
+      (Connection root as t)
+      ?priority
+      ~initial_send_window_size
+      ~initial_recv_window_size
+      descriptor
+    =
+    let stream =
+      create
+        ~parent:(Parent t)
+        ~initial_send_window_size
+        ~initial_recv_window_size
+        descriptor
+    in
     let stream_id = Streamd.id descriptor in
     StreamsTbl.add root.all_streams stream_id stream;
     root.children <- pq_add stream_id stream root.children;
-    match priority with
+    (match priority with
     | Some priority ->
       reprioritize_stream t ~priority stream
     | None ->
-      ()
+      ());
+    stream
 
   let get_node (Connection root) stream_id =
     StreamsTbl.find_opt root.all_streams stream_id
@@ -317,7 +332,7 @@ module Make (Streamd : StreamDescriptor) = struct
     root.flow > 0 && stream.flow > 0
 
   let allowed_to_receive (Connection root) (Stream stream) size =
-    size < root.inflow && size < stream.inflow
+    size <= root.inflow && size <= stream.inflow
 
   let write (Connection root as t) stream_node =
     let (Stream ({ descriptor; _ } as stream)) = stream_node in
