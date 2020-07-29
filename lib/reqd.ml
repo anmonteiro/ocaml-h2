@@ -231,9 +231,8 @@ let send_streaming_response ~flush_headers_immediately t s response =
     in
     let response_body_buffer = Bigstringaf.create s.body_buffer_size in
     let response_body =
-      Body.create
-        response_body_buffer
-        (Optional_thunk.some (fun () -> Writer.wakeup t.writer))
+      Body.create_writer response_body_buffer ~ready_to_write:(fun () ->
+          Writer.wakeup t.writer)
     in
     Writer.write_response_headers t.writer s.encoder frame_info response;
     if s.wait_for_first_flush then Writer.yield t.writer;

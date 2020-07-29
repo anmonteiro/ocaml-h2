@@ -294,11 +294,12 @@ module Make (Streamd : StreamDescriptor) = struct
     let stream_id = Streamd.id descriptor in
     StreamsTbl.add root.all_streams stream_id stream;
     root.children <- pq_add stream_id stream root.children;
-    match priority with
+    (match priority with
     | Some priority ->
       reprioritize_stream t ~priority stream
     | None ->
-      ()
+      ());
+    stream
 
   let get_node (Connection root) stream_id =
     StreamsTbl.find_opt root.all_streams stream_id
@@ -317,7 +318,7 @@ module Make (Streamd : StreamDescriptor) = struct
     root.flow > 0 && stream.flow > 0
 
   let allowed_to_receive (Connection root) (Stream stream) size =
-    size < root.inflow && size < stream.inflow
+    size <= root.inflow && size <= stream.inflow
 
   let write (Connection root as t) stream_node =
     let (Stream ({ descriptor; _ } as stream)) = stream_node in
