@@ -3,6 +3,8 @@ Unreleased
 
 - h2: client / server: execute request/response body reads as data frames
   arrive ([#130](https://github.com/anmonteiro/ocaml-h2/pull/130))
+- h2: client / server: only give back flow control tokens after surfacing reads
+  to the application ([#131](https://github.com/anmonteiro/ocaml-h2/pull/131))
 
 0.6.1 2020-05-16
 ---------------
