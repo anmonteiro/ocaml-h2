@@ -59,7 +59,8 @@ let add_stream root ?priority reqd =
   @@ Scheduler.add
        root
        ?priority
-       ~initial_window_size:Settings.WindowSize.default_initial_window_size
+       ~initial_recv_window_size:Settings.WindowSize.default_initial_window_size
+       ~initial_send_window_size:Settings.WindowSize.default_initial_window_size
        reqd
 
 let test_priority_queue () =
