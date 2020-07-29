@@ -1079,8 +1079,8 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
    *   connection. In the former case, the frame's stream identifier indicates
    *   the affected stream; in the latter, the value "0" indicates that the
    *   entire connection is the subject of the frame. *)
-  if Stream_identifier.is_connection stream_id then (
-    add_window_increment t t.streams window_increment)
+  if Stream_identifier.is_connection stream_id then
+    add_window_increment t t.streams window_increment
   else
     match Scheduler.get_node t.streams stream_id with
     | Some (Stream { descriptor; _ } as stream_node) ->
