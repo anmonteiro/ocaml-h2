@@ -646,11 +646,6 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
             set_error_and_handle t descriptor `Bad_request ProtocolError
           | _ ->
             let end_stream = Flags.test_end_stream flags in
-            (* XXX(anmonteiro): should we only give back flow control after we
-             * delivered EOF to the request body? There's a potential flow
-             * control issue right now where we're handing out connection-level
-             * flow control tokens on the receipt of every DATA frame. This
-             * might allow clients to send an unbounded number of bytes. *)
             if end_stream then
               if
                 (* From RFC7540§6.1:
