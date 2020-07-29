@@ -309,12 +309,7 @@ let handle_response_headers t stream ~end_stream active_request headers =
             (Bigstringaf.create buffer_size)
             ~done_reading:(fun len ->
               send_window_update t t.streams len;
-              send_window_update t stream len;
-              match respd.state with
-              | Active _ ->
-                ()
-              | Idle | Reserved _ | Closed _ ->
-                ())
+              send_window_update t stream len)
       in
       let new_response_state =
         Respd.create_active_response response response_body
@@ -857,13 +852,15 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
               { acc with max_concurrent_streams = x }
             | InitialWindowSize, new_val ->
               (* From RFC7540§6.9.2:
-               *   [...] a SETTINGS frame can alter the initial flow-control
-               *   window size for streams with active flow-control windows
-               *   (that is, streams in the "open" or "half-closed (remote)"
-               *   state). When the value of SETTINGS_INITIAL_WINDOW_SIZE
-               *   changes, a receiver MUST adjust the size of all stream
-               *   flow-control windows that it maintains by the difference
-               *   between the new value and the old value.
+               *   In addition to changing the flow-control window for streams
+               *   that are not yet active,  a SETTINGS frame can alter the
+               *   initial flow-control window size for streams with active
+               *   flow-control windows (that is, streams in the "open" or
+               *   "half-closed (remote)" state). When the value of
+               *   SETTINGS_INITIAL_WINDOW_SIZE changes, a receiver MUST adjust
+               *   the size of all stream flow-control windows that it
+               *   maintains by the difference between the new value and the
+               *   old value.
                *
                *   [...] A SETTINGS frame cannot alter the connection
                *   flow-control window. *)
@@ -937,7 +934,8 @@ let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block 
   let stream =
     Scheduler.add
       t.streams
-      ~initial_window_size:t.settings.initial_window_size
+      ~initial_send_window_size:t.settings.initial_window_size
+      ~initial_recv_window_size:t.config.initial_window_size
       respd
   in
   let partial_headers = create_partial_headers t flags headers_block in
@@ -1251,13 +1249,34 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
    * HTTP/2 settings. In the event that they are, we need to send a non-empty
    * SETTINGS frame advertising our configuration. *)
   let settings = Settings.settings_for_the_connection t.settings in
+  (* From RFC7540§6.9.2:
+   *   When an HTTP/2 connection is first established, new streams are created
+   *   with an initial flow-control window size of 65,535 octets. The
+   *   connection flow-control window is also 65,535 octets.
+   *
+   * XXX(anmonteiro): the starting setting for the initial window size for
+   * _sending_ is the default of 65535 octets. We're effectively overwriting it
+   * here to enforce this default after abusing the settings implementation to
+   * send our (receiving) in-flow setting to the peer. Throughout other parts
+   * of the code we (should) refer to it through
+   * [t.config.initial_window_size]. This should probably be cleaned up in the
+   * future. *)
+  t.settings <-
+    { t.settings with
+      initial_window_size = Settings.default.initial_window_size
+    };
   (* Send the client connection preface *)
   Writer.write_connection_preface t.writer settings;
-  (* If a higher value for initial window size is configured, add more
-   * tokens to the connection (we have no streams at this point). *)
-  (if t.settings.initial_window_size > Settings.default.initial_window_size then
+  (* If a higher value for initial window size is configured, add more tokens
+   * to the connection (we have no streams at this point) -- the peer is
+   * allowed to send more than the defaults.
+   *
+   * From RFC7540§6.9.2:
+   *   The connection flow-control window can only be changed using
+   *   WINDOW_UPDATE frames. *)
+  (if t.config.initial_window_size > Settings.default.initial_window_size then
      let diff =
-       t.settings.initial_window_size - Settings.default.initial_window_size
+       t.config.initial_window_size - Settings.default.initial_window_size
      in
      send_window_update t t.streams diff);
   t
@@ -1278,7 +1297,8 @@ let create_and_add_stream t ~error_handler =
   let _stream =
     Scheduler.add
       t.streams (* ?priority *)
-      ~initial_window_size:t.settings.initial_window_size
+      ~initial_send_window_size:t.settings.initial_window_size
+      ~initial_recv_window_size:t.config.initial_window_size
       respd
   in
   respd

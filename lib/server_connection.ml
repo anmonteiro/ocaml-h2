@@ -232,7 +232,8 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
       Scheduler.add
         t.streams (* TODO: *)
                   (* ?priority *)
-        ~initial_window_size:t.settings.initial_window_size
+        ~initial_send_window_size:t.settings.initial_window_size
+        ~initial_recv_window_size:t.config.initial_window_size
         reqd
     in
     Ok reqd
@@ -428,7 +429,8 @@ let open_stream t ?priority stream_id =
         Scheduler.add
           t.streams
           ?priority
-          ~initial_window_size:t.settings.initial_window_size
+          ~initial_send_window_size:t.settings.initial_window_size
+          ~initial_recv_window_size:t.config.initial_window_size
           reqd
       in
       Some stream
@@ -440,7 +442,10 @@ let open_stream t ?priority stream_id =
        *
        * Note: we already have the stream in the priority tree, and the
        * default initial window size for new streams could have changed
-       * between adding the (idle) stream and opening it. *)
+       * between adding the (idle) stream and opening it.
+       *
+       * Note: `inflow` doesn't change, that's set by us statically via config.
+       *)
       node.flow <- t.settings.initial_window_size;
       Some stream
 
@@ -759,7 +764,8 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
           Scheduler.add
             t.streams
             ~priority
-            ~initial_window_size:t.settings.initial_window_size
+            ~initial_send_window_size:t.settings.initial_window_size
+            ~initial_recv_window_size:t.config.initial_window_size
             reqd
         in
         ()
@@ -1112,6 +1118,13 @@ let write_connection_preface t =
    * HTTP/2 settings. In the event that they are, we need to send a non-empty
    * SETTINGS frame advertising our configuration. *)
   let settings = Settings.settings_for_the_connection t.settings in
+  (* XXX(anmonteiro): same as in the client. Revert
+   * [t.settings.initial_window_size] to the spec-default value until we
+   * receive a setting for it. *)
+  t.settings <-
+    { t.settings with
+      initial_window_size = Settings.default.initial_window_size
+    };
   (* Now send the connection preface, including our settings for the
    * connection.
    *
@@ -1122,9 +1135,9 @@ let write_connection_preface t =
   write_settings_frame ~ack:false t settings;
   (* If a higher value for initial window size is configured, add more
    * tokens to the connection (we have no streams at this point). *)
-  if t.settings.initial_window_size > Settings.default.initial_window_size then
+  if t.config.initial_window_size > Settings.default.initial_window_size then
     let diff =
-      t.settings.initial_window_size - Settings.default.initial_window_size
+      t.config.initial_window_size - Settings.default.initial_window_size
     in
     send_window_update t t.streams diff
 
