@@ -18,7 +18,7 @@ in
         git
         opam
       ] else [])
-      ++ (with ocamlPackages; [ merlin ocamlformat ]);
+      ++ (with ocamlPackages; [ merlin ocamlformat utop ]);
   }).overrideAttrs (o : {
     propagatedBuildInputs = lib.filter
       (drv: drv.pname == null || !(lib.any (name: name == drv.pname) (lib.attrNames h2Drvs)))
