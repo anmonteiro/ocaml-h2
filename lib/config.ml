@@ -69,9 +69,10 @@ let default =
   ; (* Indicates the initial window size when receiving data from remote
      * streams. In other words, represents the amount of octets that the H2
      * endpoint is willing to receive from the peer. Cannot be lower than
-     * 65535 (the default). *)
+     * 65535 (the default as per the spec). The default in H2 is 2^27, or
+     * 128 MiB. *)
     (* TODO(anmonteiro): validate the default somewhere. *)
-    initial_window_size = Settings.WindowSize.default_initial_window_size
+    initial_window_size = 1 lsl 27
   }
 
 let to_settings
