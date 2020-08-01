@@ -5,6 +5,8 @@ Unreleased
   arrive ([#130](https://github.com/anmonteiro/ocaml-h2/pull/130))
 - h2: client / server: only give back flow control tokens after surfacing reads
   to the application ([#131](https://github.com/anmonteiro/ocaml-h2/pull/131))
+- h2: Set a default of 128MiB for the initial receiving window size
+  ([#132](https://github.com/anmonteiro/ocaml-h2/pull/132))
 
 0.6.1 2020-05-16
 ---------------
