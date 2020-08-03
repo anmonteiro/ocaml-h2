@@ -1211,7 +1211,11 @@ let create_generic ~h2c ~config ~error_handler request_handler =
   and t =
     lazy
       { settings
-      ; reader = Reader.server_frames connection_preface_handler frame_handler
+      ; reader =
+          Reader.server_frames
+            ~max_frame_size:settings.max_frame_size
+            connection_preface_handler
+            frame_handler
       ; writer
       ; config
       ; request_handler

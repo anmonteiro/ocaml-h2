@@ -9,6 +9,8 @@ Unreleased
   ([#132](https://github.com/anmonteiro/ocaml-h2/pull/132))
 - h2: don't attempt to write frames to an encoder that has closed
   ([#134](https://github.com/anmonteiro/ocaml-h2/pull/134))
+- h2: Handle frame size errors in a more robust manner when parsing
+  ([#133](https://github.com/anmonteiro/ocaml-h2/pull/133))
 
 0.6.1 2020-05-16
 ---------------

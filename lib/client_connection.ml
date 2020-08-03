@@ -1233,7 +1233,11 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
       ; pending_pings = Queue.create ()
       ; error_handler
       ; push_handler
-      ; reader = Reader.client_frames connection_preface_handler frame_handler
+      ; reader =
+          Reader.client_frames
+            ~max_frame_size:settings.max_frame_size
+            connection_preface_handler
+            frame_handler
       ; writer = Writer.create settings.max_frame_size
       ; streams =
           Scheduler.make_root ()

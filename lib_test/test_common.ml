@@ -105,7 +105,12 @@ let parse_frames_bigstring wire =
     | _ ->
       Alcotest.fail "Expected frame to parse successfully."
   in
-  let reader = Reader.server_frames (fun _ -> ignore) handler in
+  let reader =
+    Reader.server_frames
+      ~max_frame_size:H2.Settings.default.max_frame_size
+      (fun _ -> ignore)
+      handler
+  in
   handle_preface reader;
   let _read =
     Reader.read_with_more
