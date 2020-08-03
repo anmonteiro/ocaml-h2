@@ -576,9 +576,6 @@ module Writer = struct
       write_go_away_frame t.encoder frame_info last_stream_id error debug_data
 
   let on_wakeup_writer t k =
-    (* if Writer.is_closed t.writer then *)
-    (* k () *)
-    (* else *)
     if Faraday.is_closed t.encoder then
       failwith "on_wakeup_writer on closed conn"
     else if Optional_thunk.is_some t.wakeup then
