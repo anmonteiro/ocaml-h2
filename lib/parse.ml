@@ -38,6 +38,9 @@ type parse_context =
   { mutable frame_header : Frame.frame_header option
   ; mutable remaining_bytes_to_skip : int
   ; mutable did_report_stream_error : bool
+  ; (* TODO: This should change as new settings frames arrive, but we don't yet
+     * resize the read buffer. *)
+    max_frame_size : int
   }
 
 let error e = Error e
@@ -416,22 +419,19 @@ let parse_frame parse_context =
   (* If we're parsing a new frame, we didn't yet send a stream error on it *)
   parse_context.did_report_stream_error <- false;
   parse_context.frame_header <- Some frame_header;
-  (* Payload could be 0 (e.g. empty SETTINGS frame). This always succeeds. *)
-  Angstrom.Unsafe.peek 0 (fun bs ~off:_ ~len:_ ->
-      (* h2 does unbuffered parsing and the bigarray we read input from is
-       * allocated based on the maximum frame payload negotiated by HTTP/2
-       * communication. If the underlying buffer is smaller than what
-       * the frame can fit, we want to skip the remaining input and skip to the
-       * next frame.
-       *
-       * From RFC7540§5.4.2:
-       *   A stream error is an error related to a specific stream that does
-       *   not affect processing of other streams. *)
-      let is_frame_size_error = payload_length > Bigstringaf.length bs in
-      if is_frame_size_error then
-        parse_context.remaining_bytes_to_skip <-
-          parse_context.remaining_bytes_to_skip + payload_length)
-  >>= fun () ->
+  (* h2 does unbuffered parsing and the bigarray we read input from is
+   * allocated based on the maximum frame payload negotiated by HTTP/2
+   * communication. If the underlying buffer is smaller than what
+   * the frame can fit, we want to skip the remaining input and skip to the
+   * next frame.
+   *
+   * From RFC7540§5.4.2:
+   *   A stream error is an error related to a specific stream that does
+   *   not affect processing of other streams. *)
+  let is_frame_size_error = payload_length > parse_context.max_frame_size in
+  if is_frame_size_error then
+    parse_context.remaining_bytes_to_skip <-
+      parse_context.remaining_bytes_to_skip + payload_length;
   lift
     (function
       | Ok frame_payload ->
@@ -489,10 +489,11 @@ module Reader = struct
   let create parser parse_context =
     { parser; parse_state = Initial; closed = false; parse_context }
 
-  let create_parse_context () =
+  let create_parse_context max_frame_size =
     { frame_header = None
     ; remaining_bytes_to_skip = 0
     ; did_report_stream_error = false
+    ; max_frame_size
     }
 
   let settings_preface parse_context =
@@ -528,9 +529,10 @@ module Reader = struct
     | Error e ->
       Error (`Error e)
 
-  let connection_preface_and_frames preface_parser preface_handler frame_handler
+  let connection_preface_and_frames
+      ~max_frame_size preface_parser preface_handler frame_handler
     =
-    let parse_context = create_parse_context () in
+    let parse_context = create_parse_context max_frame_size in
     let parser =
       preface_parser parse_context <* commit >>= function
       | Ok (frame, settings_list) ->
@@ -554,8 +556,9 @@ module Reader = struct
       preface_handler
       frame_handler
 
-  let server_frames preface_handler frame_handler =
+  let server_frames ~max_frame_size preface_handler frame_handler =
     connection_preface_and_frames
+      ~max_frame_size
       (fun parse_context ->
         (* From RFC7540§3.5:
          *   The client connection preface starts with a sequence of 24 octets,

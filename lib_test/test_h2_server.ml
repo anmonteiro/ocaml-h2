@@ -391,9 +391,6 @@ module Server_connection_tests = struct
   let test_read_frame_size_error () =
     let max_length = String.length (preface ()) in
     let config = { Config.default with read_buffer_size = max_length } in
-    let t =
-      create_and_handle_preface ~config ~error_handler default_request_handler
-    in
     let hpack_encoder = Hpack.Encoder.create 4096 in
     let headers =
       { Frame.frame_header =
@@ -423,19 +420,49 @@ module Server_connection_tests = struct
       "Frame payload is surely over the max length"
       true
       (frame_length > max_length);
+    let t =
+      create_and_handle_preface ~config ~error_handler default_request_handler
+    in
     let read1 = read t ~off:0 ~len:max_length frame_wire in
     Alcotest.(check int) "only read the frame header" 9 read1;
     let read2 = read t ~off:9 ~len:(max_length - 9) frame_wire in
-    Alcotest.(check int) "couldn't read more" 0 read2;
+    Alcotest.(check int) "advances over fed input" (max_length - 9) read2;
+    let read3 =
+      read t ~off:(read1 + read2) ~len:(frame_length - max_length) frame_wire
+    in
+    Alcotest.(check int)
+      "advances over more input"
+      (frame_length - max_length)
+      read3;
+    Alcotest.check
+      read_operation
+      "Reader wants to read"
+      `Read
+      (Reader.next t.reader);
+    (* #2 *)
+    let t =
+      create_and_handle_preface ~config ~error_handler default_request_handler
+    in
+    let read1 = read t ~off:0 ~len:max_length frame_wire in
+    Alcotest.(check int) "only read the frame header" 9 read1;
+    let read2 = read t ~off:9 ~len:(max_length - 9) frame_wire in
+    Alcotest.(check int) "advances over fed input" (max_length - 9) read2;
     (* Read buffer advanced, contents are not the same anymore. *)
-    let read3 = read_eof t ~off:20 ~len:(max_length - 9) frame_wire in
-    Alcotest.(check int) "couldn't read more" 0 read3;
+    let read3 =
+      read_eof
+        t
+        ~off:(read1 + read2)
+        ~len:(frame_length - max_length - (* random *) 5)
+        frame_wire
+    in
+    Alcotest.(check int)
+      "advances over more input"
+      (frame_length - max_length - (* random *) 5)
+      read3;
     Alcotest.check
       read_operation
       "There was a connection error of type FRAME_SIZE_ERROR"
-      (`Error
-        Error.(
-          ConnectionError (FrameSizeError, "frame_payload: not enough input")))
+      (`Error Error.(ConnectionError (FrameSizeError, "")))
       (Reader.next t.reader)
 
   let test_read_frame_size_error_priority_frame () =
@@ -980,16 +1007,18 @@ module Server_connection_tests = struct
     let read1 = read t ~off:0 ~len:max_length frame_wire in
     Alcotest.(check int) "only read the frame header" 9 read1;
     let read2 = read t ~off:9 ~len:(max_length - 9) frame_wire in
-    Alcotest.(check int) "couldn't read more" 0 read2;
-    (* Read buffer advanced, contents are not the same anymore. *)
-    let read3 = read_eof t ~off:20 ~len:(max_length - 9) frame_wire in
-    Alcotest.(check int) "couldn't read more" 0 read3;
+    Alcotest.(check int) "advances over fed input" (max_length - 9) read2;
+    let read3 =
+      read t ~off:(read1 + read2) ~len:(frame_length - max_length) frame_wire
+    in
+    Alcotest.(check int)
+      "advances over more input"
+      (frame_length - max_length)
+      read3;
     Alcotest.check
       read_operation
-      "There was a connection error of type FRAME_SIZE_ERROR"
-      (`Error
-        Error.(
-          ConnectionError (FrameSizeError, "frame_payload: not enough input")))
+      "Reader wants to read, unknown frame type is ignored"
+      `Read
       (Reader.next t.reader)
 
   let test_reading_request_body () =
