@@ -1436,10 +1436,6 @@ let next_write_operation t =
   flush_request_body t;
   Writer.next t.writer
 
-let yield_writer t k =
-  if Writer.is_closed t.writer then
-    k ()
-  else
-    Writer.on_wakeup_writer t.writer k
+let yield_writer t k = Writer.on_wakeup_writer t.writer k
 
 let report_write_result t result = Writer.report_result t.writer result

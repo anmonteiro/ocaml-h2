@@ -226,7 +226,7 @@ let default_ping_payload =
    *   opaque data in the payload. *)
   let bstr = Bigstringaf.create 8 in
   for i = 0 to 7 do
-    Bigstringaf.set bstr i '\000'
+    Bigstringaf.unsafe_set bstr i '\000'
   done;
   bstr
 
@@ -378,26 +378,28 @@ module Writer = struct
       f ~off ~len:total_length frame_info
 
   let write_data t frame_info ?off ?len str =
-    let total_length =
-      match len with Some len -> len | None -> String.length str
-    in
-    chunk_data_frames
-      frame_info
-      ?off
-      total_length
-      ~f:(fun ~off ~len frame_info ->
-        write_data_frame t.encoder frame_info ~off ~len str)
+    if not (is_closed t.encoder) then
+      let total_length =
+        match len with Some len -> len | None -> String.length str
+      in
+      chunk_data_frames
+        frame_info
+        ?off
+        total_length
+        ~f:(fun ~off ~len frame_info ->
+          write_data_frame t.encoder frame_info ~off ~len str)
 
   let schedule_data t frame_info ?off ?len bstr =
-    let total_length =
-      match len with Some len -> len | None -> Bigstringaf.length bstr
-    in
-    chunk_data_frames
-      frame_info
-      ?off
-      total_length
-      ~f:(fun ~off ~len frame_info ->
-        schedule_data_frame t.encoder frame_info ~off ~len bstr)
+    if not (is_closed t.encoder) then
+      let total_length =
+        match len with Some len -> len | None -> Bigstringaf.length bstr
+      in
+      chunk_data_frames
+        frame_info
+        ?off
+        total_length
+        ~f:(fun ~off ~len frame_info ->
+          schedule_data_frame t.encoder frame_info ~off ~len bstr)
 
   (* Chunk header block fragments into HEADERS|PUSH_PROMISE + CONTINUATION
    * frames. *)
@@ -504,66 +506,79 @@ module Writer = struct
     chunk_header_block_fragments t frame_info ~write_frame faraday
 
   let write_request_headers t hpack_encoder ?priority frame_info request =
-    let write_frame = write_headers_frame ?priority in
-    write_request_like_frame t hpack_encoder ~write_frame frame_info request
+    if not (is_closed t.encoder) then
+      let write_frame = write_headers_frame ?priority in
+      write_request_like_frame t hpack_encoder ~write_frame frame_info request
 
   let write_push_promise t hpack_encoder frame_info ~promised_id request =
-    let write_frame = write_push_promise_frame ~promised_id in
-    write_request_like_frame t hpack_encoder ~write_frame frame_info request
+    if not (is_closed t.encoder) then
+      let write_frame = write_push_promise_frame ~promised_id in
+      write_request_like_frame t hpack_encoder ~write_frame frame_info request
 
   let write_response_headers t hpack_encoder ?priority frame_info response =
-    let { Response.status; headers; _ } = response in
-    let faraday = Faraday.of_bigstring t.headers_block_buffer in
-    (* From RFC7540§8.1.2.4:
-     *   For HTTP/2 responses, a single :status pseudo-header field is defined
-     *   that carries the HTTP status code field (see [RFC7231], Section 6).
-     *   This pseudo-header field MUST be included in all responses; otherwise,
-     *   the response is malformed (Section 8.1.2.6). *)
-    Hpack.Encoder.encode_header
-      hpack_encoder
-      faraday
-      { Headers.name = ":status"
-      ; value = Status.to_string status
-      ; sensitive = false
-      };
-    encode_headers hpack_encoder faraday headers;
-    let has_priority = match priority with Some _ -> true | None -> false in
-    chunk_header_block_fragments
-      t
-      frame_info
-      ~write_frame:(write_headers_frame ?priority)
-      ~has_priority
-      faraday
+    if not (is_closed t.encoder) then (
+      let { Response.status; headers; _ } = response in
+      let faraday = Faraday.of_bigstring t.headers_block_buffer in
+      (* From RFC7540§8.1.2.4:
+       *   For HTTP/2 responses, a single :status pseudo-header field is defined
+       *   that carries the HTTP status code field (see [RFC7231], Section 6).
+       *   This pseudo-header field MUST be included in all responses; otherwise,
+       *   the response is malformed (Section 8.1.2.6). *)
+      Hpack.Encoder.encode_header
+        hpack_encoder
+        faraday
+        { Headers.name = ":status"
+        ; value = Status.to_string status
+        ; sensitive = false
+        };
+      encode_headers hpack_encoder faraday headers;
+      let has_priority = match priority with Some _ -> true | None -> false in
+      chunk_header_block_fragments
+        t
+        frame_info
+        ~write_frame:(write_headers_frame ?priority)
+        ~has_priority
+        faraday)
 
   let write_rst_stream t frame_info e =
-    write_rst_stream_frame t.encoder frame_info e
+    if not (is_closed t.encoder) then
+      write_rst_stream_frame t.encoder frame_info e
 
   let write_window_update t frame_info n =
-    write_window_update_frame t.encoder frame_info n
+    if not (is_closed t.encoder) then
+      write_window_update_frame t.encoder frame_info n
 
   let schedule_iovecs t ~len frame_info iovecs =
-    let writer t ~len ~iovecs = bounded_schedule_iovecs t ~len iovecs in
-    chunk_data_frames frame_info len ~f:(fun ~off ~len frame_info ->
-        write_frame_with_padding
-          t.encoder
-          frame_info
-          Data
-          len
-          (writer ~iovecs:(IOVec.shiftv iovecs off) ~len))
+    if not (is_closed t.encoder) then
+      let writer t ~len ~iovecs = bounded_schedule_iovecs t ~len iovecs in
+      chunk_data_frames frame_info len ~f:(fun ~off ~len frame_info ->
+          write_frame_with_padding
+            t.encoder
+            frame_info
+            Data
+            len
+            (writer ~iovecs:(IOVec.shiftv iovecs off) ~len))
 
   let write_priority t frame_info priority =
-    write_priority_frame t.encoder frame_info priority
+    if not (is_closed t.encoder) then
+      write_priority_frame t.encoder frame_info priority
 
   let write_settings t frame_info settings =
-    write_settings_frame t.encoder frame_info settings
+    if not (is_closed t.encoder) then
+      write_settings_frame t.encoder frame_info settings
 
   let write_ping t frame_info ?off payload =
-    write_ping_frame t.encoder frame_info ?off payload
+    if not (is_closed t.encoder) then
+      write_ping_frame t.encoder frame_info ?off payload
 
   let write_go_away t frame_info ~debug_data ~last_stream_id error =
-    write_go_away_frame t.encoder frame_info last_stream_id error debug_data
+    if not (is_closed t.encoder) then
+      write_go_away_frame t.encoder frame_info last_stream_id error debug_data
 
   let on_wakeup_writer t k =
+    (* if Writer.is_closed t.writer then *)
+    (* k () *)
+    (* else *)
     if Faraday.is_closed t.encoder then
       failwith "on_wakeup_writer on closed conn"
     else if Optional_thunk.is_some t.wakeup then

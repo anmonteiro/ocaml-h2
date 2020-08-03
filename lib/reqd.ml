@@ -119,7 +119,7 @@ let request_body t =
     failwith
       "h2.Reqd.request_body: Promised requests must not include a request body"
   | Closed _ ->
-    assert false
+    failwith "h2.Reqd.request_body: Stream already closed"
 
 let response t =
   match t.state with
@@ -446,9 +446,15 @@ let requires_output t =
     false
 
 let flush_request_body t =
-  let request_body = request_body t in
-  if Body.has_pending_output request_body then
-    try Body.execute_read request_body with exn -> report_exn t exn
+  match t.state with
+  | Active
+      ( ( Open (ActiveMessage { request_body; _ })
+        | HalfClosed { request_body; _ } )
+      , _ ) ->
+    if Body.has_pending_output request_body then (
+      try Body.execute_read request_body with exn -> report_exn t exn)
+  | _ ->
+    ()
 
 let write_buffer_data writer ~off ~len frame_info buffer =
   match buffer with

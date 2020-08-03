@@ -1404,8 +1404,4 @@ let next_write_operation t =
 
 let report_write_result t result = Writer.report_result t.writer result
 
-let yield_writer t k =
-  if Writer.is_closed t.writer then
-    k ()
-  else
-    Writer.on_wakeup_writer t.writer k
+let yield_writer t k = Writer.on_wakeup_writer t.writer k
