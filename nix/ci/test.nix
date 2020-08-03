@@ -2,29 +2,10 @@
 
 let
   pkgs = import ../sources.nix { inherit ocamlVersion; };
-  inherit (pkgs) lib stdenv fetchTarball ocamlPackages;
+  inherit (pkgs) lib stdenv fetchTarball ocamlPackages h2spec;
 
   h2Pkgs = import ./.. { inherit ocamlVersion; };
   h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
-  h2spec = stdenv.mkDerivation rec {
-    name = "h2spec";
-    version = "2.5.0";
-    src = builtins.fetchurl {
-      url = "https://github.com/summerwind/h2spec/releases/download/v${version}/h2spec_linux_amd64.tar.gz";
-      sha256 = "1za8r8fz57w68qmx4r9drd1wj44w7h6dnpcadp1j7sqn790i4l4g";
-    };
-    phases = ["unpackPhase" "installPhase" "fixupPhase"];
-    nativeBuildInputs = [ pkgs.autoPatchelfHook ];
-    unpackPhase = ''
-      mkdir h2spec-${version}
-      tar -C h2spec-${version} -xzf $src
-    '';
-    installPhase = ''
-      mkdir -p $out/bin
-      cp h2spec-${version}/* $out/bin
-      chmod +x $out/bin/h2spec
-    '';
-  };
 in
   stdenv.mkDerivation {
     name = "h2-conformance-tests";

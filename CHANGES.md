@@ -7,6 +7,8 @@ Unreleased
   to the application ([#131](https://github.com/anmonteiro/ocaml-h2/pull/131))
 - h2: Set a default of 128MiB for the initial receiving window size
   ([#132](https://github.com/anmonteiro/ocaml-h2/pull/132))
+- h2: don't attempt to write frames to an encoder that has closed
+  ([#134](https://github.com/anmonteiro/ocaml-h2/pull/134))
 
 0.6.1 2020-05-16
 ---------------
