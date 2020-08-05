@@ -3,7 +3,7 @@
 let
   overlays =
     builtins.fetchTarball
-      https://github.com/anmonteiro/nix-overlays/archive/db63c40.tar.gz;
+      https://github.com/anmonteiro/nix-overlays/archive/4a945d3.tar.gz;
 
 in
 
@@ -16,10 +16,10 @@ in
 
         h2spec = super.stdenv.mkDerivation rec {
           name = "h2spec";
-          version = "2.5.0";
+          version = "2.6.0";
           src = builtins.fetchurl {
             url = "https://github.com/summerwind/h2spec/releases/download/v${version}/h2spec_linux_amd64.tar.gz";
-            sha256 = "1za8r8fz57w68qmx4r9drd1wj44w7h6dnpcadp1j7sqn790i4l4g";
+            sha256 = "064k4yg818hd8pwh8xcf1iapw0k6ndsg1nsjwx0as09ff3gf0zhm";
           };
           phases = ["unpackPhase" "installPhase" "fixupPhase"];
           nativeBuildInputs = [ self.autoPatchelfHook ];

@@ -1,26 +1,33 @@
-let set_interval s f destroy =
-  let rec set_interval_loop s f n =
-    let timeout =
-      Lwt_timeout.create s (fun () ->
-          if n > 0 then (
-            if f () then
-              set_interval_loop s f (n - 1))
-          else
-            destroy ())
-    in
-    Lwt_timeout.start timeout
-  in
-  set_interval_loop s f 2
+let set_interval s f =
+  let timeout = Lwt_timeout.create s f in
+  Lwt_timeout.start timeout
 
 let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
   let open H2 in
   let request_handler : Unix.sockaddr -> Reqd.t -> unit =
    fun _client_address request_descriptor ->
     let request = Reqd.request request_descriptor in
-    match request.meth, request.target with
-    (* This set of routes waits until the entire request body has been read
-     * to produce a response. *)
-    | `GET, "/" | `POST, "/" ->
+    match request.target with
+    (* This set of routes responds immediately without reading the request body *)
+    | "/immediately" ->
+      let response_content_type =
+        match Headers.get request.headers "content-type" with
+        | Some request_content_type ->
+          request_content_type
+        | None ->
+          "application/octet-stream"
+      in
+      let request_body = Reqd.request_body request_descriptor in
+      Body.close_reader request_body;
+      let response =
+        Response.create
+          ~headers:(Headers.of_list [ "content-type", response_content_type ])
+          `OK
+      in
+      Reqd.respond_with_string request_descriptor response "non-empty data."
+    | _ ->
+      (* This set of routes waits until the entire request body has been read
+       * to produce a response. *)
       let request_body = Reqd.request_body request_descriptor in
       let response_content_type =
         match Headers.get request.headers "content-type" with
@@ -39,35 +46,35 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
                   (Headers.of_list [ "content-type", response_content_type ])
                 `OK
             in
-            Reqd.respond_with_string
-              request_descriptor
-              response
-              "non-empty data.")
+            match request.target with
+            | "/streaming" ->
+              let response_body =
+                Reqd.respond_with_streaming request_descriptor response
+              in
+              Body.write_string response_body (String.make 100 'a');
+              set_interval 1 (fun () ->
+                  ignore
+                  @@ Reqd.try_with request_descriptor (fun () ->
+                         Body.write_string response_body " data");
+                  Body.flush response_body (fun () ->
+                      Body.close_writer response_body))
+            | "/bigstring" ->
+              let res_body = "non-empty data." in
+              let bs =
+                Bigstringaf.of_string
+                  ~off:0
+                  ~len:(String.length res_body)
+                  res_body
+              in
+              Reqd.respond_with_bigstring request_descriptor response bs
+            | "/string" | _ ->
+              Reqd.respond_with_string
+                request_descriptor
+                response
+                "non-empty data.")
           ~on_read:(fun _request_data ~off:_ ~len:_ -> respond ())
       in
       respond ()
-    (* This set of routes responds immediately without reading the request body *)
-    | `GET, "/immediately" | `POST, "/immediately" ->
-      let response_content_type =
-        match Headers.get request.headers "content-type" with
-        | Some request_content_type ->
-          request_content_type
-        | None ->
-          "application/octet-stream"
-      in
-      let request_body = Reqd.request_body request_descriptor in
-      Body.close_reader request_body;
-      let response =
-        Response.create
-          ~headers:(Headers.of_list [ "content-type", response_content_type ])
-          `OK
-      in
-      Reqd.respond_with_string request_descriptor response "non-empty data."
-    | _ ->
-      Reqd.respond_with_string
-        request_descriptor
-        (Response.create `Method_not_allowed)
-        ""
   in
   let error_handler
       :  Unix.sockaddr -> ?request:H2.Request.t -> _
@@ -84,11 +91,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
     Body.close_writer response_body
   in
   H2_lwt_unix.Server.create_connection_handler
-    ~config:
-      { H2.Config.default with
-        max_concurrent_streams = 2
-      ; initial_window_size = Int32.(to_int max_int)
-      }
+    ~config:{ H2.Config.default with max_concurrent_streams = 2 }
     ~request_handler
     ~error_handler
 
@@ -106,10 +109,7 @@ let () =
         listen_address
         connection_handler
       >>= fun _server ->
-      Printf.printf "Listening on port %i and echoing POST requests.\n" !port;
-      print_string "To send a POST request, try\n\n";
-      print_string "  echo foo | dune exec examples/lwt/lwt_post.exe\n\n";
-      flush stdout;
+      Printf.printf "Server listening on port %i\n%!" !port;
       Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   Lwt_main.run forever
