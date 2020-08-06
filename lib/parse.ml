@@ -454,7 +454,7 @@ let connection_preface =
    *   In HTTP/2, each endpoint is required to send a connection preface as a
    *   final confirmation of the protocol in use and to establish the initial
    *   settings for the HTTP/2 connection. *)
-  string "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" <?> "connection preface"
+  string Frame.connection_preface <?> "connection preface"
 
 module Reader = struct
   module AU = Angstrom.Unbuffered

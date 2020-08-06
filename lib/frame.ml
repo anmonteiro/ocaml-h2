@@ -30,6 +30,8 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
+let connection_preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+
 module FrameType = struct
   type t =
     (* From RFC7540§6.1:

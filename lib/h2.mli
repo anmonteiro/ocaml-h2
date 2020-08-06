@@ -161,9 +161,9 @@ end
 
 (** Header Fields
 
-    Each header field consists of a lowercase {b field name} and a {b field
-    value}. Per the HTTP/2 specification, header field names {b must} be
-    converted to lowercase prior to their encoding in HTTP/2 (see
+    Each header field consists of a lowercase {b field name} and a
+    {b field value}. Per the HTTP/2 specification, header field names {b must}
+    be converted to lowercase prior to their encoding in HTTP/2 (see
     {{:https://tools.ietf.org/html/rfc7540#section-8.1.2} RFC7540§8.1.2} for
     more details). h2 does {b not} convert field names to lowercase; it is
     therefore the responsibility of the caller of the functions contained in
@@ -183,10 +183,11 @@ end
     A recipient MAY combine multiple header fields with the same field name into
     one "field-name: field-value" pair, without changing the semantics of the
     message, by appending each subsequent field value to the combined field
-    value in order, separated by a comma. {i The order in which header fields
-    with the same field name are received is therefore significant to the
-    interpretation of the combined field value}; a proxy MUST NOT change the
-    order of these field values when forwarding a message.
+    value in order, separated by a comma.
+    {i The order in which header fields with the same field name are received is
+       therefore significant to the interpretation of the combined field value};
+    a proxy MUST NOT change the order of these field values when forwarding a
+    message.
 
     {i Note.} Unless otherwise specified, all operations preserve header field
     order and all reference to equality on names is assumed to be
