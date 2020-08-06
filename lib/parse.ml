@@ -34,8 +34,15 @@
 
 open Angstrom
 
+let default_frame_header =
+  { Frame.payload_length = 0
+  ; flags = Flags.default_flags
+  ; stream_id = -1l
+  ; frame_type = Unknown (-1)
+  }
+
 type parse_context =
-  { mutable frame_header : Frame.frame_header option
+  { mutable frame_header : Frame.frame_header
   ; mutable remaining_bytes_to_skip : int
   ; mutable did_report_stream_error : bool
   ; (* TODO: This should change as new settings frames arrive, but we don't yet
@@ -419,7 +426,7 @@ let parse_frame parse_context =
   parse_frame_header >>= fun ({ Frame.payload_length; _ } as frame_header) ->
   (* If we're parsing a new frame, we didn't yet send a stream error on it *)
   parse_context.did_report_stream_error <- false;
-  parse_context.frame_header <- Some frame_header;
+  parse_context.frame_header <- frame_header;
   (* h2 does unbuffered parsing and the bigarray we read input from is
    * allocated based on the maximum frame payload negotiated by HTTP/2
    * communication. If the underlying buffer is smaller than what
@@ -491,7 +498,7 @@ module Reader = struct
     { parser; parse_state = Initial; closed = false; parse_context }
 
   let create_parse_context max_frame_size =
-    { frame_header = None
+    { frame_header = default_frame_header
     ; remaining_bytes_to_skip = 0
     ; did_report_stream_error = false
     ; max_frame_size
@@ -641,35 +648,36 @@ module Reader = struct
   let fail_to_string marks err = String.concat " > " marks ^ ": " ^ err
 
   let next_from_error t ?(msg = "") error_code =
-    match t.parse_context, error_code with
-    | ( { frame_header =
-            Some
+    if t.parse_context.frame_header == default_frame_header then
+      `Error Error.(ConnectionError (error_code, msg))
+    else
+      match t.parse_context, error_code with
+      | ( { frame_header =
               { frame_type =
                   Headers | PushPromise | Continuation | Settings | Unknown _
               ; _
               }
-        ; _
-        }
-      , Error_code.FrameSizeError )
-    | { frame_header = Some { Frame.stream_id = 0x0l; _ }; _ }, _
-    | { frame_header = None; _ }, _ ->
-      (* From RFC7540§4.2:
-       *   A frame size error in a frame that could alter the state of the
-       *   entire connection MUST be treated as a connection error (Section
-       *   5.4.1); this includes any frame carrying a header block (Section
-       *   4.3) (that is, HEADERS, PUSH_PROMISE, and CONTINUATION), SETTINGS,
-       *   and any frame with a stream identifier of 0. *)
-      `Error Error.(ConnectionError (error_code, msg))
-    | { frame_header = Some _; did_report_stream_error = true; _ }, _ ->
-      (* If the parser is in a `Fail` state and would report a stream error,
-       * just issue a `Read` operation if we've already reported that error. *)
-      if t.closed then
-        `Close
-      else
-        `Read
-    | { frame_header = Some { Frame.stream_id; _ }; _ }, _ ->
-      t.parse_context.did_report_stream_error <- true;
-      `Error Error.(StreamError (stream_id, error_code))
+          ; _
+          }
+        , Error_code.FrameSizeError )
+      | { frame_header = { Frame.stream_id = 0x0l; _ }; _ }, _ ->
+        (* From RFC7540§4.2:
+         *   A frame size error in a frame that could alter the state of the
+         *   entire connection MUST be treated as a connection error (Section
+         *   5.4.1); this includes any frame carrying a header block (Section
+         *   4.3) (that is, HEADERS, PUSH_PROMISE, and CONTINUATION), SETTINGS,
+         *   and any frame with a stream identifier of 0. *)
+        `Error Error.(ConnectionError (error_code, msg))
+      | { did_report_stream_error = true; _ }, _ ->
+        (* If the parser is in a `Fail` state and would report a stream error,
+         * just issue a `Read` operation if we've already reported that error. *)
+        if t.closed then
+          `Close
+        else
+          `Read
+      | { frame_header = { Frame.stream_id; _ }; _ }, _ ->
+        t.parse_context.did_report_stream_error <- true;
+        `Error Error.(StreamError (stream_id, error_code))
 
   let next t =
     match t.parse_state with
