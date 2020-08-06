@@ -11,6 +11,10 @@ Unreleased
   ([#134](https://github.com/anmonteiro/ocaml-h2/pull/134))
 - h2: Handle frame size errors in a more robust manner when parsing
   ([#133](https://github.com/anmonteiro/ocaml-h2/pull/133))
+- h2: Create push streams with the right priority (as per
+  [RFC7540§5.3.5](https://tools.ietf.org/html/rfc7540#section-5.3.5), pushed
+  streams initially depend on their associated stream)
+  ([#136](https://github.com/anmonteiro/ocaml-h2/pull/136))
 
 0.6.1 2020-05-16
 ---------------
