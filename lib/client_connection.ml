@@ -905,7 +905,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       report_error t error
 
 let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block =
-  let { Frame.flags; _ } = frame_header in
+  let { Frame.flags; stream_id; _ } = frame_header in
   (* From RFC7540§6.6:
    *   The PUSH_PROMISE frame (type=0x5) is used to notify the peer endpoint in
    *   advance of streams the sender intends to initiate. *)
@@ -917,9 +917,14 @@ let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block 
       t.error_handler
       (on_close_stream t promised_stream_id)
   in
-  let stream =
+  (* From RFC7540§5.3.5:
+   *   All streams are initially assigned a non-exclusive dependency on stream
+   *   0x0. Pushed streams (Section 8.2) initially depend on their associated
+   *   stream. In both cases, streams are assigned a default weight of 16. *)
+  let stream : Scheduler.nonroot Scheduler.node =
     Scheduler.add
       t.streams
+      ~priority:{ Priority.default_priority with stream_dependency = stream_id }
       ~initial_send_window_size:t.settings.initial_window_size
       ~initial_recv_window_size:t.config.initial_window_size
       respd
@@ -1283,10 +1288,11 @@ let create_and_add_stream t ~error_handler =
       error_handler
       (on_close_stream t stream_id)
   in
-  (* TODO: priority *)
-  let _stream =
+  (* TODO: custom priority *)
+  let _stream : Scheduler.nonroot Scheduler.node =
     Scheduler.add
-      t.streams (* ?priority *)
+      t.streams
+      ~priority:Priority.default_priority
       ~initial_send_window_size:t.settings.initial_window_size
       ~initial_recv_window_size:t.config.initial_window_size
       respd

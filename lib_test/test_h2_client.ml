@@ -552,6 +552,11 @@ module Client_connection_tests = struct
     let read_push = read t ~off:0 ~len:push_length push_wire in
     Alcotest.(check int) "Read the entire push frame" push_length read_push;
     Alcotest.(check bool) "Push handler called" true !push_handler_called;
+    let (Stream pushed_stream) = opt_exn (Scheduler.get_node t.streams 2l) in
+    Alcotest.(check int32)
+      "Pushed stream has a stream dependency on the parent stream"
+      1l
+      pushed_stream.priority.stream_dependency;
     read_response
       t
       hpack_encoder

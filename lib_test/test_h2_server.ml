@@ -738,6 +738,11 @@ module Server_connection_tests = struct
           map
             Frame.FrameType.serialize
             Frame.FrameType.[ PushPromise; Headers; Headers; Data ]);
+      let (Stream pushed_stream) = opt_exn (Scheduler.get_node t.streams 2l) in
+      Alcotest.(check int32)
+        "Pushed stream has a stream dependency on the parent stream"
+        1l
+        pushed_stream.priority.stream_dependency;
       let iovec_len = IOVec.lengthv iovecs in
       report_write_result t (`Ok iovec_len);
       (match next_write_operation t with

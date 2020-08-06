@@ -293,7 +293,7 @@ module Make (Streamd : StreamDescriptor) = struct
 
   let add
       (Connection root as t)
-      ?priority
+      ~priority
       ~initial_send_window_size
       ~initial_recv_window_size
       descriptor
@@ -308,11 +308,8 @@ module Make (Streamd : StreamDescriptor) = struct
     let stream_id = Streamd.id descriptor in
     StreamsTbl.add root.all_streams stream_id stream;
     root.children <- pq_add stream_id stream root.children;
-    (match priority with
-    | Some priority ->
-      reprioritize_stream t ~priority stream
-    | None ->
-      ());
+    if priority != Priority.default_priority then
+      reprioritize_stream t ~priority stream;
     stream
 
   let get_node (Connection root) stream_id =

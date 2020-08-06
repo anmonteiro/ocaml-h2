@@ -200,15 +200,14 @@ let send_window_update
     loop n;
     wakeup_writer t)
 
-let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
+let create_push_stream t parent_stream_id =
+  let candidate_push_stream_id = Int32.add t.max_pushed_stream_id 2l in
   if not t.settings.enable_push then
     (* From RFC7540§6.6:
      *   PUSH_PROMISE MUST NOT be sent if the SETTINGS_ENABLE_PUSH setting of
      *   the peer endpoint is set to 0. *)
     Error `Push_disabled
-  else if
-    Stream_identifier.(Int32.(add t.max_pushed_stream_id 2l) > max_stream_id)
-  then (
+  else if Stream_identifier.(candidate_push_stream_id > max_stream_id) then (
     (* From RFC7540§5.1:
      *   Stream identifiers cannot be reused. Long-lived connections can result
      *   in an endpoint exhausting the available range of stream identifiers.
@@ -218,7 +217,7 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
     report_connection_error t Error_code.NoError;
     Error `Stream_ids_exhausted)
   else
-    let pushed_stream_id = Int32.add max_pushed_stream_id 2l in
+    let pushed_stream_id = candidate_push_stream_id in
     t.max_pushed_stream_id <- pushed_stream_id;
     let reqd =
       Stream.create
@@ -228,10 +227,18 @@ let create_push_stream ({ max_pushed_stream_id; _ } as t) () =
         t.error_handler
         (on_close_stream t pushed_stream_id)
     in
-    let _stream =
+    (* From RFC7540§5.3.5:
+     *   All streams are initially assigned a non-exclusive dependency on
+     *   stream 0x0. Pushed streams (Section 8.2) initially depend on their
+     *   associated stream. In both cases, streams are assigned a default
+     *   weight of 16. *)
+    let _stream : Scheduler.nonroot Scheduler.node =
       Scheduler.add
-        t.streams (* TODO: *)
-                  (* ?priority *)
+        t.streams
+        ~priority:
+          { Priority.default_priority with
+            stream_dependency = parent_stream_id
+          }
         ~initial_send_window_size:t.settings.initial_window_size
         ~initial_recv_window_size:t.config.initial_window_size
         reqd
@@ -425,7 +432,7 @@ let open_stream t ~priority stream_id =
           t.error_handler
           (on_close_stream t stream_id)
       in
-      let stream =
+      let stream : Scheduler.nonroot Scheduler.node =
         Scheduler.add
           t.streams
           ~priority
@@ -753,7 +760,7 @@ let process_priority_frame t { Frame.frame_header; _ } priority =
             t.error_handler
             (on_close_stream t stream_id)
         in
-        let _stream =
+        let _stream : Scheduler.nonroot Scheduler.node =
           Scheduler.add
             t.streams
             ~priority
