@@ -168,7 +168,7 @@ let send_fixed_response t s response data =
         let iovec = { Httpaf.IOVec.buffer = `Bigstring b; off = 0; len } in
         iovec, len
     in
-    let should_send_data = length != 0 in
+    let should_send_data = length <> 0 in
     let frame_info =
       Writer.make_frame_info
         ~max_frame_size:t.max_frame_size

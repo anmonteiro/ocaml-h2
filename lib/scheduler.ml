@@ -265,7 +265,7 @@ module Make (Streamd : StreamDescriptor) = struct
        * changed *)
       if
         (not Stream_identifier.(stream_dependency === current_parent_id))
-        || exclusive != stream.priority.exclusive
+        || exclusive <> stream.priority.exclusive
       then (
         let (Parent new_parent_node) = new_parent in
         (match new_parent_node with

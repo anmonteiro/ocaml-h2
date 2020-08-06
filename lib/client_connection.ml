@@ -220,7 +220,7 @@ let handle_push_promise_headers t respd headers =
     | (#Httpaf.Method.standard as meth), _, _
       when not Httpaf.Method.(is_cacheable meth && is_safe meth) ->
       report_stream_error t respd.id Error_code.ProtocolError
-    | _, _, `Fixed len when Int64.compare len 0L != 0 ->
+    | _, _, `Fixed len when not (Int64.equal len 0L) ->
       (* From RFC7540§8.2:
        *   Clients that receive a promised request that is not cacheable,
        *   that is not known to be safe or that indicates the presence of a
@@ -833,7 +833,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
             | EnablePush, x ->
               (* We've already verified that this setting is either 0 or 1 in the
                * call to `Settings.check_settings_list` above. *)
-              { acc with enable_push = x == 1 }
+              { acc with enable_push = x = 1 }
             | MaxConcurrentStreams, x ->
               { acc with max_concurrent_streams = x }
             | InitialWindowSize, new_val ->

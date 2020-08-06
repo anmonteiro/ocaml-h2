@@ -214,7 +214,7 @@ let parse_rst_stream_frame { Frame.payload_length; stream_id; _ } =
      *   PROTOCOL_ERROR. *)
     advance payload_length >>| fun () ->
     connection_error ProtocolError "RST_STREAM must be associated with a stream"
-  else if payload_length != 4 then
+  else if payload_length <> 4 then
     (* From RFC7540§6.4:
      *   A RST_STREAM frame with a length other than 4 octets MUST be treated
      *   as a connection error (Section 5.4.1) of type FRAME_SIZE_ERROR. *)
@@ -235,7 +235,7 @@ let parse_settings_frame { Frame.payload_length; stream_id; flags; _ } =
     connection_error
       ProtocolError
       "SETTINGS must be associated with stream id 0x0"
-  else if payload_length mod 6 != 0 then
+  else if payload_length mod 6 <> 0 then
     (* From RFC7540§6.5:
      *   A SETTINGS frame with a length other than a multiple of 6 octets MUST
      *   be treated as a connection error (Section 5.4.1) of type
@@ -244,7 +244,7 @@ let parse_settings_frame { Frame.payload_length; stream_id; flags; _ } =
     connection_error
       FrameSizeError
       "SETTINGS payload size must be a multiple of 6"
-  else if Flags.test_ack flags && payload_length != 0 then
+  else if Flags.test_ack flags && payload_length <> 0 then
     (* From RFC7540§6.5:
      *   Receipt of a SETTINGS frame with the ACK flag set and a length field
      *   value other than 0 MUST be treated as a connection error
@@ -310,7 +310,7 @@ let parse_ping_frame { Frame.payload_length; stream_id; _ } =
      *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
     advance payload_length >>| fun () ->
     connection_error ProtocolError "PING must be associated with stream id 0x0"
-  else if payload_length != 8 then
+  else if payload_length <> 8 then
     (* From RFC7540§6.7:
      *   Receipt of a PING frame with a length field value other than 8 MUST
      *   be treated as a connection error (Section 5.4.1) of type
@@ -342,7 +342,7 @@ let parse_window_update_frame { Frame.stream_id; payload_length; _ } =
   (* From RFC7540§6.9:
    *   A WINDOW_UPDATE frame with a length other than 4 octets MUST be treated
    *   as a connection error (Section 5.4.1) of type FRAME_SIZE_ERROR. *)
-  if payload_length != 4 then
+  if payload_length <> 4 then
     advance payload_length >>| fun () ->
     connection_error
       FrameSizeError
@@ -351,7 +351,7 @@ let parse_window_update_frame { Frame.stream_id; payload_length; _ } =
     lift
       (fun uint ->
         let window_size_increment = Util.clear_bit (Int32.to_int uint) 31 in
-        if window_size_increment == 0 then
+        if window_size_increment = 0 then
           if
             (* From RFC7540§6.9:
              *   A receiver MUST treat the receipt of a WINDOW_UPDATE frame

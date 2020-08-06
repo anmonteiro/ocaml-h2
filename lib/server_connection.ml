@@ -120,7 +120,7 @@ let report_error t = function
        *   terminating. After sending the GOAWAY frame for an error condition,
        *   the endpoint MUST close the TCP connection. *)
       let debug_data =
-        if String.length data == 0 then
+        if String.length data = 0 then
           Bigstringaf.empty
         else
           Bigstringaf.of_string ~off:0 ~len:(String.length data) data
@@ -844,7 +844,7 @@ let apply_settings_list t settings =
         | EnablePush, x ->
           (* We've already verified that this setting is either 0 or 1 in the
            * call to `Settings.check_settings_list` above. *)
-          { acc with enable_push = x == 1 }
+          { acc with enable_push = x = 1 }
         | MaxConcurrentStreams, x ->
           { acc with max_concurrent_streams = x }
         | InitialWindowSize, new_val ->

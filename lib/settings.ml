@@ -103,7 +103,7 @@ let parse_key = function
 
 let check_value ~is_client = function
   | EnablePush, v ->
-    if v != 0 && v != 1 then
+    if v <> 0 && v <> 1 then
       (* From RFC7540§6.5.2
        *   The initial value is 1, which indicates that server push is
        *   permitted. Any value other than 0 or 1 MUST be treated as a
@@ -111,7 +111,7 @@ let check_value ~is_client = function
       Error
         Error.(
           ConnectionError (ProtocolError, "SETTINGS_ENABLE_PUSH must be 0 or 1"))
-    else if is_client && v == 1 then
+    else if is_client && v = 1 then
       (* From RFC7540§8.2:
        *   Clients MUST reject any attempt to change the
        *   SETTINGS_ENABLE_PUSH setting to a value other than 0 by
