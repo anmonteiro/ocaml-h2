@@ -220,7 +220,7 @@ let handle_push_promise_headers t respd headers =
     | (#Httpaf.Method.standard as meth), _, _
       when not Httpaf.Method.(is_cacheable meth && is_safe meth) ->
       report_stream_error t respd.id Error_code.ProtocolError
-    | _, _, `Fixed len when Int64.compare len 0L != 0 ->
+    | _, _, `Fixed len when not (Int64.equal len 0L) ->
       (* From RFC7540§8.2:
        *   Clients that receive a promised request that is not cacheable,
        *   that is not known to be safe or that indicates the presence of a
@@ -449,7 +449,7 @@ let create_partial_headers t flags headers_block =
   }
 
 let handle_first_response_bytes
-    t stream active_request frame_header ?priority headers_block
+    t stream active_request frame_header headers_block
   =
   let (Scheduler.Stream { descriptor; _ }) = stream in
   let { Frame.flags; stream_id; _ } = frame_header in
@@ -462,11 +462,6 @@ let handle_first_response_bytes
       Active (HalfClosed remote_state, active_request));
   if not (Flags.test_end_header flags) then
     t.receiving_headers_for_stream <- Some stream_id;
-  (match priority with
-  | None ->
-    ()
-  | Some priority ->
-    Scheduler.reprioritize_stream t.streams ~priority stream);
   handle_headers_block t stream partial_headers flags headers_block
 
 let process_trailer_headers t stream active_response frame_header headers_block =
@@ -498,80 +493,71 @@ let process_trailer_headers t stream active_response frame_header headers_block 
     (* trailer headers: RFC7230§4.4 *)
     handle_trailer_headers t stream partial_headers flags headers_block
 
-let process_headers_frame t { Frame.frame_header; _ } ?priority headers_block =
+let process_headers_frame t { Frame.frame_header; _ } headers_block =
   let { Frame.stream_id; _ } = frame_header in
-  match priority with
-  | Some { Priority.stream_dependency; _ }
-    when Stream_identifier.(stream_dependency === stream_id) ->
-    (* From RFC7540§5.3.1:
-     *   A stream cannot depend on itself. An endpoint MUST treat this as a
-     *   stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
-    report_stream_error t stream_id Error_code.ProtocolError
-  | _ ->
-    (match Scheduler.get_node t.streams stream_id with
-    | None ->
-      (* If we're receiving a response for a stream that's no longer in the
-       * priority tree, assume this is a network race - we canceled a request
-       * but a responnse was already in flight.
-       *
-       * However, if the stream identifer is greater than the largest stream
-       * identifier we have produced, they should know better. In this case,
-       * send an RST_STREAM. *)
-      if
-        Stream_identifier.(
-          stream_id >= t.current_stream_id && is_request stream_id)
-      then
-        report_stream_error t stream_id Error_code.StreamClosed
-    | Some (Scheduler.Stream { descriptor; _ } as stream) ->
-      (match descriptor.state with
-      | Idle ->
-        (* From RFC7540§6.2:
-         *   HEADERS frames can be sent on a stream in the "idle", "reserved
-         *   (local)", "open", or "half-closed (remote)" state. *)
-        report_connection_error t Error_code.ProtocolError
-      | Active
-          ((Open WaitingForPeer | HalfClosed WaitingForPeer), active_request) ->
-        handle_first_response_bytes
-          t
-          stream
-          active_request
-          frame_header
-          ?priority
-          headers_block
-      | Active
-          ( ( Open (FullHeaders | PartialHeaders _)
-            | HalfClosed (FullHeaders | PartialHeaders _) )
-          , _ ) ->
-        assert false
-      (* if we're getting a HEADERS frame at this point, they must be
-       * trailers, and the END_STREAM flag needs to be set. *)
-      | Active
-          ( ( Open (ActiveMessage active_response)
-            | HalfClosed (ActiveMessage active_response) )
-          , _ ) ->
-        process_trailer_headers
-          t
-          stream
-          active_response
-          frame_header
-          headers_block
-      | Closed { reason = ResetByThem _; _ } ->
-        (* From RFC7540§5.1:
-         *   closed: [...] An endpoint that receives any frame other than
-         *   PRIORITY after receiving a RST_STREAM MUST treat that as a
-         *   stream error (Section 5.4.2) of type STREAM_CLOSED. *)
-        report_stream_error t stream_id Error_code.StreamClosed
+  match Scheduler.get_node t.streams stream_id with
+  | None ->
+    (* If we're receiving a response for a stream that's no longer in the
+     * priority tree, assume this is a network race - we canceled a request
+     * but a responnse was already in flight.
+     *
+     * However, if the stream identifer is greater than the largest stream
+     * identifier we have produced, they should know better. In this case,
+     * send an RST_STREAM. *)
+    if
+      Stream_identifier.(
+        stream_id >= t.current_stream_id && is_request stream_id)
+    then
+      report_stream_error t stream_id Error_code.StreamClosed
+  | Some (Scheduler.Stream { descriptor; _ } as stream) ->
+    (match descriptor.state with
+    | Idle ->
+      (* From RFC7540§6.2:
+       *   HEADERS frames can be sent on a stream in the "idle", "reserved
+       *   (local)", "open", or "half-closed (remote)" state. *)
+      report_connection_error t Error_code.ProtocolError
+    | Active ((Open WaitingForPeer | HalfClosed WaitingForPeer), active_request)
+      ->
+      handle_first_response_bytes
+        t
+        stream
+        active_request
+        frame_header
+        headers_block
+    | Active
+        ( ( Open (FullHeaders | PartialHeaders _)
+          | HalfClosed (FullHeaders | PartialHeaders _) )
+        , _ ) ->
+      assert false
+    (* if we're getting a HEADERS frame at this point, they must be
+     * trailers, and the END_STREAM flag needs to be set. *)
+    | Active
+        ( ( Open (ActiveMessage active_response)
+          | HalfClosed (ActiveMessage active_response) )
+        , _ ) ->
+      process_trailer_headers
+        t
+        stream
+        active_response
+        frame_header
+        headers_block
+    | Closed { reason = ResetByThem _; _ } ->
       (* From RFC7540§5.1:
-       *   reserved (local): [...] Receiving any type of frame other than
-       *   RST_STREAM, PRIORITY, or WINDOW_UPDATE on a stream in this state
-       *   MUST be treated as a connection error (Section 5.4.1) of type
-       *   PROTOCOL_ERROR. *)
-      | Reserved _ | Closed _ ->
-        (* From RFC7540§5.1:
-         *   Similarly, an endpoint that receives any frames after receiving
-         *   a frame with the END_STREAM flag set MUST treat that as a
-         *   connection error (Section 5.4.1) of type STREAM_CLOSED [...]. *)
-        report_connection_error t Error_code.StreamClosed))
+       *   closed: [...] An endpoint that receives any frame other than
+       *   PRIORITY after receiving a RST_STREAM MUST treat that as a
+       *   stream error (Section 5.4.2) of type STREAM_CLOSED. *)
+      report_stream_error t stream_id Error_code.StreamClosed
+    (* From RFC7540§5.1:
+     *   reserved (local): [...] Receiving any type of frame other than
+     *   RST_STREAM, PRIORITY, or WINDOW_UPDATE on a stream in this state
+     *   MUST be treated as a connection error (Section 5.4.1) of type
+     *   PROTOCOL_ERROR. *)
+    | Reserved _ | Closed _ ->
+      (* From RFC7540§5.1:
+       *   Similarly, an endpoint that receives any frames after receiving
+       *   a frame with the END_STREAM flag set MUST treat that as a
+       *   connection error (Section 5.4.1) of type STREAM_CLOSED [...]. *)
+      report_connection_error t Error_code.StreamClosed)
 
 let process_data_frame t { Frame.frame_header; _ } bstr =
   let open Scheduler in
@@ -847,7 +833,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
             | EnablePush, x ->
               (* We've already verified that this setting is either 0 or 1 in the
                * call to `Settings.check_settings_list` above. *)
-              { acc with enable_push = x == 1 }
+              { acc with enable_push = x = 1 }
             | MaxConcurrentStreams, x ->
               { acc with max_concurrent_streams = x }
             | InitialWindowSize, new_val ->
@@ -919,7 +905,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       report_error t error
 
 let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block =
-  let { Frame.flags; _ } = frame_header in
+  let { Frame.flags; stream_id; _ } = frame_header in
   (* From RFC7540§6.6:
    *   The PUSH_PROMISE frame (type=0x5) is used to notify the peer endpoint in
    *   advance of streams the sender intends to initiate. *)
@@ -931,9 +917,14 @@ let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block 
       t.error_handler
       (on_close_stream t promised_stream_id)
   in
-  let stream =
+  (* From RFC7540§5.3.5:
+   *   All streams are initially assigned a non-exclusive dependency on stream
+   *   0x0. Pushed streams (Section 8.2) initially depend on their associated
+   *   stream. In both cases, streams are assigned a default weight of 16. *)
+  let stream : Scheduler.nonroot Scheduler.node =
     Scheduler.add
       t.streams
+      ~priority:{ Priority.default_priority with stream_dependency = stream_id }
       ~initial_send_window_size:t.settings.initial_window_size
       ~initial_recv_window_size:t.config.initial_window_size
       respd
@@ -1178,7 +1169,7 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
       (match t.receiving_headers_for_stream with
       | Some stream_id
         when (not Stream_identifier.(stream_id === frame_header.stream_id))
-             || frame_header.frame_type != Continuation ->
+             || frame_header.frame_type <> Continuation ->
         (* From RFC7540§6.2:
          *   A HEADERS frame without the END_HEADERS flag set MUST be followed
          *   by a CONTINUATION frame for the same stream. A receiver MUST treat
@@ -1193,8 +1184,8 @@ let create ?(config = Config.default) ?push_handler ~error_handler =
           Error_code.ProtocolError
       | _ ->
         (match frame_payload with
-        | Headers (priority, headers_block) ->
-          process_headers_frame t frame ?priority headers_block
+        | Headers (_priority, headers_block) ->
+          process_headers_frame t frame headers_block
         | Data bs ->
           process_data_frame t frame bs
         | Priority priority ->
@@ -1297,10 +1288,11 @@ let create_and_add_stream t ~error_handler =
       error_handler
       (on_close_stream t stream_id)
   in
-  (* TODO: priority *)
-  let _stream =
+  (* TODO: custom priority *)
+  let _stream : Scheduler.nonroot Scheduler.node =
     Scheduler.add
-      t.streams (* ?priority *)
+      t.streams
+      ~priority:Priority.default_priority
       ~initial_send_window_size:t.settings.initial_window_size
       ~initial_recv_window_size:t.config.initial_window_size
       respd
@@ -1368,7 +1360,14 @@ let request t request ~error_handler ~response_handler =
       ~flags:Flags.default_flags
       respd.id
   in
-  Writer.write_request_headers t.writer t.hpack_encoder frame_info request;
+  Writer.write_request_headers
+    t.writer
+    t.hpack_encoder
+    ~priority:
+      (* TODO: allow setting the priority of the request. *)
+      Priority.default_priority
+    frame_info
+    request;
   Writer.flush t.writer (fun () ->
       respd.state <-
         Active (Open WaitingForPeer, { request; request_body; response_handler }));

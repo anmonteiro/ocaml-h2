@@ -265,7 +265,7 @@ module Make (Streamd : StreamDescriptor) = struct
        * changed *)
       if
         (not Stream_identifier.(stream_dependency === current_parent_id))
-        || exclusive != stream.priority.exclusive
+        || exclusive <> stream.priority.exclusive
       then (
         let (Parent new_parent_node) = new_parent in
         (match new_parent_node with
@@ -293,7 +293,7 @@ module Make (Streamd : StreamDescriptor) = struct
 
   let add
       (Connection root as t)
-      ?priority
+      ~priority
       ~initial_send_window_size
       ~initial_recv_window_size
       descriptor
@@ -308,11 +308,8 @@ module Make (Streamd : StreamDescriptor) = struct
     let stream_id = Streamd.id descriptor in
     StreamsTbl.add root.all_streams stream_id stream;
     root.children <- pq_add stream_id stream root.children;
-    (match priority with
-    | Some priority ->
-      reprioritize_stream t ~priority stream
-    | None ->
-      ());
+    if priority != Priority.default_priority then
+      reprioritize_stream t ~priority stream;
     stream
 
   let get_node (Connection root) stream_id =
@@ -461,7 +458,7 @@ module Make (Streamd : StreamDescriptor) = struct
            * losing some * potentially useful information regarding the
            * stream's state at the * cost of keeping it around for a little
            * while longer. *)
-          if closed.Stream.ttl == 0 then (
+          if closed.Stream.ttl = 0 then (
             StreamsTbl.remove root.all_streams id;
             acc)
           else (
@@ -472,7 +469,7 @@ module Make (Streamd : StreamDescriptor) = struct
 
   let check_flow flow growth flow' =
     (* Check for overflow on 32-bit systems. *)
-    flow' > growth == (flow > 0) && flow' <= Settings.WindowSize.max_window_size
+    flow' > growth = (flow > 0) && flow' <= Settings.WindowSize.max_window_size
 
   let add_flow : type a. a node -> int -> bool =
    fun t growth ->

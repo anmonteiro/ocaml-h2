@@ -38,7 +38,7 @@ let write_frame ?padding t { Frame.frame_header; frame_payload } =
     Writer.schedule_data t info body
   | Headers (priority, headers_block) ->
     (* Block already HPACK-encoded. *)
-    write_headers_frame t.encoder info ?priority (make_iovecs headers_block)
+    write_headers_frame t.encoder info ~priority (make_iovecs headers_block)
   | Priority p ->
     Writer.write_priority t info p
   | RSTStream e ->

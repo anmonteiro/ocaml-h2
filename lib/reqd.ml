@@ -73,7 +73,8 @@ type active_stream =
   ; mutable trailers_parser : partial_headers option
   ; mutable trailers : Headers.t option
   ; create_push_stream :
-      unit -> (t, [ `Push_disabled | `Stream_ids_exhausted ]) result
+      Stream_identifier.t
+      -> (t, [ `Push_disabled | `Stream_ids_exhausted ]) result
   }
 
 and state =
@@ -167,7 +168,7 @@ let send_fixed_response t s response data =
         let iovec = { Httpaf.IOVec.buffer = `Bigstring b; off = 0; len } in
         iovec, len
     in
-    let should_send_data = length != 0 in
+    let should_send_data = length <> 0 in
     let frame_info =
       Writer.make_frame_info
         ~max_frame_size:t.max_frame_size
@@ -271,7 +272,7 @@ let respond_with_streaming t ?(flush_headers_immediately = false) response =
   unsafe_respond_with_streaming ~flush_headers_immediately t response
 
 let start_push_stream t s request =
-  match s.create_push_stream () with
+  match s.create_push_stream t.id with
   | Ok promised_reqd ->
     let frame_info =
       Writer.make_frame_info ~max_frame_size:t.max_frame_size t.id

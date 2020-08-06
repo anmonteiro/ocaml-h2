@@ -87,13 +87,14 @@ let frame_testable =
   (module struct
     type t = Frame.t
 
-    let priority_to_yojson = function
-      | Some { Priority.exclusive; stream_dependency; weight } ->
+    let priority_to_yojson priority =
+      if priority != Priority.default_priority then
+        let { Priority.exclusive; stream_dependency; weight } = priority in
         [ "stream_dependency", `Int (Int32.to_int stream_dependency)
         ; "weight", `Int weight
         ; "exclusive", `Bool exclusive
         ]
-      | None ->
+      else
         [ "stream_dependency", `Null; "weight", `Null; "exclusive", `Null ]
 
     let bs_to_string bs =
@@ -110,7 +111,7 @@ let frame_testable =
           ("header_block_fragment", `String (bs_to_string fragment))
           :: priority_to_yojson priority
         | Priority priority ->
-          priority_to_yojson (Some priority)
+          priority_to_yojson priority
         | RSTStream error_code ->
           [ "error_code", `Int (Error_code.serialize error_code |> Int32.to_int)
           ]
@@ -170,20 +171,12 @@ let priority_of_json json =
   let exclusive = Json.(json |> member "exclusive" |> to_bool_option) in
   match stream_dependency, weight, exclusive with
   | Some stream_dependency, Some weight, Some exclusive ->
-    Some
-      { Priority.exclusive
-      ; stream_dependency = Int32.of_int stream_dependency
-      ; weight
-      }
+    { Priority.exclusive
+    ; stream_dependency = Int32.of_int stream_dependency
+    ; weight
+    }
   | _ ->
-    None
-
-let priority_of_json_exn json =
-  match priority_of_json json with
-  | Some p ->
-    p
-  | None ->
-    raise (Invalid_argument "priority_of_json")
+    Priority.default_priority
 
 let frame_type_of_string = function
   | "data" ->
@@ -220,7 +213,7 @@ let frame_payload_of_json frame_type json =
     in
     Headers (priority, fragment)
   | Priority ->
-    Priority (priority_of_json_exn json)
+    Priority (priority_of_json json)
   | RSTStream ->
     let error_code =
       Json.(json |> member "error_code" |> to_int |> Int32.of_int)

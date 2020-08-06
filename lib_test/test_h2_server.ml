@@ -155,6 +155,7 @@ module Server_connection_tests = struct
     Serialize.Writer.write_request_headers
       writer
       hpack_encoder
+      ~priority:Priority.default_priority
       frame_info
       request;
     Faraday.serialize_to_string (Serialize.Writer.faraday writer)
@@ -276,7 +277,7 @@ module Server_connection_tests = struct
           }
       ; frame_payload =
           Frame.Headers
-            ( None
+            ( Priority.default_priority
             , encode_headers
                 hpack_encoder
                 Headers.(
@@ -401,7 +402,7 @@ module Server_connection_tests = struct
           }
       ; frame_payload =
           Frame.Headers
-            ( None
+            ( Priority.default_priority
             , encode_headers
                 hpack_encoder
                 Headers.(
@@ -630,7 +631,7 @@ module Server_connection_tests = struct
           }
       ; frame_payload =
           Frame.Headers
-            ( None
+            ( Priority.default_priority
             , encode_headers
                 hpack_encoder
                 Headers.(
@@ -642,7 +643,7 @@ module Server_connection_tests = struct
       { Frame.frame_header = { headers.frame_header with stream_id = 3l }
       ; frame_payload =
           Frame.Headers
-            ( Some { Priority.default_priority with stream_dependency = 1l }
+            ( { Priority.default_priority with stream_dependency = 1l }
             , encode_headers
                 hpack_encoder
                 Headers.(
@@ -737,6 +738,11 @@ module Server_connection_tests = struct
           map
             Frame.FrameType.serialize
             Frame.FrameType.[ PushPromise; Headers; Headers; Data ]);
+      let (Stream pushed_stream) = opt_exn (Scheduler.get_node t.streams 2l) in
+      Alcotest.(check int32)
+        "Pushed stream has a stream dependency on the parent stream"
+        1l
+        pushed_stream.priority.stream_dependency;
       let iovec_len = IOVec.lengthv iovecs in
       report_write_result t (`Ok iovec_len);
       (match next_write_operation t with

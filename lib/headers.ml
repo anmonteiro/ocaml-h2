@@ -204,7 +204,7 @@ module Pseudo = struct
   let reserved_response = [ ":status" ]
 
   (* 0x3A is the char code for `:` *)
-  let is_pseudo name = Char.code (String.unsafe_get name 0) == 0x3A
+  let is_pseudo name = Char.code (String.unsafe_get name 0) = 0x3A
 end
 
 let iter ~f t = List.iter (fun { name; value; _ } -> f name value) t
@@ -282,7 +282,7 @@ let method_path_and_scheme_or_malformed t =
     , get_multi_pseudo t "scheme"
     , get_multi_pseudo t "path" )
   with
-  | _, [ ("http" | "https") ], [ path ] when String.length path == 0 ->
+  | _, [ ("http" | "https") ], [ path ] when String.length path = 0 ->
     (* From RFC7540§8.1.2.6:
      *   This pseudo-header field MUST NOT be empty for http or https URIs;
      *   http or https URIs that do not contain a path component MUST include a
