@@ -1164,7 +1164,7 @@ let create_generic ~h2c ~config ~error_handler request_handler =
       (match t.receiving_headers_for_stream with
       | Some stream_id
         when (not Stream_identifier.(stream_id === frame_header.stream_id))
-             || frame_header.frame_type != Continuation ->
+             || frame_header.frame_type <> Continuation ->
         (* From RFC7540§6.2:
          *   A HEADERS frame without the END_HEADERS flag set MUST be followed
          *   by a CONTINUATION frame for the same stream. A receiver MUST treat

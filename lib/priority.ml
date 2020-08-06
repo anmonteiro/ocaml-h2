@@ -68,6 +68,6 @@ let set_exclusive n = set_bit_int32 n 31
 let clear_exclusive n = clear_bit_int32 n 31
 
 let equal p1 p2 =
-  p1.weight == p2.weight
+  p1.weight = p2.weight
   && Int32.equal p1.stream_dependency p2.stream_dependency
-  && p1.exclusive == p2.exclusive
+  && p1.exclusive = p2.exclusive

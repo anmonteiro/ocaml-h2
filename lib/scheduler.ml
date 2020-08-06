@@ -458,7 +458,7 @@ module Make (Streamd : StreamDescriptor) = struct
            * losing some * potentially useful information regarding the
            * stream's state at the * cost of keeping it around for a little
            * while longer. *)
-          if closed.Stream.ttl == 0 then (
+          if closed.Stream.ttl = 0 then (
             StreamsTbl.remove root.all_streams id;
             acc)
           else (
@@ -469,7 +469,7 @@ module Make (Streamd : StreamDescriptor) = struct
 
   let check_flow flow growth flow' =
     (* Check for overflow on 32-bit systems. *)
-    flow' > growth == (flow > 0) && flow' <= Settings.WindowSize.max_window_size
+    flow' > growth = (flow > 0) && flow' <= Settings.WindowSize.max_window_size
 
   let add_flow : type a. a node -> int -> bool =
    fun t growth ->
