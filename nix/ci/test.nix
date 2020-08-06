@@ -22,7 +22,7 @@ in
 
       dune build spec/lwt_h2spec.exe
       nohup dune exec spec/lwt_h2spec.exe &
-      sleep 2
+      sleep 3
       ${h2spec}/bin/h2spec --strict -p 8080 -P /string
 
       ${h2spec}/bin/h2spec --strict -p 8080 -P /bigstring

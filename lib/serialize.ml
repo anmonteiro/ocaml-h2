@@ -309,7 +309,7 @@ let write_connection_preface t =
    *   settings for the HTTP/2 connection. [...] The client connection preface
    *   starts with a sequence of 24 octets, [...] the string
    *   PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n. *)
-  write_string t "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+  write_string t Frame.connection_preface
 
 module Writer = struct
   type t =
