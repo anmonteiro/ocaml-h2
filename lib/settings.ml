@@ -216,37 +216,30 @@ let settings_for_the_connection settings =
 
 let parse_settings_payload num_settings =
   let open Angstrom in
-  let parse_setting =
-    lift2
-      (fun k v ->
-        match parse_key k with
-        | Some s ->
-          Some (s, Int32.to_int v)
-        | None ->
-          None)
-      BE.any_uint16
-      BE.any_int32
+  let rec parse_inner acc remaining =
+    (* From RFC7540§6.5.3:
+     *   The values in the SETTINGS frame MUST be processed in the order
+     *   they appear, with no other frame processing between values. *)
+    if remaining <= 0 then
+      return (List.rev acc)
+    else
+      lift2
+        (fun k v ->
+          match parse_key k with
+          | Some s ->
+            (s, Int32.to_int v) :: acc
+          | None ->
+            (* Note: This ignores unknown settings.
+             *
+             * From RFC7540§6.5.3:
+             *   Unsupported parameters MUST be ignored.
+             *)
+            acc)
+        BE.any_uint16
+        BE.any_int32
+      >>= fun acc' -> parse_inner acc' (remaining - 1)
   in
-  (* Note: This ignores unknown settings.
-   *
-   * From RFC7540§6.5.3:
-   *   Unsupported parameters MUST be ignored.
-   *)
-  lift
-    (fun xs ->
-      let rec filter_opt acc = function
-        | [] ->
-          acc []
-        | Some x :: xs ->
-          filter_opt (fun ys -> acc (x :: ys)) xs
-        | None :: xs ->
-          filter_opt acc xs
-      in
-      (* From RFC7540§6.5.3:
-       *   The values in the SETTINGS frame MUST be processed in the order
-       *   they appear, with no other frame processing between values. *)
-      filter_opt (fun x -> x) xs)
-    (count num_settings parse_setting)
+  parse_inner [] num_settings
 
 let rec write_settings_payload t settings_list =
   let open Faraday in
@@ -269,7 +262,7 @@ let of_settings_list settings =
       | HeaderTableSize, x ->
         { acc with header_table_size = x }
       | EnablePush, x ->
-        { acc with enable_push = x == 1 }
+        { acc with enable_push = x = 1 }
       | MaxConcurrentStreams, x ->
         { acc with max_concurrent_streams = x }
       | InitialWindowSize, new_val ->

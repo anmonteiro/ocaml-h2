@@ -132,19 +132,13 @@ module Client_connection_tests = struct
   let read_response
       t
       hpack_encoder
-      ?priority
       ?(stream_id = 1l)
       ?(flags = Flags.(default_flags |> set_end_stream |> set_end_header))
       response
     =
     let writer = Writer.create 4096 in
     let frame_info = Writer.make_frame_info ~flags stream_id in
-    Writer.write_response_headers
-      ?priority
-      writer
-      hpack_encoder
-      frame_info
-      response;
+    Writer.write_response_headers writer hpack_encoder frame_info response;
     let headers_wire = Faraday.serialize_to_bigstring (Writer.faraday writer) in
     let headers_length = Bigstringaf.length headers_wire in
     let read_headers = read t ~off:0 ~len:headers_length headers_wire in
@@ -208,7 +202,7 @@ module Client_connection_tests = struct
           }
       ; frame_payload =
           Frame.Headers
-            ( None
+            ( Priority.default_priority
             , encode_headers
                 hpack_encoder
                 Headers.(of_list [ ":status", "200" ]) )
@@ -391,53 +385,6 @@ module Client_connection_tests = struct
       ~flags:Flags.(default_flags |> set_end_header)
       (Response.create `OK ~headers:(Headers.of_list [ "content-length", "2" ]));
     read_response_body t "foo";
-    Alcotest.(check bool)
-      "Stream level error handler called"
-      true
-      !error_handler_called
-
-  let test_stream_level_protocol_error () =
-    let t = create_and_handle_preface () in
-    let request = Request.create ~scheme:"http" `GET "/" in
-    let response_handler _response _response_body = () in
-    let error_handler_called = ref false in
-    let stream_level_error_handler error =
-      error_handler_called := true;
-      match error with
-      | `Protocol_error _ ->
-        Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
-      | _ ->
-        Alcotest.fail "Expected stream error handler to pass"
-    in
-    let request_body =
-      Client_connection.request
-        t
-        request
-        ~error_handler:stream_level_error_handler
-        ~response_handler
-    in
-    flush_request t;
-    Body.close_writer request_body;
-    let frames, lenv = flush_pending_writes t in
-    Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
-    let frame = List.hd frames in
-    Alcotest.(check int)
-      "Next write operation is an empty DATA frame with the END_STREAM flag set"
-      (Frame.FrameType.serialize Data)
-      Frame.(frame.frame_header.frame_type |> FrameType.serialize);
-    Alcotest.(check bool)
-      "Next write operation is an empty DATA frame with the END_STREAM flag set"
-      true
-      (Flags.test_end_stream frame.frame_header.flags);
-    report_write_result t (`Ok lenv);
-    let hpack_encoder = Hpack.Encoder.create 4096 in
-    read_response
-      t
-      hpack_encoder
-      ~priority:
-        (* depend on itself *)
-        { Priority.default_priority with stream_dependency = 1l }
-      (Response.create `OK ~headers:(Headers.of_list [ "content-length", "2" ]));
     Alcotest.(check bool)
       "Stream level error handler called"
       true
@@ -1190,9 +1137,6 @@ module Client_connection_tests = struct
       , test_inadequate_security )
     ; "simple GET request", `Quick, test_simple_get_request
     ; "data larger than declared", `Quick, test_data_larger_than_reported
-    ; ( "stream error handler gets called on stream-level protocol errors"
-      , `Quick
-      , test_stream_level_protocol_error )
     ; "stream error on idle stream", `Quick, test_stream_error_on_idle_stream
     ; "continuation frame (success)", `Quick, test_continuation_frame
     ; ( "stream correctly transitions state"

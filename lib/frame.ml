@@ -174,7 +174,7 @@ type frame_payload =
    *            present if the PRIORITY flag is set.
    *
    *    Header Block Fragment: A header block fragment (Section 4.3). *)
-  | Headers of Priority.t option * Bigstringaf.t
+  | Headers of Priority.t * Bigstringaf.t
   (* From RFC7540§6.3:
    *   The payload of a PRIORITY frame contains the following fields:
    *

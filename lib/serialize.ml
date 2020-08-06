@@ -128,15 +128,14 @@ let bounded_schedule_iovecs t ~len iovecs =
   in
   loop t len iovecs
 
-let write_headers_frame t info ?priority ?len iovecs =
+let write_headers_frame t info ~priority ?len iovecs =
   let len = match len with Some len -> len | None -> IOVec.lengthv iovecs in
-  match priority with
-  | None ->
+  if priority == Priority.default_priority then
     (* See RFC7540§6.3:
      *   Just the Header Block Fragment length if no priority. *)
     let writer t = bounded_schedule_iovecs t ~len iovecs in
     write_frame_with_padding t info Headers len writer
-  | Some priority ->
+  else
     (* See RFC7540§6.2:
      *   Exclusive Bit & Stream Dependency (4 octets) + Weight (1 octet) +
      *   Header Block Fragment length. *)
@@ -505,9 +504,9 @@ module Writer = struct
     encode_headers hpack_encoder faraday headers;
     chunk_header_block_fragments t frame_info ~write_frame faraday
 
-  let write_request_headers t hpack_encoder ?priority frame_info request =
+  let write_request_headers t hpack_encoder ~priority frame_info request =
     if not (is_closed t.encoder) then
-      let write_frame = write_headers_frame ?priority in
+      let write_frame = write_headers_frame ~priority in
       write_request_like_frame t hpack_encoder ~write_frame frame_info request
 
   let write_push_promise t hpack_encoder frame_info ~promised_id request =
@@ -515,7 +514,7 @@ module Writer = struct
       let write_frame = write_push_promise_frame ~promised_id in
       write_request_like_frame t hpack_encoder ~write_frame frame_info request
 
-  let write_response_headers t hpack_encoder ?priority frame_info response =
+  let write_response_headers t hpack_encoder frame_info response =
     if not (is_closed t.encoder) then (
       let { Response.status; headers; _ } = response in
       let faraday = Faraday.of_bigstring t.headers_block_buffer in
@@ -532,12 +531,11 @@ module Writer = struct
         ; sensitive = false
         };
       encode_headers hpack_encoder faraday headers;
-      let has_priority = match priority with Some _ -> true | None -> false in
       chunk_header_block_fragments
         t
         frame_info
-        ~write_frame:(write_headers_frame ?priority)
-        ~has_priority
+        ~write_frame:(write_headers_frame ~priority:Priority.default_priority)
+        ~has_priority:false
         faraday)
 
   let write_rst_stream t frame_info e =

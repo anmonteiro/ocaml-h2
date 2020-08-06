@@ -174,14 +174,15 @@ let parse_headers_frame frame_header =
     let parse_headers length =
       if Flags.test_priority flags then
         lift2
-          (fun priority headers -> Ok (Frame.Headers (Some priority, headers)))
+          (fun priority headers -> Ok (Frame.Headers (priority, headers)))
           parse_priority
           (* See RFC7540§6.3:
            *   Stream Dependency (4 octets) + Weight (1 octet). *)
           (take_bigstring (length - 5))
       else
         lift
-          (fun headers_block -> Ok (Frame.Headers (None, headers_block)))
+          (fun headers_block ->
+            Ok (Frame.Headers (Priority.default_priority, headers_block)))
           (take_bigstring length)
     in
     parse_padded_payload frame_header parse_headers
