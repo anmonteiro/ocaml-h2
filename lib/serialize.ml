@@ -38,7 +38,7 @@ module IOVec = Httpaf.IOVec
 type frame_info =
   { flags : Flags.t
   ; stream_id : Stream_identifier.t
-  ; padding : Bigstringaf.t option
+  ; padding : Bigstringaf.t
   ; max_frame_payload : int
   }
 
@@ -57,8 +57,7 @@ let write_frame_header t frame_header =
 
 let write_frame_with_padding t info frame_type length writer =
   let header, writer =
-    match info.padding with
-    | None ->
+    if Bigstringaf.length info.padding = 0 then
       let header =
         { Frame.payload_length = length
         ; flags = info.flags
@@ -67,12 +66,12 @@ let write_frame_with_padding t info frame_type length writer =
         }
       in
       header, writer
-    | Some padding ->
-      let pad_length = Bigstringaf.length padding in
+    else
+      let pad_length = Bigstringaf.length info.padding in
       let writer' t =
         write_uint8 t pad_length;
         writer t;
-        schedule_bigstring ~off:0 ~len:pad_length t padding
+        schedule_bigstring ~off:0 ~len:pad_length t info.padding
       in
       let header =
         { Frame.payload_length = length + pad_length + 1
@@ -341,7 +340,7 @@ module Writer = struct
   let faraday t = t.encoder
 
   let make_frame_info
-      ?padding
+      ?(padding = Bigstringaf.empty)
       ?(flags = Flags.default_flags)
       ?(max_frame_size = Config.default.read_buffer_size)
       stream_id
