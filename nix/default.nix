@@ -12,6 +12,7 @@ in
   let
     buildH2 = args: buildDunePackage ({
       version = "0.6.0-dev";
+      useDune2 = true;
       doCheck = doCheck;
       src = lib.gitignoreSource ./..;
     } // args);
