@@ -59,6 +59,6 @@ in
 
       h2spec --strict -p 8080 --timeout 3 -P /streaming
 
-      # kill $(lsof -i tcp:8080 -t)
+      kill $(lsof -i tcp:8080 -t)
     '';
   }
