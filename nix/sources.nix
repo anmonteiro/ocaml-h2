@@ -3,7 +3,7 @@
 let
   overlays =
     builtins.fetchTarball
-      https://github.com/anmonteiro/nix-overlays/archive/e2f8c4b.tar.gz;
+      https://github.com/anmonteiro/nix-overlays/archive/5cf9c32.tar.gz;
 
 in
 
@@ -25,7 +25,7 @@ in
             sha256 = "064k4yg818hd8pwh8xcf1iapw0k6ndsg1nsjwx0as09ff3gf0zhm";
           });
           phases = ["unpackPhase" "installPhase" "fixupPhase"];
-          nativeBuildInputs = (if super.stdenv.isDarwin then [ self.autoPatchelfHook ] else []);
+          nativeBuildInputs = (if super.stdenv.isDarwin then [] else [ self.autoPatchelfHook ]);
           unpackPhase = ''
             mkdir h2spec-${version}
             tar -C h2spec-${version} -xzf $src
