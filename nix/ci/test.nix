@@ -6,29 +6,59 @@ let
 
   h2Pkgs = import ./.. { inherit ocamlVersion; };
   h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
+  srcs = lib.mapAttrsFlatten (n: v: v.src) h2Drvs ++ [
+    (lib.gitignoreSource (lib.cleanSourceWith rec {
+      src = ../..;
+      # Good examples: https://github.com/NixOS/nixpkgs/blob/master/lib/sources.nix
+      filter = name: type:
+      let
+        path = toString name;
+        relPath = lib.removePrefix (toString src + "/") path;
+      in
+      relPath == "spec" || lib.hasPrefix "spec/" relPath || relPath == ".ocamlformat";
+    })) ];
 in
+
   stdenv.mkDerivation {
     name = "h2-conformance-tests";
-    src = ./../..;
+    srcs = srcs;
+    sourceRoot = "./h2-tests";
+    unpackPhase = ''
+      shopt -s dotglob
+
+      for src in $srcs; do
+        cp -a $src "./testdir-$(basename $src)"
+      done
+
+      mkdir h2-tests
+
+      chmod u+w -R testdir-*
+      mv -n testdir-*/* h2-tests
+    '';
     dontBuild = true;
     installPhase = ''
       touch $out
     '';
-    buildInputs = (lib.attrValues h2Drvs) ++ (with ocamlPackages; [ ocaml dune findlib pkgs.ocamlformat ]);
+    buildInputs =
+      (lib.attrValues h2Drvs) ++
+      (with ocamlPackages; [ ocaml dune findlib ]) ++
+      (with pkgs; [ ocamlformat lsof h2spec ]);
     doCheck = true;
     checkPhase = ''
       # Check code is formatted with OCamlformat
-      dune build @fmt
+      dune build --root=. @fmt
 
-      dune build spec/lwt_h2spec.exe
-      nohup dune exec spec/lwt_h2spec.exe &
-      sleep 3
-      ${h2spec}/bin/h2spec --strict -p 8080 -P /string
+      dune exec --display=short spec/lwt_h2spec.exe &
+      while [ -z "$(lsof -t -i tcp:8080)" ]; do
+        sleep 1;
+      done;
 
-      ${h2spec}/bin/h2spec --strict -p 8080 -P /bigstring
+      h2spec --strict -p 8080 -P /string
 
-      ${h2spec}/bin/h2spec --strict -p 8080 --timeout 3 -P /streaming
+      h2spec --strict -p 8080 -P /bigstring
 
-      kill $(${pkgs.lsof}/bin/lsof -i tcp:8080 | awk '{print $2}' | grep -v PID)
+      h2spec --strict -p 8080 --timeout 3 -P /streaming
+
+      kill $(lsof -i tcp:8080 -t)
     '';
   }
