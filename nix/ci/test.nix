@@ -7,16 +7,10 @@ let
   h2Pkgs = import ./.. { inherit ocamlVersion; };
   h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
   srcs = lib.mapAttrsFlatten (n: v: v.src) h2Drvs ++ [
-    (lib.gitignoreSource (lib.cleanSourceWith rec {
-      src = ../..;
-      # Good examples: https://github.com/NixOS/nixpkgs/blob/master/lib/sources.nix
-      filter = name: type:
-      let
-        path = toString name;
-        relPath = lib.removePrefix (toString src + "/") path;
-      in
-      relPath == "spec" || lib.hasPrefix "spec/" relPath || relPath == ".ocamlformat";
-    })) ];
+    (lib.filterGitSource { src = ../..;
+      dirs = [ "spec" ];
+      files = [ ".ocamlformat" ];
+    }) ];
 in
 
   stdenv.mkDerivation {

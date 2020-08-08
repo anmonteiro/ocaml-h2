@@ -4,26 +4,17 @@
 
 let
   inherit (pkgs) lib stdenv ocamlPackages;
-  inherit (lib) gitignoreSource;
+  inherit (lib) filterGitSource;
 in
 
   with ocamlPackages;
 
   let
-    genSrc = { dirs, files ? [] }: gitignoreSource (lib.cleanSourceWith rec {
+    genSrc = { dirs, files }: filterGitSource {
       src = ./..;
-      # Good examples: https://github.com/NixOS/nixpkgs/blob/master/lib/sources.nix
-      filter = name: type:
-      let
-        path = toString name;
-        baseName = baseNameOf path;
-        relPath = lib.removePrefix (toString src + "/") path;
-      in
-        (lib.any (dir: dir == relPath || (lib.hasPrefix "${dir}/" relPath)) dirs) ||
-        (type == "regular" &&
-          (lib.hasPrefix "dune" baseName ||
-           (lib.any (file: lib.hasPrefix file baseName) files)));
-    });
+      inherit dirs;
+      files = files ++ [ "dune-project" ];
+    };
     buildH2 = args: buildDunePackage ({
       version = "0.6.0-dev";
       useDune2 = true;
