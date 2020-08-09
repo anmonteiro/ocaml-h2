@@ -616,7 +616,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
      *   This is necessary even if the frame is in error. *)
     Scheduler.deduct_inflow t.streams payload_length;
     match Scheduler.get_node t.streams stream_id with
-    | Some (Scheduler.Stream { descriptor; _ } as stream) ->
+    | Some (Stream { descriptor; _ } as stream) ->
       (match descriptor.state with
       | Active (Open (ActiveMessage request_info), active_stream) ->
         let request_body = Reqd.request_body descriptor in
@@ -1017,7 +1017,7 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
     add_window_increment t t.streams window_increment
   else
     match Scheduler.get_node t.streams stream_id with
-    | Some (Scheduler.Stream { descriptor; _ } as stream_node) ->
+    | Some (Stream { descriptor; _ } as stream_node) ->
       (match descriptor.state with
       | Idle ->
         (* From RFC7540§5.1:
