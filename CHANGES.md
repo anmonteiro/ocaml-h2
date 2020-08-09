@@ -1,7 +1,7 @@
 Unreleased
 ---------------
 
-0.7.0 2020-08-07
+0.7.0 2020-08-09
 ---------------
 
 - h2: client / server: execute request/response body reads as data frames
