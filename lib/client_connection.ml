@@ -563,7 +563,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
   let open Scheduler in
   let { Frame.flags; stream_id; payload_length; _ } = frame_header in
   match Scheduler.get_node t.streams stream_id with
-  | Some (Stream { descriptor; _ } as stream) ->
+  | Some (Scheduler.Stream { descriptor; _ } as stream) ->
     (match descriptor.state with
     | Active
         ( ( Open (ActiveMessage response_info)
@@ -1072,7 +1072,7 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
     add_window_increment t t.streams window_increment
   else
     match Scheduler.get_node t.streams stream_id with
-    | Some (Stream { descriptor; _ } as stream_node) ->
+    | Some (Scheduler.Stream { descriptor; _ } as stream_node) ->
       (match descriptor.state with
       | Idle ->
         (* From RFC7540§5.1:
@@ -1104,7 +1104,7 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
 let process_continuation_frame t { Frame.frame_header; _ } headers_block =
   let { Frame.stream_id; flags; _ } = frame_header in
   match Scheduler.get_node t.streams stream_id with
-  | Some (Stream { descriptor; _ } as stream) ->
+  | Some (Scheduler.Stream { descriptor; _ } as stream) ->
     (match descriptor.state with
     | Active
         ( ( Open (PartialHeaders partial_headers)

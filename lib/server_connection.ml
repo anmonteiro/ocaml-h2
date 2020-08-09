@@ -616,7 +616,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
      *   This is necessary even if the frame is in error. *)
     Scheduler.deduct_inflow t.streams payload_length;
     match Scheduler.get_node t.streams stream_id with
-    | Some (Stream { descriptor; _ } as stream) ->
+    | Some (Scheduler.Stream { descriptor; _ } as stream) ->
       (match descriptor.state with
       | Active (Open (ActiveMessage request_info), active_stream) ->
         let request_body = Reqd.request_body descriptor in
@@ -1017,7 +1017,7 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
     add_window_increment t t.streams window_increment
   else
     match Scheduler.get_node t.streams stream_id with
-    | Some (Stream { descriptor; _ } as stream_node) ->
+    | Some (Scheduler.Stream { descriptor; _ } as stream_node) ->
       (match descriptor.state with
       | Idle ->
         (* From RFC7540§5.1:
@@ -1061,7 +1061,7 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
     report_connection_error t Error_code.ProtocolError
   else
     match Scheduler.get_node t.streams stream_id with
-    | Some (Stream { descriptor; _ } as stream) ->
+    | Some (Scheduler.Stream { descriptor; _ } as stream) ->
       (match descriptor.state with
       | Active (Open (PartialHeaders partial_headers), active_stream) ->
         handle_headers_block
@@ -1252,7 +1252,7 @@ let handle_h2c_request t headers request_body_iovecs =
    *   identifier of 1 (see Section 5.1.1) with default priority values
    *   (Section 5.3.5). *)
   match open_stream ~priority:Priority.default_priority t 1l with
-  | Some (Stream { descriptor = reqd; _ } as stream) ->
+  | Some (Scheduler.Stream { descriptor = reqd; _ } as stream) ->
     let active_stream =
       Reqd.create_active_stream
         t.hpack_encoder
