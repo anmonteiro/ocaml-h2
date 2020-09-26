@@ -537,6 +537,21 @@ module Writer = struct
         ~has_priority:false
         faraday)
 
+  let write_response_trailers t hpack_encoder frame_info trailers =
+    if not (is_closed t.encoder) then (
+      let faraday = Faraday.of_bigstring t.headers_block_buffer in
+      (* From RFC7540§8.1:
+       *  optionally, one HEADERS frame, followed by zero or more
+       *  CONTINUATION frames containing the trailer-part, if present (see
+       *  [RFC7230], Section 4.1.2). *)
+      encode_headers hpack_encoder faraday trailers;
+      chunk_header_block_fragments
+        t
+        frame_info
+        ~write_frame:(write_headers_frame ~priority:Priority.default_priority)
+        ~has_priority:false
+        faraday)
+
   let write_rst_stream t frame_info e =
     if not (is_closed t.encoder) then
       write_rst_stream_frame t.encoder frame_info e
