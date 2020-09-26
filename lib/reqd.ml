@@ -414,9 +414,6 @@ let try_with t f : (unit, exn) Result.result =
 let error_code t =
   match fst t.error_code with #error as error -> Some error | `Ok -> None
 
-let response_body_requires_output response_body =
-  (not (Body.is_closed response_body)) || Body.has_pending_output response_body
-
 let requires_output t =
   match t.state with
   | Idle ->
@@ -437,8 +434,8 @@ let requires_output t =
       false
     | Fixed { iovec = { len; _ }; _ } ->
       len > 0
-    | Streaming (_, response_body) ->
-      response_body_requires_output response_body
+    | Streaming _ ->
+      true
     | Waiting ->
       true)
   | Closed _ ->
@@ -464,20 +461,39 @@ let write_buffer_data writer ~off ~len frame_info buffer =
 
 let flush_response_body t ~max_bytes =
   match t.state with
-  | Active ((Open _ | HalfClosed _), { response_state; _ }) ->
-    (match response_state with
-    | Streaming (_, response_body) ->
-      let written =
+  | Active ((Open _ | HalfClosed _), stream) ->
+    (match stream.response_state with
+    | Streaming (response, response_body) ->
+      if Body.has_pending_output response_body then
         Body.transfer_to_writer
           response_body
           t.writer
           ~max_frame_size:t.max_frame_size
           ~max_bytes
           t.id
-      in
-      if not (response_body_requires_output response_body) then
-        close_stream t;
-      written
+      else if Body.is_closed response_body then (
+        (* no pending output and closed, we can finalize the message and close
+           the stream *)
+        let frame_info =
+          Writer.make_frame_info
+            ~max_frame_size:t.max_frame_size
+            ~flags:Flags.(set_end_stream default_flags)
+            t.id
+        in
+        (* FIXME this needs to bypass flow-control in Scheduler.write (i.e.
+           `allowed_to_transmit`) *)
+        (* Note: we don't need to check if we're flow-controlled here.
+         *
+         * From RFC7540§6.9.1:
+         *   Frames with zero length with the END_STREAM flag set (that is, an
+         *   empty DATA frame) MAY be sent if there is no available space in
+         *   either flow-control window. *)
+        Writer.schedule_data t.writer frame_info ~len:0 Bigstringaf.empty;
+        Writer.flush t.writer (fun () -> Stream.finish_stream t Finished);
+        stream.response_state <- Complete response;
+        0)
+      else (* no pending output but Body is still open *)
+        0
     | Fixed r ->
       (match r.iovec with
       | { buffer; off; len } as iovec ->
