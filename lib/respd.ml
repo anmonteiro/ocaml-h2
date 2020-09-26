@@ -177,17 +177,14 @@ let report_error t error error_code =
 let error_code t =
   match fst t.error_code with #error as error -> Some error | `Ok -> None
 
-let request_body_requires_output response_body =
-  (not (Body.is_closed response_body)) || Body.has_pending_output response_body
-
 let requires_output t =
   match t.state with
   | Idle ->
     true
   | Reserved _ ->
     false
-  | Active (Open _, { request_body; _ }) ->
-    request_body_requires_output request_body
+  | Active (Open _, _) ->
+    true
   | Active (HalfClosed _, _) ->
     false
   | Closed _ ->
@@ -196,17 +193,34 @@ let requires_output t =
 let flush_request_body t ~max_bytes =
   match t.state with
   | Active (Open active_state, ({ request_body; _ } as s)) ->
-    let written =
+    if Body.has_pending_output request_body then
       Body.transfer_to_writer
         request_body
         t.writer
         ~max_frame_size:t.max_frame_size
         ~max_bytes
         t.id
-    in
-    if not (request_body_requires_output request_body) then
+    else if Body.is_closed request_body then (
+      (* closed and no pending output *)
+      (* FIXME this needs to bypass flow-control in Scheduler.write (i.e.
+         `allowed_to_transmit`) *)
+      (* Note: we don't need to check if we're flow-controlled here.
+       *
+       * From RFC7540§6.9.1:
+       *   Frames with zero length with the END_STREAM flag set (that is, an
+       *   empty DATA frame) MAY be sent if there is no available space in
+       *   either flow-control window. *)
+      let frame_info =
+        Writer.make_frame_info
+          ~max_frame_size:t.max_frame_size
+          ~flags:Flags.(set_end_stream default_flags)
+          t.id
+      in
+      Writer.schedule_data t.writer frame_info ~len:0 Bigstringaf.empty;
       t.state <- Active (HalfClosed active_state, s);
-    written
+      0)
+    else (* not closed and no pending output *)
+      0
   | _ ->
     0
 

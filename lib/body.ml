@@ -37,7 +37,6 @@ module Writer = Serialize.Writer
 type _ t =
   { faraday : Faraday.t
   ; mutable read_scheduled : bool
-  ; mutable write_final_data_frame : bool
   ; mutable on_eof : unit -> unit
   ; mutable on_read : Bigstringaf.t -> off:int -> len:int -> unit
   ; buffered_bytes : int ref
@@ -54,7 +53,6 @@ let default_on_read = Sys.opaque_identity (fun _ ~off:_ ~len:_ -> ())
 let _create buffer ~done_reading ~ready_to_write =
   { faraday = Faraday.of_bigstring buffer
   ; read_scheduled = false
-  ; write_final_data_frame = true
   ; on_eof = default_on_eof
   ; on_read = default_on_read
   ; buffered_bytes = ref 0
@@ -96,6 +94,8 @@ let flush t kontinue =
   ready_to_write t
 
 let is_closed t = Faraday.is_closed t.faraday
+
+let has_pending_output t = Faraday.has_pending_output t.faraday
 
 let close_writer t =
   Faraday.close t.faraday;
@@ -139,12 +139,6 @@ let schedule_read t ~on_eof ~on_read =
     t.on_eof <- on_eof;
     t.on_read <- on_read)
 
-let has_pending_output t =
-  (* Force another write poll to make sure that the final chunk is emitted for
-   * chunk-encoded bodies. *)
-  Faraday.has_pending_output t.faraday
-  || (Faraday.is_closed t.faraday && t.write_final_data_frame)
-
 let close_reader t =
   Faraday.close t.faraday;
   execute_read t
@@ -152,24 +146,7 @@ let close_reader t =
 let transfer_to_writer t writer ~max_frame_size ~max_bytes stream_id =
   let faraday = t.faraday in
   match Faraday.operation faraday with
-  | `Yield ->
-    0
-  | `Close ->
-    if t.write_final_data_frame then (
-      t.write_final_data_frame <- false;
-      (* Note: we don't need to check if we're flow-controlled here.
-       *
-       * From RFC7540§6.9.1:
-       *   Frames with zero length with the END_STREAM flag set (that is, an
-       *   empty DATA frame) MAY be sent if there is no available space in
-       *   either flow-control window. *)
-      let frame_info =
-        Writer.make_frame_info
-          ~max_frame_size
-          ~flags:Flags.(set_end_stream default_flags)
-          stream_id
-      in
-      Writer.schedule_data writer frame_info ~len:0 Bigstringaf.empty);
+  | `Yield | `Close ->
     0
   | `Writev iovecs ->
     let buffered = t.buffered_bytes in
