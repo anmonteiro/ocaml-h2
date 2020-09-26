@@ -502,6 +502,8 @@ module Reqd : sig
     -> Response.t
     -> [ `write ] Body.t
 
+  val send_trailers_on_close : t -> Headers.t -> unit
+
   (** {3 Pushing}
 
       HTTP/2 allows a server to pre-emptively send (or "push") responses (along
