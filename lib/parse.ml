@@ -50,13 +50,11 @@ type parse_context =
     max_frame_size : int
   }
 
-let error e = Error e
-
 let connection_error error_code msg =
-  error Error.(ConnectionError (error_code, msg))
+  Error Error.(ConnectionError (error_code, msg))
 
 let stream_error error_code stream_id =
-  error Error.(StreamError (stream_id, error_code))
+  Error Error.(StreamError (stream_id, error_code))
 
 let parse_uint24 o1 o2 o3 = (o1 lsl 16) lor (o2 lsl 8) lor o3
 

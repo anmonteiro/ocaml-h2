@@ -66,7 +66,6 @@ type active_stream =
   { body_buffer_size : int
   ; encoder : Hpack.Encoder.t
   ; mutable response_state : response_state
-  ; mutable wait_for_first_flush : bool
         (* We're not doing anything with these yet, we could probably have a
          * `Reqd.schedule_read_trailers` function that would be called once
          * trailer headers are emitted. *)
@@ -89,7 +88,6 @@ let create_active_stream encoder body_buffer_size create_push_stream =
   { body_buffer_size
   ; encoder
   ; response_state = Waiting
-  ; wait_for_first_flush = true
   ; trailers_parser = None
   ; trailers = None
   ; create_push_stream
@@ -224,7 +222,7 @@ let respond_with_bigstring t response bstr =
   unsafe_respond_with_data t response (`Bigstring bstr)
 
 let send_streaming_response ~flush_headers_immediately t s response =
-  s.wait_for_first_flush <- not flush_headers_immediately;
+  let wait_for_first_flush = not flush_headers_immediately in
   match s.response_state with
   | Waiting ->
     let frame_info =
@@ -236,7 +234,7 @@ let send_streaming_response ~flush_headers_immediately t s response =
           Writer.wakeup t.writer)
     in
     Writer.write_response_headers t.writer s.encoder frame_info response;
-    if s.wait_for_first_flush then Writer.yield t.writer;
+    if wait_for_first_flush then Writer.yield t.writer;
     s.response_state <- Streaming (response, response_body);
     Writer.wakeup t.writer;
     response_body
