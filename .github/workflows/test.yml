@@ -9,12 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ocamlVersion: [4_07, 4_08, 4_09, 4_10, 4_11]
+        ocamlVersion: [4_08, 4_09, 4_10, 4_11]
     steps:
     - uses: actions/checkout@v2
       with:
         submodules: 'recursive'
-    - uses: cachix/install-nix-action@v8
+    - uses: cachix/install-nix-action@v11
     - uses: cachix/cachix-action@v6
       with:
         name: anmonteiro

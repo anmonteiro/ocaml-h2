@@ -1,9 +1,9 @@
-{ ocamlVersion ? "4_10" }:
+{ ocamlVersion ? "4_11" }:
 
 let
   overlays =
     builtins.fetchTarball
-      https://github.com/anmonteiro/nix-overlays/archive/cc29edc.tar.gz;
+      https://github.com/anmonteiro/nix-overlays/archive/1e18d3b.tar.gz;
 
 in
 
