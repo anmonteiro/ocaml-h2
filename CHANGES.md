@@ -1,6 +1,11 @@
 Unreleased
 ---------------
 
+- h2: scheduler: fix bug that caused zero length DATA frames not to be sent if
+  there were no flow-control credits
+  ([#142](https://github.com/anmonteiro/ocaml-h2/pull/142)) -- reported and
+  fixed by [@blandinw](https://github.com/blandinw)
+
 0.7.0 2020-08-09
 ---------------
 

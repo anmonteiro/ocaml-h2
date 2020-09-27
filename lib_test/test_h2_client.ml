@@ -114,10 +114,10 @@ module Client_connection_tests = struct
     Alcotest.(check int) "read_eof with no input returns 0" 0 c;
     reader_closed ~msg:"Shutting down a reader closes it" t
 
-  let preface =
+  let preface ~settings =
     let writer = Writer.create 0x400 in
     let frame_info = Writer.make_frame_info 0l in
-    Writer.write_settings writer frame_info [];
+    Writer.write_settings writer frame_info settings;
     Faraday.serialize_to_string (Serialize.Writer.faraday writer)
 
   let read_frames conn frames =
@@ -221,7 +221,8 @@ module Client_connection_tests = struct
     in
     headers, continuation
 
-  let handle_preface t =
+  let handle_preface ?(settings = []) t =
+    let preface = preface ~settings in
     let preface_len = String.length preface in
     let preface = read t (bs_of_string preface) ~off:0 ~len:preface_len in
     Alcotest.(check int)
@@ -241,10 +242,14 @@ module Client_connection_tests = struct
     handle_preface t
 
   let create_and_handle_preface
-      ?config ?push_handler ?(error_handler = default_error_handler) ()
+      ?settings
+      ?config
+      ?push_handler
+      ?(error_handler = default_error_handler)
+      ()
     =
     let t = create ?config ?push_handler ~error_handler in
-    handle_preface t;
+    handle_preface ?settings t;
     t
 
   let test_invalid_preface () =
@@ -1133,6 +1138,32 @@ module Client_connection_tests = struct
     report_write_result t (`Ok lenv);
     Alcotest.(check bool) "Response handler called" true !body_read_called
 
+  let test_flow_control_can_send_empty_data_frame () =
+    let t =
+      create_and_handle_preface ~settings:Settings.[ InitialWindowSize, 5 ] ()
+    in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let response_handler _response _response_body = () in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~error_handler:default_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    Body.write_string request_body "hello";
+    flush_request t;
+    Body.flush request_body (fun () -> Body.close_writer request_body);
+    let frames, _lenv = flush_pending_writes t in
+    Alcotest.(check (list int))
+      "Writes empty DATA frame"
+      (List.map Frame.FrameType.serialize Frame.FrameType.[ Data ])
+      (List.map
+         (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+           Frame.FrameType.serialize frame_type)
+         frames)
+
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
@@ -1172,6 +1203,9 @@ module Client_connection_tests = struct
       , `Quick
       , test_reading_response_body )
     ; "flow control", `Quick, test_flow_control
+    ; ( "flow control -- can send empty data frame"
+      , `Quick
+      , test_flow_control_can_send_empty_data_frame )
     ]
 end
 
