@@ -464,7 +464,7 @@ let flush_response_body t ~max_bytes =
   | Active ((Open _ | HalfClosed _), stream) ->
     (match stream.response_state with
     | Streaming (response, response_body) ->
-      if Body.has_pending_output response_body then
+      if Body.has_pending_output response_body && max_bytes > 0 then
         Body.transfer_to_writer
           response_body
           t.writer
@@ -480,21 +480,17 @@ let flush_response_body t ~max_bytes =
             ~flags:Flags.(set_end_stream default_flags)
             t.id
         in
-        (* FIXME this needs to bypass flow-control in Scheduler.write (i.e.
-           `allowed_to_transmit`) *)
-        (* Note: we don't need to check if we're flow-controlled here.
-         *
-         * From RFC7540§6.9.1:
+        (* From RFC7540§6.9.1:
          *   Frames with zero length with the END_STREAM flag set (that is, an
          *   empty DATA frame) MAY be sent if there is no available space in
          *   either flow-control window. *)
         Writer.schedule_data t.writer frame_info ~len:0 Bigstringaf.empty;
-        Writer.flush t.writer (fun () -> Stream.finish_stream t Finished);
+        Writer.flush t.writer (fun () -> close_stream t);
         stream.response_state <- Complete response;
         0)
       else (* no pending output but Body is still open *)
         0
-    | Fixed r ->
+    | Fixed r when max_bytes > 0 ->
       (match r.iovec with
       | { buffer; off; len } as iovec ->
         if max_bytes < len then (
@@ -514,7 +510,7 @@ let flush_response_body t ~max_bytes =
           write_buffer_data t.writer ~off ~len frame_info buffer;
           close_stream t;
           len)
-    | Waiting | Complete _ ->
+    | Fixed _ | Waiting | Complete _ ->
       0)
   | _ ->
     0

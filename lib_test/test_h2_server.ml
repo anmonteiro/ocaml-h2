@@ -1135,6 +1135,60 @@ module Server_connection_tests = struct
     | _ ->
       assert false
 
+  let test_flow_control_can_send_empty_data_frame () =
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let request_handler reqd =
+      let response = Response.create `OK in
+      let response_body = Reqd.respond_with_streaming reqd response in
+      Body.write_string response_body "hello";
+      Body.flush response_body (fun () -> Body.close_writer response_body)
+    in
+    let t =
+      create_and_handle_preface
+        ~settings:Settings.[ InitialWindowSize, 5 ]
+        ~error_handler
+        request_handler
+    in
+    read_request ~body:"request body" t request;
+    let data_frame =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.(default_flags |> set_end_stream)
+          ; frame_type = Data
+          }
+      ; frame_payload = Frame.Data (Bigstringaf.of_string ~off:0 ~len:3 "foo")
+      }
+    in
+    read_frames t [ data_frame ];
+    match next_write_operation t with
+    | `Write iovecs ->
+      let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
+      Alcotest.(check (list int))
+        "Response written"
+        (List.map Frame.FrameType.serialize Frame.FrameType.[ Headers; Data ])
+        (List.map
+           (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+             Frame.FrameType.serialize frame_type)
+           frames);
+      report_write_result t (`Ok (IOVec.lengthv iovecs));
+      (match next_write_operation t with
+      | `Write iovecs ->
+        let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
+        Alcotest.(check (list int))
+          "Final 0-length DATA frame is not subject to flow control"
+          (List.map Frame.FrameType.serialize Frame.FrameType.[ Data ])
+          (List.map
+             (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+               Frame.FrameType.serialize frame_type)
+             frames);
+        report_write_result t (`Ok (IOVec.lengthv iovecs));
+        writer_yields t
+      | _ ->
+        assert false)
+    | _ ->
+      assert false
+
   (* TODO: test for trailer headers. *)
   (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
   let suite =
@@ -1189,6 +1243,9 @@ module Server_connection_tests = struct
       , `Quick
       , test_reading_request_body )
     ; "flow control", `Quick, test_flow_control
+    ; ( "flow control -- can send empty data frame"
+      , `Quick
+      , test_flow_control_can_send_empty_data_frame )
     ]
 end
 

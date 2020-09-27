@@ -339,19 +339,23 @@ module Make (Streamd : StreamDescriptor) = struct
      *   send a flow-controlled frame with a length that exceeds the space
      *   available in either of the flow-control windows advertised by the
      *   receiver. *)
-    if allowed_to_transmit t stream_node then (
-      let allowed_bytes = min root.flow stream.flow in
-      let written =
-        Streamd.flush_write_body ~max_bytes:allowed_bytes descriptor
-      in
-      (* From RFC7540§6.9.1:
-       *   After sending a flow-controlled frame, the sender reduces the space
-       *   available in both windows by the length of the transmitted frame. *)
-      root.flow <- root.flow - written;
-      stream.flow <- stream.flow - written;
-      written)
-    else
-      0
+    let allowed_bytes =
+      if allowed_to_transmit t stream_node then
+        min root.flow stream.flow
+      else
+        (* There might be a zero-length DATA frame (with the end stream flag
+           set) waiting to be sent. *)
+        0
+    in
+    let written =
+      Streamd.flush_write_body ~max_bytes:allowed_bytes descriptor
+    in
+    (* From RFC7540§6.9.1:
+     *   After sending a flow-controlled frame, the sender reduces the space
+     *   available in both windows by the length of the transmitted frame. *)
+    root.flow <- root.flow - written;
+    stream.flow <- stream.flow - written;
+    written
 
   let update_t stream n =
     let (Stream ({ parent = Parent parent; _ } as stream)) = stream in
