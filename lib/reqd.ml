@@ -51,7 +51,11 @@ type response_state =
       ; mutable iovec :
           [ `String of string | `Bigstring of Bigstringaf.t ] Httpaf.IOVec.t
       }
-  | Streaming of Response.t * [ `write ] Body.t
+  | Streaming of
+      { response : Response.t
+      ; response_body : [ `write ] Body.t
+      ; trailers : Headers.t
+      }
   | Complete of Response.t
 
 type request_info =
@@ -131,7 +135,7 @@ let response t =
     (match response_state with
     | Waiting ->
       None
-    | Streaming (response, _) | Fixed { response; _ } | Complete response ->
+    | Streaming { response; _ } | Fixed { response; _ } | Complete response ->
       Some response)
   | Closed _ ->
     None
@@ -147,7 +151,7 @@ let response_exn t =
     (match response_state with
     | Waiting ->
       failwith "h2.Reqd.response_exn: response has not started"
-    | Streaming (response, _) | Fixed { response; _ } | Complete response ->
+    | Streaming { response; _ } | Fixed { response; _ } | Complete response ->
       response)
   | Closed _ ->
     assert false
@@ -192,6 +196,25 @@ let send_fixed_response t s response data =
   | Fixed _ | Complete _ ->
     failwith "h2.Reqd.respond_with_*: response already complete"
 
+let schedule_trailers t new_trailers =
+  match t.state with
+  | Idle | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
+    assert false
+  | Closed _ ->
+    failwith "h2.Reqd.schedule_trailers: stream already closed"
+  | Reserved _ ->
+    failwith "h2.Reqd.schedule_trailers: response not started"
+  | Active ((Open (FullHeaders | ActiveMessage _) | HalfClosed _), stream) ->
+    (match stream.response_state with
+    | Streaming { response; response_body; trailers = old_trailers } ->
+      if old_trailers <> Headers.empty then
+        failwith "h2.Reqd.schedule_trailers: trailers already scheduled";
+      stream.response_state <-
+        Streaming { response; response_body; trailers = new_trailers }
+    | _ ->
+      failwith
+        "h2.Reqd.schedule_trailers: can only send trailers in Streaming mode")
+
 let unsafe_respond_with_data t response data =
   match t.state with
   | Idle | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
@@ -235,7 +258,8 @@ let send_streaming_response ~flush_headers_immediately t s response =
     in
     Writer.write_response_headers t.writer s.encoder frame_info response;
     if wait_for_first_flush then Writer.yield t.writer;
-    s.response_state <- Streaming (response, response_body);
+    s.response_state <-
+      Streaming { response; response_body; trailers = Headers.empty };
     Writer.wakeup t.writer;
     response_body
   | Streaming _ ->
@@ -366,11 +390,11 @@ let _report_error ?request t s exn error_code =
      * outstanding call to the [error_handler], but an intervening exception
      * has been reported as well. *)
     failwith "h2.Reqd.report_exn: NYI"
-  | Streaming (_response, response_body), `Ok ->
+  | Streaming { response_body; _ }, `Ok ->
     Body.close_writer response_body;
     t.error_code <- (exn :> [ `Ok | error ]), Some error_code;
     reset_stream t error_code
-  | Streaming (_response, response_body), `Exn _ ->
+  | Streaming { response_body; _ }, `Exn _ ->
     Body.close_writer response_body;
     t.error_code <- fst t.error_code, Some error_code;
     reset_stream t error_code;
@@ -463,7 +487,7 @@ let flush_response_body t ~max_bytes =
   match t.state with
   | Active ((Open _ | HalfClosed _), stream) ->
     (match stream.response_state with
-    | Streaming (response, response_body) ->
+    | Streaming { response; response_body; trailers } ->
       if Body.has_pending_output response_body && max_bytes > 0 then
         Body.transfer_to_writer
           response_body
@@ -471,7 +495,7 @@ let flush_response_body t ~max_bytes =
           ~max_frame_size:t.max_frame_size
           ~max_bytes
           t.id
-      else if Body.is_closed response_body then (
+      else if Body.is_closed response_body then
         (* no pending output and closed, we can finalize the message and close
            the stream *)
         let frame_info =
@@ -480,14 +504,24 @@ let flush_response_body t ~max_bytes =
             ~flags:Flags.(set_end_stream default_flags)
             t.id
         in
-        (* From RFC7540§6.9.1:
-         *   Frames with zero length with the END_STREAM flag set (that is, an
-         *   empty DATA frame) MAY be sent if there is no available space in
-         *   either flow-control window. *)
-        Writer.schedule_data t.writer frame_info ~len:0 Bigstringaf.empty;
-        Writer.flush t.writer (fun () -> close_stream t);
-        stream.response_state <- Complete response;
-        0)
+        if trailers <> Headers.empty then (
+          Writer.write_response_trailers
+            t.writer
+            stream.encoder
+            frame_info
+            trailers;
+          close_stream t;
+          stream.response_state <- Complete response;
+          0)
+        else (
+          (* From RFC7540§6.9.1:
+           *   Frames with zero length with the END_STREAM flag set (that is, an
+           *   empty DATA frame) MAY be sent if there is no available space in
+           *   either flow-control window. *)
+          Writer.schedule_data t.writer frame_info ~len:0 Bigstringaf.empty;
+          close_stream t;
+          stream.response_state <- Complete response;
+          0)
       else (* no pending output but Body is still open *)
         0
     | Fixed r when max_bytes > 0 ->
