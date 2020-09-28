@@ -502,7 +502,13 @@ module Reqd : sig
     -> Response.t
     -> [ `write ] Body.t
 
-  val send_trailers_on_close : t -> Headers.t -> unit
+  val schedule_trailers : t -> Headers.t -> unit
+  (** [schedule_trailers reqd trailers] schedules a list of trailers to be sent
+      before the stream is closed, concluding the HTTP message. Should only be
+      used after {!respond_with_streaming}. Raises [Failure] if trailers have
+      already been scheduled. See
+      {{:https://tools.ietf.org/html/rfc7540#section-8.1} RFC7540§8.1} for more
+      information *)
 
   (** {3 Pushing}
 

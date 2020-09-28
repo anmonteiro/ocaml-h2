@@ -1195,7 +1195,7 @@ module Server_connection_tests = struct
     let response_body = Reqd.respond_with_streaming reqd response in
     Body.write_string response_body "somedata";
     Body.flush response_body (fun () ->
-        Reqd.send_trailers_on_close reqd Headers.(add empty "foo" "bar");
+        Reqd.schedule_trailers reqd Headers.(add empty "foo" "bar");
         Body.close_writer response_body)
 
   let test_trailers () =
@@ -1214,14 +1214,18 @@ module Server_connection_tests = struct
     match next_write_operation t with
     | `Write iovecs ->
       let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
-      Alcotest.(check (list int))
-        "Next write operation surfaces writes for HEADERS / DATA"
-        List.(map Frame.FrameType.serialize Frame.FrameType.[ Headers; Data ])
-        List.(
-          map
-            (fun { Frame.frame_header; _ } ->
-              Frame.FrameType.serialize frame_header.frame_type)
-            frames);
+      List.iter2
+        (fun { Frame.frame_header; _ } (label, frame_type, flags) ->
+          Alcotest.(check int)
+            ("Next write operation surfaces writes for " ^ label)
+            (Frame.FrameType.serialize frame_header.frame_type)
+            (Frame.FrameType.serialize frame_type);
+          Alcotest.(check int) "Correct flags are used" frame_header.flags flags)
+        frames
+        Frame.FrameType.
+          [ ("HEADERS", Headers, Flags.(set_end_header default_flags))
+          ; "DATA", Data, Flags.default_flags
+          ];
       let iovec_len = IOVec.lengthv iovecs in
       report_write_result t (`Ok iovec_len);
       (match next_write_operation t with
@@ -1232,6 +1236,10 @@ module Server_connection_tests = struct
           "Next write operation surfaces the trailers HEADERS frame"
           Frame.FrameType.(serialize Headers)
           Frame.FrameType.(serialize frame.frame_header.frame_type);
+        Alcotest.(check int)
+          "Last HEADERS frame has END_STREAM and END_HEADERS flag"
+          frame.frame_header.flags
+          Flags.(set_end_stream (set_end_header default_flags));
         let iovec_len = IOVec.lengthv iovecs in
         report_write_result t (`Ok iovec_len);
         Alcotest.check
@@ -1246,14 +1254,13 @@ module Server_connection_tests = struct
           (next_read_operation t)
       | _ ->
         Alcotest.fail
-          "Expected state machine to issue a write operation after seeing  (*\n\
-          \       headers.")
+          "Expected state machine to issue a write operation after seeing \
+           headers.")
     | _ ->
       Alcotest.fail
         "Expected state machine to issue a write operation after seeing \
          headers."
 
-  (* TODO: test for trailer headers. *)
   (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
