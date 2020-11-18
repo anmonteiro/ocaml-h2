@@ -15,7 +15,7 @@ jobs:
       with:
         submodules: 'recursive'
     - uses: cachix/install-nix-action@v12
-    - uses: cachix/cachix-action@v6
+    - uses: cachix/cachix-action@v8
       with:
         name: anmonteiro
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
