@@ -669,7 +669,7 @@ module Config : sig
     ; max_concurrent_streams : int
           (** [max_concurrent_streams] specifies the maximum number of streams
               that the sender will allow the peer to initiate. Defaults to
-              [1^31 - 1] *)
+              [2^31 - 1] *)
     ; initial_window_size : int
           (** [initial_window_size] specifies the initial window size for flow
               control tokens. Defaults to [65535] *)
