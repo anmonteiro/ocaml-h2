@@ -54,6 +54,8 @@ end
 
 type error = Respd.error
 
+type trailers_handler = Headers.t -> unit
+
 type response_handler = Response.t -> [ `read ] Body.t -> unit
 
 type error_handler = error -> unit
@@ -258,7 +260,11 @@ let handle_push_promise_headers t respd headers =
         respd.state <-
           Active
             ( HalfClosed Stream.WaitingForPeer
-            , { Respd.request; request_body; response_handler } )
+            , { Respd.request
+              ; request_body
+              ; response_handler
+              ; trailers_handler = ignore
+              } )
       | Error _ ->
         (* From RFC7540§6.6:
          *   Recipients of PUSH_PROMISE frames can choose to reject promised
@@ -1340,13 +1346,16 @@ let create_h2c
              *   it is completely sent. *)
           ; request_body = Body.empty
           ; response_handler
+          ; trailers_handler = ignore
           } );
     Writer.wakeup t.writer;
     Ok t
   | Error msg ->
     Error msg
 
-let request t request ~error_handler ~response_handler =
+let request
+    t ?(trailers_handler = ignore) request ~error_handler ~response_handler
+  =
   let max_frame_size = t.settings.max_frame_size in
   let respd = create_and_add_stream t ~error_handler in
   let request_body =
@@ -1370,7 +1379,9 @@ let request t request ~error_handler ~response_handler =
     request;
   Writer.flush t.writer (fun () ->
       respd.state <-
-        Active (Open WaitingForPeer, { request; request_body; response_handler }));
+        Active
+          ( Open WaitingForPeer
+          , { request; request_body; response_handler; trailers_handler } ));
   Writer.wakeup t.writer;
   (* Closing the request body puts the stream in the half-closed (local) state.
    * This is handled by {!Respd.flush_request_body}, which transitions the

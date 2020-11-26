@@ -52,17 +52,16 @@ type response_info =
   { response : Response.t
   ; response_body : [ `read ] Body.t
   ; mutable response_body_bytes : int64
-        (* We're not doing anything with these yet, we could probably have a
-         * `Reqd.schedule_read_trailers` function that would be called once
-         * trailer headers are emitted. *)
   ; mutable trailers_parser : Stream.partial_headers option
-  ; mutable trailers : Headers.t option
   }
+
+type trailers_handler = Headers.t -> unit
 
 type active_request =
   { request : Request.t
   ; request_body : [ `writer ] Body.t
   ; response_handler : response_handler
+  ; trailers_handler : trailers_handler
   }
 
 type active_state =
@@ -82,7 +81,6 @@ let create_active_response response response_body =
     ; response_body
     ; response_body_bytes = Int64.zero
     ; trailers_parser = None
-    ; trailers = None
     }
 
 let response_body_exn t =
@@ -222,9 +220,10 @@ let flush_request_body t ~max_bytes =
 
 let deliver_trailer_headers t headers =
   match t.state with
-  | Active ((Open (ActiveMessage s) | HalfClosed (ActiveMessage s)), _) ->
-    (* TODO: call the schedule_trailers callback *)
-    s.trailers <- Some headers
+  | Active
+      ( (Open (ActiveMessage _) | HalfClosed (ActiveMessage _))
+      , { trailers_handler; _ } ) ->
+    trailers_handler headers
   | _ ->
     assert false
 
