@@ -806,6 +806,8 @@ module Client_connection : sig
     | `Exn of exn
     ]
 
+  type trailers_handler = Headers.t -> unit
+
   type response_handler = Response.t -> [ `read ] Body.t -> unit
 
   type error_handler = error -> unit
@@ -847,15 +849,17 @@ module Client_connection : sig
 
   val request
     :  t
+    -> ?trailers_handler:trailers_handler
     -> Request.t
     -> error_handler:error_handler
     -> response_handler:response_handler
     -> [ `write ] Body.t
-  (** [request connection req ~error_handler ~response_handler] opens a new
-      HTTP/2 stream with [req] and returns a request body that can be written
-      to. Once a response arrives, [response_handler] will be called with its
-      headers and body. [error_handler] will be called for {e stream-level}
-      errors.
+  (** [request connection ?trailers_handler req ~error_handler
+      ~response_handler] opens a new HTTP/2 stream with [req] and returns a
+      request body that can be written to. Once a response arrives,
+      [response_handler] will be called with its headers and body.
+      [error_handler] will be called for {e stream-level} errors. If there are
+      any trailers they will be parsed and passed to [trailers_handler].
 
       HTTP/2 is multiplexed over a single TCP connection and distinguishes
       connection-level errors from stream-level errors. See
