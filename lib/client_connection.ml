@@ -1145,7 +1145,9 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
 (* From RFC7540§1:
  *   HTTP/2 [...] allows interleaving of request and response messages on the
  *   same connection and uses an efficient coding for HTTP header fields. *)
-let create ?(config = Config.default) ?push_handler ~error_handler =
+let[@ocaml.warning "-16"] create
+    ?(config = Config.default) ?push_handler ~error_handler
+  =
   let push_handler =
     match push_handler with
     | Some push_handler ->
