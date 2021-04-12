@@ -5,6 +5,9 @@ Unreleased
   there were no flow-control credits
   ([#142](https://github.com/anmonteiro/ocaml-h2/pull/142)) -- reported  by
   [@blandinw](https://github.com/blandinw)
+- h2: client / server: fix a security issue that allowed a malicious peer to
+  make h2 allocate as much as it wanted
+  ([#149](https://github.com/anmonteiro/ocaml-h2/pull/149))
 
 0.7.0 2020-08-09
 ---------------
