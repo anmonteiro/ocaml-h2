@@ -33,10 +33,10 @@ open Parsetree
 open Ast_helper
 open Asttypes
 
+let ghloc = !default_loc
+
 let let_ name body =
-  Str.value
-    Nonrecursive
-    [ Vb.mk (Pat.var { txt = name; loc = !default_loc }) body ]
+  Str.value Nonrecursive [ Vb.mk (Pat.var { txt = name; loc = ghloc }) body ]
 
 module CharSet = Set.Make (Char)
 
@@ -116,8 +116,8 @@ let mk_static_table static_table =
       (fun acc (_, name, value) ->
         let tup =
           Exp.tuple
-            [ Exp.constant (Pconst_string (name, None))
-            ; Exp.constant (Pconst_string (value, None))
+            [ Exp.constant (Pconst_string (name, ghloc, None))
+            ; Exp.constant (Pconst_string (value, ghloc, None))
             ]
         in
         tup :: acc)
@@ -180,7 +180,8 @@ let mk_lookup_token token_map =
                                               } )
                                         ; ( Nolabel
                                           , Exp.constant
-                                              (Pconst_string (name, None)) )
+                                              (Pconst_string (name, ghloc, None))
+                                          )
                                         ])
                                    (Exp.constant
                                       (Pconst_integer (string_of_int i, None))))

@@ -297,7 +297,7 @@ let handle_response_headers t stream ~end_stream active_request headers =
         respd
         (`Invalid_response_body_length response)
         ProtocolError
-    | body_length ->
+    | `Fixed _ | `Unknown ->
       let response_body =
         if end_stream then
           Body.empty

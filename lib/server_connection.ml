@@ -290,7 +290,7 @@ let handle_headers t ~end_stream stream active_stream headers =
       (match Message.body_length headers with
       | `Error e ->
         set_error_and_handle t reqd e ProtocolError
-      | body_length ->
+      | `Fixed _ | `Unknown ->
         let request =
           Request.create ~scheme ~headers (Httpaf.Method.of_string meth) path
         in
