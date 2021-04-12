@@ -5,6 +5,8 @@ Unreleased
   there were no flow-control credits
   ([#142](https://github.com/anmonteiro/ocaml-h2/pull/142)) -- reported  by
   [@blandinw](https://github.com/blandinw)
+- h2,h2-lwt,h2-lwt-unix,h2-async,h2-mirage Add `trailers_handler` to
+  `Connection.request` ([#146](https://github.com/anmonteiro/ocaml-h2/pull/146))
 - h2: client / server: fix a security issue that allowed a malicious peer to
   make h2 allocate as much as it wanted
   ([#149](https://github.com/anmonteiro/ocaml-h2/pull/149))
