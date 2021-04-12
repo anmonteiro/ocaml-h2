@@ -1,4 +1,4 @@
-Unreleased
+0.8.0 2021-04-11
 ---------------
 
 - h2: scheduler: fix bug that caused zero length DATA frames not to be sent if
