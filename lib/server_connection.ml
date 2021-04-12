@@ -298,17 +298,8 @@ let handle_headers t ~end_stream stream active_stream headers =
           if end_stream then
             Body.empty
           else
-            let buffer_size =
-              match body_length with
-              | `Fixed n ->
-                Int64.to_int n
-              | `Error _ | `Unknown ->
-                (* Not sure how much data we're gonna get. Use the configured
-                 * value for [request_body_buffer_size]. *)
-                t.config.request_body_buffer_size
-            in
             Body.create_reader
-              (Bigstringaf.create buffer_size)
+              (Bigstringaf.create t.config.request_body_buffer_size)
               ~done_reading:(fun len ->
                 (* From RFC7540§6.9.1:
                  *   The receiver of a frame sends a WINDOW_UPDATE frame as it

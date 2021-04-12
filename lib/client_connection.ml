@@ -302,17 +302,8 @@ let handle_response_headers t stream ~end_stream active_request headers =
         if end_stream then
           Body.empty
         else
-          let buffer_size =
-            match body_length with
-            | `Fixed n ->
-              Int64.to_int n
-            | `Error _ | `Unknown ->
-              (* Not sure how much data we're gonna get. Use the configured
-               * value for [response_body_buffer_size]. *)
-              t.config.response_body_buffer_size
-          in
           Body.create_reader
-            (Bigstringaf.create buffer_size)
+            (Bigstringaf.create t.config.response_body_buffer_size)
             ~done_reading:(fun len ->
               send_window_update t t.streams len;
               send_window_update t stream len)
