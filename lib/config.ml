@@ -38,8 +38,8 @@ type t =
   ; request_body_buffer_size : int
   ; response_body_buffer_size : int
   ; enable_server_push : bool
-  ; max_concurrent_streams : int
-  ; initial_window_size : int
+  ; max_concurrent_streams : int32
+  ; initial_window_size : int32
   }
 
 let default =
@@ -72,7 +72,7 @@ let default =
      * 65535 (the default as per the spec). The default in H2 is 2^27, or
      * 128 MiB. *)
     (* TODO(anmonteiro): validate the default somewhere. *)
-    initial_window_size = 1 lsl 27
+    initial_window_size = Int32.shift_left 1l 27
   }
 
 let to_settings

@@ -175,18 +175,6 @@ let write_rst_stream_frame t info e =
   write_frame_header t header;
   BE.write_uint32 t (Error_code.serialize e)
 
-let rec write_settings_payload t = function
-  | [] ->
-    ()
-  | (key, value) :: xs ->
-    (* From RFC7540§6.5.1:
-     *   The payload of a SETTINGS frame consists of zero or more parameters,
-     *   each consisting of an unsigned 16-bit setting identifier and an
-     *   unsigned 32-bit value. *)
-    BE.write_uint16 t (Settings.serialize_key key);
-    BE.write_uint32 t (Int32.of_int value);
-    write_settings_payload t xs
-
 let write_settings_frame t info settings =
   let header =
     { Frame.flags = info.flags
@@ -201,7 +189,7 @@ let write_settings_frame t info settings =
     }
   in
   write_frame_header t header;
-  write_settings_payload t settings
+  Settings.write_settings_payload t settings
 
 let write_push_promise_frame t info ~promised_id ?len iovecs =
   let len = match len with Some len -> len | None -> IOVec.lengthv iovecs in
@@ -276,7 +264,7 @@ let write_window_update_frame t info window_size =
     }
   in
   write_frame_header t header;
-  BE.write_uint32 t (Int32.of_int window_size)
+  BE.write_uint32 t window_size
 
 let write_continuation_frame t info ?len iovecs =
   let len = match len with Some len -> len | None -> IOVec.lengthv iovecs in
