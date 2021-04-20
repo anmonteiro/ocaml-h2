@@ -8,3 +8,26 @@ jobs:
   runs:
     using: 'docker'
     image: 'Dockerfile.32bit'
+
+
+jobs:
+  docker-32bit:
+    runs-on: ubuntu-latest
+    container:
+      image: ocurrent/opam@sha256:e7a75342370514e1adf20c6c95102bb37dddefd5ad205c457e4aa72012283960
+    steps:
+    - uses: actions/checkout@v2
+    - name: Print the result of `uname -a`
+      run: uname -a
+    - name: apt-get update
+      run: sudo apt-get update && sudo apt-get upgrade -y
+    - name: opam update
+      run: opam update && opam upgrade
+    - name: opam depext conf-pkg-config conf-gmp conf-m4
+      run: opam pin add . -n
+    - name: Install OPAM dependencies
+      run: opam install -y --deps-only . -t
+    - name:
+      run: opam install -y --deps-only . -t
+    - name:
+      run: opam exec -- dune runtest
