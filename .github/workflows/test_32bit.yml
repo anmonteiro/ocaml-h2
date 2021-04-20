@@ -4,8 +4,7 @@ on:
   push:
     branches:
       - master
-runs:
-  using: 'docker'
-  image: 'Dockerfile'
-  args:
-    - ${{ inputs.who-to-greet }}
+jobs:
+  runs:
+    using: 'docker'
+    image: 'Dockerfile.32bit'
