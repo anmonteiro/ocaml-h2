@@ -180,7 +180,7 @@ let report_exn t exn =
     report_connection_error t ~additional_debug_data Error_code.InternalError
 
 let send_window_update
-    : type a. t -> a Scheduler.PriorityTreeNode.node -> int -> unit
+    : type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
   =
  fun t stream n ->
   let send_window_update_frame stream_id n =
@@ -189,13 +189,13 @@ let send_window_update
     let frame_info = Writer.make_frame_info stream_id in
     Writer.write_window_update t.writer frame_info n
   in
-  if n > 0 then (
+  if Int32.compare n 0l > 0 then (
     let max_window_size = Settings.WindowSize.max_window_size in
     let stream_id = Scheduler.stream_id stream in
     let rec loop n =
       if n > max_window_size then (
         send_window_update_frame stream_id max_window_size;
-        loop (n - max_window_size))
+        loop (Int32.sub n max_window_size))
       else
         send_window_update_frame stream_id n
     in
@@ -305,6 +305,7 @@ let handle_response_headers t stream ~end_stream active_request headers =
           Body.create_reader
             (Bigstringaf.create t.config.response_body_buffer_size)
             ~done_reading:(fun len ->
+              let len = Int32.of_int len in
               send_window_update t t.streams len;
               send_window_update t stream len)
       in
@@ -345,7 +346,13 @@ let handle_headers t ~end_stream stream headers =
    *   receives a HEADERS frame that causes its advertised concurrent stream
    *   limit to be exceeded MUST treat this as a stream error (Section 5.4.2)
    *   of type PROTOCOL_ERROR or REFUSED_STREAM. *)
-  if t.current_server_streams + 1 > t.config.max_concurrent_streams then
+  if
+    Int32.(
+      compare
+        (of_int (t.current_server_streams + 1))
+        t.config.max_concurrent_streams)
+    > 0
+  then
     if t.unacked_settings > 0 then
       (* From RFC7540§8.1.4:
        *   The REFUSED_STREAM error code can be included in a RST_STREAM frame
@@ -559,6 +566,7 @@ let process_headers_frame t { Frame.frame_header; _ } headers_block =
 let process_data_frame t { Frame.frame_header; _ } bstr =
   let open Scheduler in
   let { Frame.flags; stream_id; payload_length; _ } = frame_header in
+  let payload_len32 = Int32.of_int payload_length in
   match Scheduler.get_node t.streams stream_id with
   | Some (Stream { descriptor; _ } as stream) ->
     (match descriptor.state with
@@ -574,7 +582,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
       (* First, calculate whether we're allowed to receive this frame based
        * on the _current_ inflow. *)
       let allowed_to_receive =
-        Scheduler.(allowed_to_receive t.streams stream payload_length)
+        Scheduler.(allowed_to_receive t.streams stream payload_len32)
       in
       (* Then, deduct inflow from the connection flow-control window, as
        * mandated by the protocol.
@@ -584,16 +592,16 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
        *   for its contribution against the connection flow-control window,
        *   unless the receiver treats this as a connection error (Section 5.4.1).
        *   This is necessary even if the frame is in error. *)
-      Scheduler.deduct_inflow t.streams payload_length;
+      Scheduler.deduct_inflow t.streams payload_len32;
       if not allowed_to_receive then (
         (* From RFC7540§6.9:
          *  A receiver MAY respond with a stream error (Section 5.4.2) or
          *  connection error (Section 5.4.1) of type FLOW_CONTROL_ERROR if it
          *  is unable to accept a frame. *)
-        send_window_update t t.streams payload_length;
+        send_window_update t t.streams payload_len32;
         report_stream_error t stream_id Error_code.FlowControlError)
       else (
-        Scheduler.deduct_inflow stream payload_length;
+        Scheduler.deduct_inflow stream payload_len32;
         match Message.body_length response.headers with
         | `Fixed len
         (* Getting more than the server declared *)
@@ -601,7 +609,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
           (* Give back connection-level flow-controlled bytes (we use payload
            * length to include any padding bytes that the frame might have
            * included - which were ignored at parse time). *)
-          send_window_update t t.streams payload_length;
+          send_window_update t t.streams payload_len32;
           (* From RFC7540§8.1.2.6:
            *   A request or response is also malformed if the value of a
            *   content-length header field does not equal the sum of the
@@ -651,7 +659,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
        *   window, unless the receiver treats this as a connection error
        *   (Section 5.4.1). This is necessary even if the frame is in
        *   error. *)
-      send_window_update t t.streams payload_length
+      send_window_update t t.streams payload_len32
     (* From RFC7540§6.4:
      *   [...] after sending the RST_STREAM, the sending endpoint MUST be
      *   prepared to receive and process additional frames sent on the
@@ -663,7 +671,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
      * as a way of only accepting frames after an RST_STREAM from us up to
      * a time limit. *)
     | _ ->
-      send_window_update t t.streams payload_length;
+      send_window_update t t.streams payload_len32;
       (* From RFC7540§6.1:
        *   If a DATA frame is received whose stream is not in "open" or
        *   "half-closed (local)" state, the recipient MUST respond with a
@@ -820,20 +828,20 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
         List.fold_left
           (fun (acc : Settings.t) item ->
             match item with
-            | Settings.HeaderTableSize, x ->
+            | Settings.HeaderTableSize x ->
               (* From RFC7540§6.5.2:
                *   Allows the sender to inform the remote endpoint of the maximum
                *   size of the header compression table used to decode header
                *   blocks, in octets. *)
               Hpack.Encoder.set_capacity t.hpack_encoder x;
               { acc with header_table_size = x }
-            | EnablePush, x ->
+            | EnablePush x ->
               (* We've already verified that this setting is either 0 or 1 in the
                * call to `Settings.check_settings_list` above. *)
               { acc with enable_push = x = 1 }
-            | MaxConcurrentStreams, x ->
+            | MaxConcurrentStreams x ->
               { acc with max_concurrent_streams = x }
-            | InitialWindowSize, new_val ->
+            | InitialWindowSize new_val ->
               (* From RFC7540§6.9.2:
                *   In addition to changing the flow-control window for streams
                *   that are not yet active,  a SETTINGS frame can alter the
@@ -848,7 +856,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
                *   [...] A SETTINGS frame cannot alter the connection
                *   flow-control window. *)
               let old_val = t.settings.initial_window_size in
-              let growth = new_val - old_val in
+              let growth = Int32.sub new_val old_val in
               let exception Local in
               (match
                  Scheduler.iter
@@ -870,18 +878,18 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
                   t
                   ~additional_debug_data:
                     (Format.sprintf
-                       "Window size for stream would exceed %d"
+                       "Window size for stream would exceed %ld"
                        Settings.WindowSize.max_window_size)
                   Error_code.FlowControlError);
               { acc with initial_window_size = new_val }
-            | MaxFrameSize, x ->
+            | MaxFrameSize x ->
               Scheduler.iter
                 ~f:(fun (Stream { descriptor; _ }) ->
                   if Respd.requires_output descriptor then
                     descriptor.max_frame_size <- x)
                 t.streams;
               { acc with max_frame_size = x }
-            | MaxHeaderListSize, x ->
+            | MaxHeaderListSize x ->
               { acc with max_header_list_size = Some x })
           t.settings
           settings
@@ -1028,7 +1036,7 @@ let process_goaway_frame t _frame payload =
   shutdown_rw t
 
 let add_window_increment
-    : type a. t -> a Scheduler.PriorityTreeNode.node -> int -> unit
+    : type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
   =
  fun t stream increment ->
   let open Scheduler in
@@ -1042,7 +1050,7 @@ let add_window_increment
       flow
   in
   if did_add then (
-    if new_flow > 0 then
+    if Int32.compare new_flow 0l > 0 then
       (* Don't bother waking up the writer if the new flow doesn't allow
        * the stream to write. *)
       Writer.wakeup t.writer)
@@ -1051,7 +1059,7 @@ let add_window_increment
       t
       ~additional_debug_data:
         (Printf.sprintf
-           "Window size for stream would exceed %d"
+           "Window size for stream would exceed %ld"
            Settings.WindowSize.max_window_size)
       Error_code.FlowControlError
   else
@@ -1270,7 +1278,9 @@ let[@ocaml.warning "-16"] create
    *   WINDOW_UPDATE frames. *)
   (if t.config.initial_window_size > Settings.default.initial_window_size then
      let diff =
-       t.config.initial_window_size - Settings.default.initial_window_size
+       Int32.sub
+         t.config.initial_window_size
+         Settings.default.initial_window_size
      in
      send_window_update t t.streams diff);
   t

@@ -119,8 +119,20 @@ let frame_testable =
           [ ( "settings"
             , `List
                 (List.map
-                   (fun (k, v) ->
-                     `List [ `Int (Settings.serialize_key k); `Int v ])
+                   (fun setting ->
+                     `List
+                       [ `Int (Settings.serialize_key setting)
+                       ; `Int
+                           (match setting with
+                           | MaxConcurrentStreams value
+                           | InitialWindowSize value ->
+                             Int32.to_int value
+                           | HeaderTableSize value
+                           | EnablePush value
+                           | MaxFrameSize value
+                           | MaxHeaderListSize value ->
+                             value)
+                       ])
                    settings_list) )
           ]
         | PushPromise (stream_identifier, fragment) ->
@@ -135,7 +147,7 @@ let frame_testable =
           ; "last_stream_id", `Int (Int32.to_int stream_identifier)
           ]
         | WindowUpdate increment ->
-          [ "window_size_increment", `Int increment ]
+          [ "window_size_increment", `Int (Int32.to_int increment) ]
         | Continuation fragment ->
           [ "header_block_fragment", `String (bs_to_string fragment) ]
         | Unknown (_frame_type, _) ->
@@ -224,15 +236,22 @@ let frame_payload_of_json frame_type json =
       List.map
         (fun setting_json ->
           let setting = Json.to_list setting_json in
-          let key_id =
-            match Json.to_int (List.hd setting) |> Settings.parse_key with
-            | Some key_id ->
-              key_id
-            | None ->
-              raise (Invalid_argument "settings key id")
-          in
           let key_value = List.nth setting 1 |> Json.to_int in
-          key_id, key_value)
+          match Json.to_int (List.hd setting) with
+          | 0x1 ->
+            Settings.HeaderTableSize key_value
+          | 0x2 ->
+            EnablePush key_value
+          | 0x3 ->
+            MaxConcurrentStreams (Int32.of_int key_value)
+          | 0x4 ->
+            InitialWindowSize (Int32.of_int key_value)
+          | 0x5 ->
+            MaxFrameSize key_value
+          | 0x6 ->
+            MaxHeaderListSize key_value
+          | _ ->
+            raise (Invalid_argument "settings key id"))
         Json.(json |> member "settings" |> to_list)
     in
     Settings settings
@@ -262,7 +281,7 @@ let frame_payload_of_json frame_type json =
     GoAway (last_stream_id, Error_code.parse error_code, debug_data)
   | WindowUpdate ->
     let window_size_increment =
-      Json.(json |> member "window_size_increment" |> to_int)
+      Json.(json |> member "window_size_increment" |> to_int) |> Int32.of_int
     in
     WindowUpdate window_size_increment
   | Continuation ->
