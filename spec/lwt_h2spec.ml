@@ -91,7 +91,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
     Body.close_writer response_body
   in
   H2_lwt_unix.Server.create_connection_handler
-    ~config:{ H2.Config.default with max_concurrent_streams = 2 }
+    ~config:{ H2.Config.default with max_concurrent_streams = 2l }
     ~request_handler
     ~error_handler
 
