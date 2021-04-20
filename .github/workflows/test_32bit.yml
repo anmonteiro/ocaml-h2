@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - master
-jobs:
-  runs:
-    using: 'docker'
-    image: 'Dockerfile.32bit'
-
 
 jobs:
   docker-32bit:
