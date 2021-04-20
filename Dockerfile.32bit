@@ -1,0 +1,17 @@
+# https://discuss.ocaml.org/t/how-to-generate-a-32-bit-binary-on-a-64-bit-system/6163/6
+FROM ocurrent/opam@sha256:e7a75342370514e1adf20c6c95102bb37dddefd5ad205c457e4aa72012283960
+
+WORKDIR /home/opam/src
+
+RUN sudo apt-get update && sudo apt-get upgrade -y
+RUN sudo apt-get install vim -y
+
+RUN opam update && opam upgrade
+
+RUN opam depext conf-pkg-config conf-gmp conf-m4
+RUN opam install h2 h2-lwt-unix --deps-only -t
+
+COPY --chown=opam . /home/opam/src
+
+# ENTRYPOINT
+
