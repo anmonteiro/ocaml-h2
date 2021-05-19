@@ -48,16 +48,6 @@ end
 
 module Server (Flow : Mirage_flow.S) : Server with type socket = Flow.flow
 
-module Server_with_conduit : sig
-  include Server with type socket = Conduit_mirage.Flow.flow
-
-  type t = Conduit_mirage.Flow.flow -> unit Lwt.t
-
-  val connect
-    :  Conduit_mirage.t
-    -> (Conduit_mirage.server -> t -> unit Lwt.t) Lwt.t
-end
-
 module type Client = H2_lwt.Client
 
 module Client (Flow : Mirage_flow.S) : Client with type socket = Flow.flow
