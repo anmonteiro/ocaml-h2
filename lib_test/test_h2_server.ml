@@ -553,23 +553,22 @@ module Server_connection_tests = struct
           ; flags = Flags.default_flags
           ; frame_type = Settings
           }
-      ; frame_payload = Frame.Settings Settings.[ InitialWindowSize, 1 lsl 31 ]
+      ; frame_payload =
+          Frame.Settings Settings.[ InitialWindowSize (Int32.shift_left 1l 31) ]
       }
     in
     let frame_wire = Test_common.serialize_frame settings in
     match parse_frames_bigstring frame_wire with
-    | [ { Frame.frame_payload = Settings [ (Settings.InitialWindowSize, v) ]
-        ; _
-        }
-      ] ->
+    | [ { Frame.frame_payload = Settings [ Settings.InitialWindowSize v ]; _ } ]
+      ->
       (* The protocol says it should read a uint32 here, but because the
        * largest value it accepts is 2^31 - 1 we work around that by checking
        * for negative numbers (that have overflown). We avoid adding a new
        * dependency this way, but if we ever want to support it at least we
        * have this test. *)
-      Alcotest.(check int)
+      Alcotest.(check int32)
         "Window Size value roundtrips in a signed fashion"
-        (-1 lsl 31)
+        (Int32.shift_left (-1l) 31)
         v
     | _ ->
       Alcotest.fail "Expected frame to parse successfully."
@@ -875,7 +874,7 @@ module Server_connection_tests = struct
      * initiate streams. The client, however, is. *)
     let t =
       create_and_handle_preface
-        ~settings:[ MaxConcurrentStreams, 0 ]
+        ~settings:[ MaxConcurrentStreams 0l ]
         ~error_handler
         default_request_handler
     in
@@ -912,11 +911,9 @@ module Server_connection_tests = struct
     writer_yields t
 
   let test_h2c () =
-    let settings_payload =
-      Settings.[ EnablePush, 0; MaxConcurrentStreams, 2 ]
-    in
+    let settings_payload = Settings.[ EnablePush 0; MaxConcurrentStreams 2l ] in
     let f = Faraday.create 100 in
-    Serialize.write_settings_payload f settings_payload;
+    Settings.write_settings_payload f settings_payload;
     let serialized_settings = Faraday.serialize_to_string f in
     let http_request =
       Httpaf.Request.create
@@ -948,7 +945,7 @@ module Server_connection_tests = struct
         (t.settings
         = { Settings.default with
             enable_push = false
-          ; max_concurrent_streams = 2
+          ; max_concurrent_streams = 2l
           });
       (match next_write_operation t with
       | `Write iovecs ->
@@ -1145,7 +1142,7 @@ module Server_connection_tests = struct
     in
     let t =
       create_and_handle_preface
-        ~settings:Settings.[ InitialWindowSize, 5 ]
+        ~settings:Settings.[ InitialWindowSize 5l ]
         ~error_handler
         request_handler
     in
