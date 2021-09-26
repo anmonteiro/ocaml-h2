@@ -1258,7 +1258,8 @@ module Server_connection_tests = struct
         "Expected state machine to issue a write operation after seeing \
          headers."
 
-  (* TODO: test graceful shutdown, allowing lower numbered streams to complete. *)
+  (* TODO: test graceful shutdown, allowing lower numbered streams to
+     complete. *)
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof

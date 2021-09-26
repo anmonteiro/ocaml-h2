@@ -8,7 +8,8 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
    fun _client_address request_descriptor ->
     let request = Reqd.request request_descriptor in
     match request.target with
-    (* This set of routes responds immediately without reading the request body *)
+    (* This set of routes responds immediately without reading the request
+       body *)
     | "/immediately" ->
       let response_content_type =
         match Headers.get request.headers "content-type" with

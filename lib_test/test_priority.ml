@@ -298,7 +298,8 @@ let test_reprioritize_to_dependency_exclusive () =
     "Stream 0 has a single child, stream 7"
     1
     (List.length root_children);
-  (* reprioritize stream 1 to have 7 as the new parent with exclusive priority *)
+  (* reprioritize stream 1 to have 7 as the new parent with exclusive
+     priority *)
   let (Stream stream1 as stream1_node) =
     Scheduler.get_node root 1l |> opt_exn
   in
