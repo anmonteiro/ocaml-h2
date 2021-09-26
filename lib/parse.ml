@@ -355,8 +355,13 @@ let parse_window_update_frame { Frame.stream_id; payload_length; _ } =
   else
     lift
       (fun uint ->
-        let window_size_increment = Util.clear_bit (Int32.to_int uint) 31 in
-        if window_size_increment = 0 then
+        (* From RFC7540§6.9:
+         *   The frame payload of a WINDOW_UPDATE frame is one reserved bit
+         *   plus an unsigned 31-bit integer indicating the number of octets
+         *   that the sender can transmit in addition to the existing
+         *   flow-control window. *)
+        let window_size_increment = Util.clear_bit_int32 uint 31 in
+        if Int32.equal window_size_increment 0l then
           if
             (* From RFC7540§6.9:
              *   A receiver MUST treat the receipt of a WINDOW_UPDATE frame

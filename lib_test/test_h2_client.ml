@@ -816,11 +816,9 @@ module Client_connection_tests = struct
       (next_write_operation t)
 
   let test_h2c () =
-    let settings_payload =
-      Settings.[ EnablePush, 0; MaxConcurrentStreams, 2 ]
-    in
+    let settings_payload = Settings.[ EnablePush 0; MaxConcurrentStreams 2l ] in
     let f = Faraday.create 100 in
-    Serialize.write_settings_payload f settings_payload;
+    Settings.write_settings_payload f settings_payload;
     let serialized_settings = Faraday.serialize_to_string f in
     let http_request =
       Httpaf.Request.create
@@ -1140,7 +1138,7 @@ module Client_connection_tests = struct
 
   let test_flow_control_can_send_empty_data_frame () =
     let t =
-      create_and_handle_preface ~settings:Settings.[ InitialWindowSize, 5 ] ()
+      create_and_handle_preface ~settings:Settings.[ InitialWindowSize 5l ] ()
     in
     let request = Request.create ~scheme:"http" `GET "/" in
     let response_handler _response _response_body = () in

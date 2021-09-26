@@ -1,6 +1,8 @@
 Unreleased
 -----------
 
+- h2: Fix tests on 32-bit platforms
+  ([#152](https://github.com/anmonteiro/ocaml-h2/pull/152))
 - h2-mirage: adapt to Conduit v4 and remove `H2_mirage.Server_with_conduit`
   ([#154](https://github.com/anmonteiro/ocaml-h2/pull/154))
 

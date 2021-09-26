@@ -8,7 +8,8 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
    fun _client_address request_descriptor ->
     let request = Reqd.request request_descriptor in
     match request.target with
-    (* This set of routes responds immediately without reading the request body *)
+    (* This set of routes responds immediately without reading the request
+       body *)
     | "/immediately" ->
       let response_content_type =
         match Headers.get request.headers "content-type" with
@@ -91,7 +92,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
     Body.close_writer response_body
   in
   H2_lwt_unix.Server.create_connection_handler
-    ~config:{ H2.Config.default with max_concurrent_streams = 2 }
+    ~config:{ H2.Config.default with max_concurrent_streams = 2l }
     ~request_handler
     ~error_handler
 

@@ -70,8 +70,8 @@ module Method : module type of Httpaf.Method
     keeps it for the sake of higher level interaction between OCaml libraries
     that support both HTTP/1 and HTTP/2.
 
-    See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1}
-    for more details. *)
+    See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1} for
+    more details. *)
 module Status : sig
   include
     module type of Httpaf.Status
@@ -172,8 +172,8 @@ end
     The order in which header fields {i with differing field names} are received
     is not significant, except for pseudo-header fields, which {b must} appear
     in header blocks before regular fields (see
-    {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.1} RFC7540§8.1.2.1}
-    for more details).
+    {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.1} RFC7540§8.1.2.1} for
+    more details).
 
     A sender MUST NOT generate multiple header fields with the same field name
     in a message unless either the entire field value for that header field is
@@ -639,8 +639,8 @@ module Settings : sig
   type t =
     { header_table_size : int
     ; enable_push : bool
-    ; max_concurrent_streams : int
-    ; initial_window_size : int
+    ; max_concurrent_streams : int32
+    ; initial_window_size : int32
     ; max_frame_size : int
     ; max_header_list_size : int option
     }
@@ -666,11 +666,11 @@ module Config : sig
     ; request_body_buffer_size : int  (** Defaults to [4096] *)
     ; response_body_buffer_size : int  (** Defaults to [4096] *)
     ; enable_server_push : bool  (** Defaults to [true] *)
-    ; max_concurrent_streams : int
+    ; max_concurrent_streams : int32
           (** [max_concurrent_streams] specifies the maximum number of streams
               that the sender will allow the peer to initiate. Defaults to
               [2^31 - 1] *)
-    ; initial_window_size : int
+    ; initial_window_size : int32
           (** [initial_window_size] specifies the initial window size for flow
               control tokens. Defaults to [65535] *)
     }

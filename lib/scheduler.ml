@@ -326,7 +326,7 @@ module Make (Streamd : StreamDescriptor) = struct
     StreamsTbl.iter (fun _id -> f) all_streams
 
   let allowed_to_transmit (Connection root) (Stream stream) =
-    root.flow > 0 && stream.flow > 0
+    Int32.compare root.flow 0l > 0 && Int32.compare stream.flow 0l > 0
 
   let allowed_to_receive (Connection root) (Stream stream) size =
     size <= root.inflow && size <= stream.inflow
@@ -345,17 +345,20 @@ module Make (Streamd : StreamDescriptor) = struct
       else
         (* There might be a zero-length DATA frame (with the end stream flag
            set) waiting to be sent. *)
-        0
+        0l
     in
     let written =
-      Streamd.flush_write_body ~max_bytes:allowed_bytes descriptor
+      Int32.of_int
+      @@ Streamd.flush_write_body
+           ~max_bytes:(Int32.to_int allowed_bytes)
+           descriptor
     in
     (* From RFC7540§6.9.1:
      *   After sending a flow-controlled frame, the sender reduces the space
      *   available in both windows by the length of the transmitted frame. *)
-    root.flow <- root.flow - written;
-    stream.flow <- stream.flow - written;
-    written
+    root.flow <- Int32.sub root.flow written;
+    stream.flow <- Int32.sub stream.flow written;
+    Int32.to_int written
 
   let update_t stream n =
     let (Stream ({ parent = Parent parent; _ } as stream)) = stream in
@@ -471,46 +474,50 @@ module Make (Streamd : StreamDescriptor) = struct
         []
         root.marked_for_removal
 
+  (* XXX(anmonteiro): Consider using `optint` for this?
+   * https://github.com/mirage/optint
+   *)
   let check_flow flow growth flow' =
     (* Check for overflow on 32-bit systems. *)
-    flow' > growth = (flow > 0) && flow' <= Settings.WindowSize.max_window_size
+    Int32.compare flow' growth > 0 = (Int32.compare flow 0l > 0)
+    && Int32.compare flow' Settings.WindowSize.max_window_size <= 0
 
-  let add_flow : type a. a node -> int -> bool =
+  let add_flow : type a. a node -> int32 -> bool =
    fun t growth ->
     match t with
     | Connection ({ flow; _ } as root) ->
-      let flow' = flow + growth in
+      let flow' = Int32.add flow growth in
       let valid_flow = check_flow flow growth flow' in
       if valid_flow then root.flow <- flow';
       valid_flow
     | Stream ({ flow; _ } as stream) ->
-      let flow' = flow + growth in
+      let flow' = Int32.add flow growth in
       let valid_flow = check_flow flow growth flow' in
       if valid_flow then stream.flow <- flow';
       valid_flow
 
-  let add_inflow : type a. a node -> int -> bool =
+  let add_inflow : type a. a node -> int32 -> bool =
    fun t growth ->
     match t with
     | Connection ({ inflow; _ } as root) ->
-      let inflow' = inflow + growth in
+      let inflow' = Int32.add inflow growth in
       let valid_inflow = check_flow inflow growth inflow' in
       if valid_inflow then root.inflow <- inflow';
       valid_inflow
     | Stream ({ inflow; _ } as stream) ->
-      let inflow' = inflow + growth in
+      let inflow' = Int32.add inflow growth in
       let valid_inflow = check_flow inflow growth inflow' in
       if valid_inflow then stream.inflow <- inflow';
       valid_inflow
 
-  let deduct_inflow : type a. a node -> int -> unit =
+  let deduct_inflow : type a. a node -> int32 -> unit =
    fun t size ->
     match t with
     | Connection ({ inflow; _ } as root) ->
       (* no need to check, we verify that the peer is allowed to send. *)
-      root.inflow <- inflow - size
+      root.inflow <- Int32.sub inflow size
     | Stream ({ inflow; _ } as stream) ->
-      stream.inflow <- inflow - size
+      stream.inflow <- Int32.sub inflow size
 
   let pp_hum fmt t =
     let rec pp_hum_inner level fmt t =
