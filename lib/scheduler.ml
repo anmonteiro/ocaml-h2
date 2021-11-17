@@ -418,7 +418,7 @@ module Make (Streamd : StreamDescriptor) = struct
           p.t_last <- i.t;
           let written, subtree_is_active = schedule i_node in
           if subtree_is_active then (
-            update_t i_node written;
+            update_t i_node (PriorityQueue.size p.children);
             p.children <- PriorityQueue.add id i_node children')
           else (
             implicitly_close_idle_stream i.descriptor max_seen_ids;
@@ -445,7 +445,7 @@ module Make (Streamd : StreamDescriptor) = struct
             p.t_last <- i.t;
             let written, subtree_is_active = schedule i_node in
             if subtree_is_active then (
-              update_t i_node written;
+              update_t i_node (PriorityQueue.size p.children);
               p.children <- PriorityQueue.add id i_node children')
             else (
               implicitly_close_idle_stream i.descriptor max_seen_ids;
