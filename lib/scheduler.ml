@@ -146,22 +146,24 @@ module Make (Streamd : StreamDescriptor) = struct
   let create
       ~parent ~initial_send_window_size ~initial_recv_window_size descriptor
     =
-    Stream
-      { descriptor
-      ; t_last = 0
-      ; t =
-          0
-          (* From RFC7540§5.3.5:
-           *   All streams are initially assigned a non-exclusive dependency on
-           *   stream 0x0. Pushed streams (Section 8.2) initially depend on
-           *   their associated stream. In both cases, streams are assigned a
-           *   default weight of 16. *)
-      ; priority = Priority.default_priority
-      ; parent
-      ; children = PriorityQueue.empty
-      ; flow = initial_send_window_size
-      ; inflow = initial_recv_window_size
-      }
+    match parent with
+    | Parent (Connection root) ->
+      Stream
+        { descriptor
+        ; t_last = root.t_last
+        ; t =
+            root.t_last
+            (* From RFC7540§5.3.5:
+             *   All streams are initially assigned a non-exclusive dependency on
+             *   stream 0x0. Pushed streams (Section 8.2) initially depend on
+             *   their associated stream. In both cases, streams are assigned a
+             *   default weight of 16. *)
+        ; priority = Priority.default_priority
+        ; parent
+        ; children = PriorityQueue.empty
+        ; flow = initial_send_window_size
+        ; inflow = initial_recv_window_size
+        }
 
   let pq_add stream_id node pq = PriorityQueue.add stream_id node pq
 
