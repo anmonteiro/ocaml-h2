@@ -143,10 +143,15 @@ module Make (Streamd : StreamDescriptor) = struct
       ~initial_recv_window_size
       descriptor
     =
+    let t_last =
+      match parent with
+      | Parent (Connection root) -> root.t_last
+      | Parent (Stream stream) -> stream.t_last
+    in
     Stream
       { descriptor
-      ; t_last = 0
-      ; t = 0
+      ; t_last
+      ; t = t_last
       ; (* From RFC7540§5.3.5:
          *   All streams are initially assigned a non-exclusive dependency on
          *   stream 0x0. Pushed streams (Section 8.2) initially depend on their
@@ -398,28 +403,25 @@ module Make (Streamd : StreamDescriptor) = struct
    * 12
    * 13 schedule(0)
    *)
+
   let flush t max_seen_ids =
+    let remove_child : type a. a node -> int32 -> unit =
+     fun p_node id ->
+      match p_node with
+      | Connection p -> p.children <- PriorityQueue.remove id p.children
+      | Stream p -> p.children <- PriorityQueue.remove id p.children
+    in
+    let update_t_last : type a. a node -> int -> unit =
+     fun p_node t_last ->
+      match p_node with
+      | Connection p -> p.t_last <- t_last
+      | Stream p -> p.t_last <- t_last
+    in
     let rec schedule : type a. a node -> int * bool = function
-      | Connection p ->
+      | Connection { children; _ } as p_node ->
         (* The root can never send data. *)
-        (match PriorityQueue.pop p.children with
-        | Some ((id, (Stream i as i_node)), children') ->
-          p.t_last <- i.t;
-          let written, subtree_is_active = schedule i_node in
-          if subtree_is_active
-          then (
-            update_t i_node written;
-            p.children <- PriorityQueue.add id i_node children')
-          else (
-            implicitly_close_idle_stream i.descriptor max_seen_ids;
-            (* XXX(anmonteiro): we may not want to remove from the tree right
-             * away. *)
-            p.children <- children');
-          written, subtree_is_active
-        | None ->
-          (* Queue is empty, see line 6 above. *)
-          0, false)
-      | Stream ({ descriptor; _ } as p) as p_node ->
+        traverse p_node children
+      | Stream { descriptor; children; _ } as p_node ->
         if Streamd.requires_output descriptor
         then
           (* In this branch, flow-control has no bearing on activity, otherwise
@@ -431,26 +433,47 @@ module Make (Streamd : StreamDescriptor) = struct
            * inactive after the call to `write` above. *)
           let subtree_is_active =
             Streamd.requires_output descriptor
-            || not (PriorityQueue.is_empty p.children)
+            || not (PriorityQueue.is_empty children)
           in
           written, subtree_is_active
-        else (
-          match PriorityQueue.pop p.children with
-          | Some ((id, (Stream i as i_node)), children') ->
-            p.t_last <- i.t;
-            let written, subtree_is_active = schedule i_node in
-            if subtree_is_active
-            then (
-              update_t i_node written;
-              p.children <- PriorityQueue.add id i_node children')
-            else (
-              implicitly_close_idle_stream i.descriptor max_seen_ids;
-              p.children <- children');
-            written, subtree_is_active
-          | None ->
-            (* Queue is empty, see line 6 above. *)
-            0, false)
+        else traverse p_node children
+    and traverse : type a. a node -> PriorityQueue.t -> int * bool =
+     fun p_node ->
+      let rec loop children =
+        match PriorityQueue.pop children with
+        | Some ((id, (Stream i as i_node)), children') ->
+          let written, subtree_is_active = schedule i_node in
+          if not subtree_is_active
+          then (
+            implicitly_close_idle_stream i.descriptor max_seen_ids;
+            (* XXX(anmonteiro): we may not want to remove from the tree right
+             * away. *)
+            remove_child p_node id);
+          if written > 0
+             (* We need this check because the queue contains both streams that
+              * want to send data and streams that don't want to send data.
+              * Without this check, we might end up in a situation where a stream
+              * won't be flushed until a few write operations later. *)
+          then (
+            update_t_last p_node i.t;
+            update_t i_node written;
+            written, subtree_is_active)
+          else
+            (* Otherwise check if any of the remaining children wants to
+               write *)
+            loop children'
+        | None ->
+          (* No data written, but queue was not originally empty.
+           * Therefore, we can't determine the subtree is inactive. *)
+          0, true
+      in
+      fun children ->
+        if PriorityQueue.is_empty children
+        then (* Queue is empty, see line 6 above. *)
+          0, false
+        else loop children
     in
+
     let (Connection root) = t in
     ignore (schedule t);
     StreamsTbl.iter
