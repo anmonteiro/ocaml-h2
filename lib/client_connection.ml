@@ -498,7 +498,7 @@ let process_trailer_headers t stream active_response frame_header headers_block 
     handle_trailer_headers t stream partial_headers flags headers_block
 
 let process_headers_frame t { Frame.frame_header; _ } headers_block =
-  let { Frame.stream_id; _ } = frame_header in
+  let { Frame.stream_id; flags; _ } = frame_header in
   match Scheduler.get_node t.streams stream_id with
   | None ->
     (* If we're receiving a response for a stream that's no longer in the
@@ -544,7 +544,9 @@ let process_headers_frame t { Frame.frame_header; _ } headers_block =
         stream
         active_response
         frame_header
-        headers_block
+        headers_block;
+        if Flags.test_end_stream flags then Stream.finish_stream descriptor Finished
+        (* TODO: what if the END_STREAM flag is not set? *)
     | Closed { reason = ResetByThem _; _ } ->
       (* From RFC7540§5.1:
        *   closed: [...] An endpoint that receives any frame other than
