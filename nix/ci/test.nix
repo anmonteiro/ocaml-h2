@@ -1,10 +1,30 @@
 { ocamlVersion }:
 
 let
-  pkgs = import ../sources.nix { inherit ocamlVersion; };
+  lock = builtins.fromJSON (builtins.readFile ./../../flake.lock);
+  src = fetchGit {
+    url = with lock.nodes.nixpkgs.locked;"https://github.com/${owner}/${repo}";
+    inherit (lock.nodes.nixpkgs.locked) rev;
+    # inherit (lock.nodes.nixpkgs.original) ref;
+  };
+  pkgs = import "${src}/boot.nix" {
+    overlays = [
+      (import src)
+      (self: super: {
+        h2spec = super.callPackage ../h2spec.nix { };
+        ocamlPackages = super.ocaml-ng."ocamlPackages_${ocamlVersion}";
+
+        pkgsCross.musl64 = super.pkgsCross.musl64 // {
+          ocamlPackages = super.pkgsCross.musl64.ocaml-ng."ocamlPackages_${ocamlVersion}";
+        };
+      })
+    ];
+  };
+
+
   inherit (pkgs) lib stdenv fetchTarball ocamlPackages h2spec;
 
-  h2Pkgs = import ./.. { inherit ocamlVersion; };
+  h2Pkgs = import ./.. { inherit pkgs; };
   h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
   srcs = lib.mapAttrsFlatten (n: v: v.src) h2Drvs ++ [
     (lib.filterGitSource {
