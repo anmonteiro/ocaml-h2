@@ -544,7 +544,8 @@ let process_headers_frame t { Frame.frame_header; _ } headers_block =
         stream
         active_response
         frame_header
-        headers_block
+        headers_block;
+      Stream.finish_stream descriptor Finished
     | Closed { reason = ResetByThem _; _ } ->
       (* From RFC7540§5.1:
        *   closed: [...] An endpoint that receives any frame other than
