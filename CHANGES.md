@@ -5,6 +5,10 @@ Unreleased
   ([#152](https://github.com/anmonteiro/ocaml-h2/pull/152))
 - h2-mirage: adapt to Conduit v4 and remove `H2_mirage.Server_with_conduit`
   ([#154](https://github.com/anmonteiro/ocaml-h2/pull/154))
+- h2: fix memory leaks related to trailer headers in the server and client
+  implementations ([#159](https://github.com/anmonteiro/ocaml-h2/pull/159)
+  (thanks [@quernd](https://github.com/quernd)!),
+  [#160](https://github.com/anmonteiro/ocaml-h2/pull/160))
 
 0.8.0 2021-04-11
 ---------------
