@@ -40,8 +40,8 @@ let start_https_server () =
               X509_lwt.private_of_pems ~cert ~priv_key >>= fun certificate ->
               let config =
                 Tls.Config.server
-                  ~alpn_protocols:
-                    [ "h2"; "http/1.1" ] (* accept h2 before http/1.1 *)
+                  ~alpn_protocols:[ "h2"; "http/1.1" ]
+                    (* accept h2 before http/1.1 *)
                   ~certificates:(`Single certificate)
                   ~ciphers:
                     (List.filter
@@ -51,10 +51,10 @@ let start_https_server () =
               in
               Tls_lwt.Unix.server_of_fd config fd >>= fun tls_server ->
               match Tls_lwt.Unix.epoch tls_server with
-              | `Error ->
+              | Error () ->
                 Lwt_io.eprintlf
                   "Unable to fetch session data. Did the handshake fail?"
-              | `Ok { alpn_protocol; _ } ->
+              | Ok { alpn_protocol; _ } ->
                 (match alpn_protocol with
                 | None ->
                   (* Unable to negotiate a protocol *)

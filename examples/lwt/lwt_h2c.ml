@@ -103,8 +103,8 @@ let connection_handler =
         Status.to_string error
     in
     let body = handle Headers.empty in
-    Body.write_string body message;
-    Body.close_writer body
+    Body.Writer.write_string body message;
+    Body.Writer.close body
   in
   let request_handler _addr (reqd : Httpaf.Reqd.t Gluten.reqd) =
     let { Gluten.reqd; upgrade } = reqd in
