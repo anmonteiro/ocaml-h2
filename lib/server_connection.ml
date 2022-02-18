@@ -571,7 +571,8 @@ let process_headers_frame t { Frame.frame_header; _ } ~priority headers_block =
           stream
           active_stream
           frame_header
-          headers_block
+          headers_block;
+        Stream.finish_stream reqd Finished
       | Active (HalfClosed _, _)
       (* From RFC7540§5.1:
        *   half-closed (remote): [...] If an endpoint receives additional
