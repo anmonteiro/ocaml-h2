@@ -1391,11 +1391,8 @@ let request
       ( Open WaitingForPeer
       , { request; request_body; response_handler; trailers_handler } );
   if not flush_headers_immediately then
-    Writer.yield t.writer
-  else
-    Writer.wakeup t.writer;
-  (* if flush_headers_immediately then *)
-  (* Writer.wakeup t.writer; *)
+    Writer.yield t.writer;
+  Writer.wakeup t.writer;
   (* Closing the request body puts the stream in the half-closed (local) state.
    * This is handled by {!Respd.flush_request_body}, which transitions the
    * state once it verifies that there's no more data to send for the
