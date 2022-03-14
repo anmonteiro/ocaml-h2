@@ -1162,6 +1162,49 @@ module Client_connection_tests = struct
            Frame.FrameType.serialize frame_type)
          frames)
 
+  let test_dont_flush_headers_immediately () =
+    let t =
+      create_and_handle_preface ~settings:Settings.[ InitialWindowSize 5l ] ()
+    in
+    let request =
+      Request.create
+        ~scheme:"http"
+        `GET
+        "/"
+        ~headers:Headers.(of_list [ "content-length", "5" ])
+    in
+    let response_handler _response _response_body = () in
+    let request_body =
+      Client_connection.request
+        ~flush_headers_immediately:false
+        t
+        request
+        ~error_handler:default_error_handler
+        ~response_handler
+    in
+    (* Writer yields when `~flush_headers_immediately` is false *)
+    writer_yielded t;
+    (* Write to the body *)
+    Body.write_string request_body "Hello";
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check (list int))
+      "Batches headers and data frames together"
+      (List.map Frame.FrameType.serialize Frame.FrameType.[ Headers; Data ])
+      (List.map
+         (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+           Frame.FrameType.serialize frame_type)
+         frames);
+    report_write_result t (`Ok lenv);
+    Body.close_writer request_body;
+    let frames, _lenv = flush_pending_writes t in
+    Alcotest.(check (list int))
+      "Writes empty DATA frame"
+      (List.map Frame.FrameType.serialize Frame.FrameType.[ Data ])
+      (List.map
+         (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+           Frame.FrameType.serialize frame_type)
+         frames)
+
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
@@ -1204,6 +1247,9 @@ module Client_connection_tests = struct
     ; ( "flow control -- can send empty data frame"
       , `Quick
       , test_flow_control_can_send_empty_data_frame )
+    ; ( "don't flush headers immediately"
+      , `Quick
+      , test_dont_flush_headers_immediately )
     ]
 end
 
