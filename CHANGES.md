@@ -9,6 +9,11 @@ Unreleased
   implementations ([#159](https://github.com/anmonteiro/ocaml-h2/pull/159)
   (thanks [@quernd](https://github.com/quernd)!),
   [#160](https://github.com/anmonteiro/ocaml-h2/pull/160))
+- h2: allow configuring `flush_headers_immediately` on the client and default
+  to `false`. This means that h2 will wait for the first request body bytes to
+  be scheduled and batch `HEADERS` and `DATA` frames when sending requests
+  ([#163](https://github.com/anmonteiro/ocaml-h2/pull/163),
+  [#164](https://github.com/anmonteiro/ocaml-h2/pull/164))
 
 0.8.0 2021-04-11
 ---------------
