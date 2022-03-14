@@ -1358,7 +1358,12 @@ let create_h2c
     Error msg
 
 let request
-    t ?(trailers_handler = ignore) request ~error_handler ~response_handler
+    t
+    ?(flush_headers_immediately = true)
+    ?(trailers_handler = ignore)
+    request
+    ~error_handler
+    ~response_handler
   =
   let max_frame_size = t.settings.max_frame_size in
   let respd = create_and_add_stream t ~error_handler in
@@ -1381,12 +1386,16 @@ let request
       Priority.default_priority
     frame_info
     request;
-  Writer.flush t.writer (fun () ->
-      respd.state <-
-        Active
-          ( Open WaitingForPeer
-          , { request; request_body; response_handler; trailers_handler } ));
-  Writer.wakeup t.writer;
+  respd.state <-
+    Active
+      ( Open WaitingForPeer
+      , { request; request_body; response_handler; trailers_handler } );
+  if not flush_headers_immediately then
+    Writer.yield t.writer
+  else
+    Writer.wakeup t.writer;
+  (* if flush_headers_immediately then *)
+  (* Writer.wakeup t.writer; *)
   (* Closing the request body puts the stream in the half-closed (local) state.
    * This is handled by {!Respd.flush_request_body}, which transitions the
    * state once it verifies that there's no more data to send for the

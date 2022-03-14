@@ -849,6 +849,7 @@ module Client_connection : sig
 
   val request
     :  t
+    -> ?flush_headers_immediately:bool
     -> ?trailers_handler:trailers_handler
     -> Request.t
     -> error_handler:error_handler
