@@ -24,7 +24,7 @@ module Http2 = struct
         in
         let buf = Buffer.create 10 in
         let rec respond () =
-          Body.schedule_read
+          Body.Reader.schedule_read
             request_body
             ~on_eof:(fun () ->
               let response =
@@ -59,11 +59,13 @@ module Http2 = struct
       let response_body = start_response Headers.empty in
       (match error with
       | `Exn exn ->
-        Body.write_string response_body (Printexc.to_string exn);
-        Body.write_string response_body "\n"
+        Body.Writer.write_string response_body (Printexc.to_string exn);
+        Body.Writer.write_string response_body "\n"
       | #Status.standard as error ->
-        Body.write_string response_body (Status.default_reason_phrase error));
-      Body.close_writer response_body
+        Body.Writer.write_string
+          response_body
+          (Status.default_reason_phrase error));
+      Body.Writer.close response_body
     in
     fun http_request request_body ->
       H2.Server_connection.create_h2c

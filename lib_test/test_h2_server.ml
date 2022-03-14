@@ -236,8 +236,8 @@ module Server_connection_tests = struct
         Status.to_string error
     in
     let body = handle Headers.empty in
-    Body.write_string body message;
-    Body.close_writer body
+    Body.Writer.write_string body message;
+    Body.Writer.close body
 
   let test_reading_malformed_frame ?(is_failure = false) wire () =
     let t = create_and_handle_preface ~error_handler default_request_handler in
@@ -811,8 +811,8 @@ module Server_connection_tests = struct
       error_handler_called := true;
       Alcotest.(check bool) "request was malformed" true (error = `Bad_request);
       let body = handle Headers.empty in
-      Body.write_string body "";
-      Body.close_writer body
+      Body.Writer.write_string body "";
+      Body.Writer.close body
     in
     let t = create_and_handle_preface ~error_handler default_request_handler in
     let request =
@@ -836,8 +836,8 @@ module Server_connection_tests = struct
       error_handler_called := true;
       Alcotest.(check bool) "request was malformed" true (error = `Bad_request);
       let body = handle Headers.empty in
-      Body.write_string body "";
-      Body.close_writer body
+      Body.Writer.write_string body "";
+      Body.Writer.close body
     in
     let t = create_and_handle_preface ~error_handler default_request_handler in
     (* CONNECT is malformed if it doesn't include the `:authority`
@@ -884,17 +884,17 @@ module Server_connection_tests = struct
 
   let streaming_handler ?(flush = false) response writes reqd =
     let request_body = Reqd.request_body reqd in
-    Body.close_reader request_body;
+    Body.Reader.close request_body;
     let body =
       Reqd.respond_with_streaming ~flush_headers_immediately:flush reqd response
     in
     let rec write writes =
       match writes with
       | [] ->
-        Body.close_writer body
+        Body.Writer.close body
       | w :: ws ->
-        Body.write_string body w;
-        Body.flush body (fun () -> write ws)
+        Body.Writer.write_string body w;
+        Body.Writer.flush body (fun () -> write ws)
     in
     write writes
 
@@ -1033,7 +1033,7 @@ module Server_connection_tests = struct
     in
     let request_handler reqd =
       let request_body = Reqd.request_body reqd in
-      Body.schedule_read
+      Body.Reader.schedule_read
         request_body
         ~on_eof:ignore
         ~on_read:(fun _bs ~off:_ ~len:_ ->
@@ -1041,10 +1041,10 @@ module Server_connection_tests = struct
           Alcotest.(check bool)
             "Response body isn't closed (yet) when reading"
             false
-            (Body.is_closed request_body);
-          Body.schedule_read
+            (Body.Reader.is_closed request_body);
+          Body.Reader.schedule_read
             ~on_read:(fun _ ~off:_ ~len:_ ->
-              Body.schedule_read
+              Body.Reader.schedule_read
                 ~on_read:(fun _ ~off:_ ~len:_ -> ())
                 ~on_eof:(fun () ->
                   body_eof_called := true;
@@ -1096,7 +1096,7 @@ module Server_connection_tests = struct
     let request = Request.create ~scheme:"http" `GET "/" in
     let request_handler reqd =
       let request_body = Reqd.request_body reqd in
-      Body.schedule_read
+      Body.Reader.schedule_read
         request_body
         ~on_eof:ignore
         ~on_read:(fun _bs ~off:_ ~len:_ -> body_read_called := true)
@@ -1137,8 +1137,9 @@ module Server_connection_tests = struct
     let request_handler reqd =
       let response = Response.create `OK in
       let response_body = Reqd.respond_with_streaming reqd response in
-      Body.write_string response_body "hello";
-      Body.flush response_body (fun () -> Body.close_writer response_body)
+      Body.Writer.write_string response_body "hello";
+      Body.Writer.flush response_body (fun () ->
+          Body.Writer.close response_body)
     in
     let t =
       create_and_handle_preface
@@ -1190,10 +1191,10 @@ module Server_connection_tests = struct
     let response = Response.create `OK in
     (* Send the response for / *)
     let response_body = Reqd.respond_with_streaming reqd response in
-    Body.write_string response_body "somedata";
-    Body.flush response_body (fun () ->
+    Body.Writer.write_string response_body "somedata";
+    Body.Writer.flush response_body (fun () ->
         Reqd.schedule_trailers reqd Headers.(add empty "foo" "bar");
-        Body.close_writer response_body)
+        Body.Writer.close response_body)
 
   let test_trailers () =
     let t = create ~error_handler trailers_request_handler in

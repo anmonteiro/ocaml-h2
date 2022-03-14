@@ -42,7 +42,7 @@ type error =
   ]
 
 type error_handler =
-  ?request:Request.t -> error -> (Headers.t -> [ `write ] Body.t) -> unit
+  ?request:Request.t -> error -> (Headers.t -> Body.Writer.t) -> unit
 
 type response_state =
   | Waiting
@@ -53,14 +53,14 @@ type response_state =
       }
   | Streaming of
       { response : Response.t
-      ; response_body : [ `write ] Body.t
+      ; response_body : Body.Writer.t
       ; trailers : Headers.t
       }
   | Complete of Response.t
 
 type request_info =
   { request : Request.t
-  ; request_body : [ `read ] Body.t
+  ; request_body : Body.Reader.t
   ; mutable request_body_bytes : int64
   }
 
@@ -253,7 +253,7 @@ let send_streaming_response ~flush_headers_immediately t s response =
     in
     let response_body_buffer = Bigstringaf.create s.body_buffer_size in
     let response_body =
-      Body.create_writer response_body_buffer ~ready_to_write:(fun () ->
+      Body.Writer.create response_body_buffer ~ready_to_write:(fun () ->
           Writer.wakeup t.writer)
     in
     Writer.write_response_headers t.writer s.encoder frame_info response;
@@ -308,7 +308,7 @@ let start_push_stream t s request =
     let { encoder; body_buffer_size; create_push_stream; _ } = s in
     (* From RFC7540§8.2:
      *   Promised requests [...] MUST NOT include a request body. *)
-    let request_info = create_active_request request Body.empty in
+    let request_info = create_active_request request Body.Reader.empty in
     let active_stream =
       create_active_stream encoder body_buffer_size create_push_stream
     in
@@ -391,11 +391,11 @@ let _report_error ?request t s exn error_code =
      * has been reported as well. *)
     failwith "h2.Reqd.report_exn: NYI"
   | Streaming { response_body; _ }, `Ok ->
-    Body.close_writer response_body;
+    Body.Writer.close response_body;
     t.error_code <- (exn :> [ `Ok | error ]), Some error_code;
     reset_stream t error_code
   | Streaming { response_body; _ }, `Exn _ ->
-    Body.close_writer response_body;
+    Body.Writer.close response_body;
     t.error_code <- fst t.error_code, Some error_code;
     reset_stream t error_code;
     Writer.close_and_drain t.writer
@@ -417,7 +417,7 @@ let report_error t exn error_code =
       ( ( Open (ActiveMessage { request; request_body; _ })
         | HalfClosed { request; request_body; _ } )
       , stream ) ->
-    Body.close_reader request_body;
+    Body.Reader.close request_body;
     _report_error t stream ~request exn error_code
   | Closed _ ->
     ()
@@ -471,8 +471,8 @@ let flush_request_body t =
       ( ( Open (ActiveMessage { request_body; _ })
         | HalfClosed { request_body; _ } )
       , _ ) ->
-    if Body.has_pending_output request_body then (
-      try Body.execute_read request_body with exn -> report_exn t exn)
+    if Body.Reader.has_pending_output request_body then (
+      try Body.Reader.execute_read request_body with exn -> report_exn t exn)
   | _ ->
     ()
 
@@ -488,14 +488,14 @@ let flush_response_body t ~max_bytes =
   | Active ((Open _ | HalfClosed _), stream) ->
     (match stream.response_state with
     | Streaming { response; response_body; trailers } ->
-      if Body.has_pending_output response_body && max_bytes > 0 then
-        Body.transfer_to_writer
+      if Body.Writer.has_pending_output response_body && max_bytes > 0 then
+        Body.Writer.transfer_to_writer
           response_body
           t.writer
           ~max_frame_size:t.max_frame_size
           ~max_bytes
           t.id
-      else if Body.is_closed response_body then
+      else if Body.Writer.is_closed response_body then
         (* no pending output and closed, we can finalize the message and close
            the stream *)
         let frame_info =

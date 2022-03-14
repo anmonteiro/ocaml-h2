@@ -55,7 +55,7 @@ type error =
   ]
 
 type error_handler =
-  ?request:Request.t -> error -> (Headers.t -> [ `write ] Body.t) -> unit
+  ?request:Request.t -> error -> (Headers.t -> Body.Writer.t) -> unit
 
 type t =
   { mutable settings : Settings.t
@@ -302,9 +302,9 @@ let handle_headers t ~end_stream stream active_stream headers =
         in
         let request_body =
           if end_stream then
-            Body.empty
+            Body.Reader.empty
           else
-            Body.create_reader
+            Body.Reader.create
               (Bigstringaf.create t.config.request_body_buffer_size)
               ~done_reading:(fun len ->
                 let len = Int32.of_int len in
@@ -328,7 +328,7 @@ let handle_headers t ~end_stream stream active_stream headers =
           reqd.state <- Active (HalfClosed request_info, active_stream);
           (* Deliver EOF to the request body, as the handler might be waiting
            * on it to produce a response. *)
-          Body.close_reader request_body)
+          Body.Reader.close request_body)
         else
           reqd.state <- Active (Open (ActiveMessage request_info), active_stream);
         t.request_handler reqd;
@@ -382,7 +382,7 @@ let handle_headers_block
       else if Headers.trailers_valid headers then (
         Reqd.deliver_trailer_headers reqd headers;
         let request_body = Reqd.request_body reqd in
-        Body.close_reader request_body)
+        Body.Reader.close request_body)
       else
         (* From RFC7540§8.1.2.1:
          *   Pseudo-header fields MUST NOT appear in trailers. Endpoints MUST
@@ -676,10 +676,10 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
              * Note: we send these WINDOW_UPDATE frames once the body bytes
              * have been surfaced to the application. This is done in the
              * record field `done_reading` of `Body.t`. *)
-            let faraday = Body.unsafe_faraday request_body in
+            let faraday = Body.Reader.unsafe_faraday request_body in
             if not (Faraday.is_closed faraday) then (
               Faraday.schedule_bigstring faraday bstr;
-              if end_stream then Body.close_reader request_body);
+              if end_stream then Body.Reader.close request_body);
             Reqd.flush_request_body descriptor)
       | Idle ->
         (* From RFC7540§5.1:
@@ -1110,8 +1110,8 @@ let default_error_handler ?request:_ error handle =
       Status.to_string error
   in
   let body = handle Headers.empty in
-  Body.write_string body message;
-  Body.close_writer body
+  Body.Writer.write_string body message;
+  Body.Writer.close body
 
 let write_connection_preface t =
   (* Check if the settings for the connection are different than the default
@@ -1277,14 +1277,14 @@ let handle_h2c_request t headers request_body_iovecs =
      *   the response. *)
     reqd.state <- Active (HalfClosed request_info, active_stream);
     if not end_stream then
-      let faraday = Body.unsafe_faraday request_body in
+      let faraday = Body.Reader.unsafe_faraday request_body in
       if not (Faraday.is_closed faraday) then (
         List.iter
           (fun { Httpaf.IOVec.buffer; off; len } ->
             Faraday.schedule_bigstring faraday ~off ~len buffer)
           request_body_iovecs;
         (* Close the request body, we're not expecting more input. *)
-        Body.close_reader request_body)
+        Body.Reader.close request_body)
   | None ->
     ()
 

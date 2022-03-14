@@ -3,7 +3,7 @@ module Client = H2_lwt_unix.Client
 
 let response_handler notify_response_received _response response_body =
   let rec read_response () =
-    Body.schedule_read
+    Body.Reader.schedule_read
       response_body
       ~on_eof:(fun () -> Lwt.wakeup_later notify_response_received ())
       ~on_read:(fun bigstring ~off ~len ->
@@ -59,5 +59,5 @@ let () =
       let request_body =
         Client.SSL.request connection request ~error_handler ~response_handler
       in
-      Body.close_writer request_body;
+      Body.Writer.close request_body;
       response_received )

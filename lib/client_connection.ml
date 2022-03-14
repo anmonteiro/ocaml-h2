@@ -56,7 +56,7 @@ type error = Respd.error
 
 type trailers_handler = Headers.t -> unit
 
-type response_handler = Response.t -> [ `read ] Body.t -> unit
+type response_handler = Response.t -> Body.Reader.t -> unit
 
 type error_handler = error -> unit
 
@@ -253,7 +253,7 @@ let handle_push_promise_headers t respd headers =
       | Ok response_handler ->
         (* From RFC7540§8.2:
          *   Promised requests [...] MUST NOT include a request body. *)
-        let request_body = Body.empty in
+        let request_body = Body.Writer.empty in
         (* From RFC7540§5.1:
          *   reserved (remote): [...] Receiving a HEADERS frame causes the
          *   stream to transition to "half-closed (local)". *)
@@ -300,9 +300,9 @@ let handle_response_headers t stream ~end_stream active_request headers =
     | `Fixed _ | `Unknown ->
       let response_body =
         if end_stream then
-          Body.empty
+          Body.Reader.empty
         else
-          Body.create_reader
+          Body.Reader.create
             (Bigstringaf.create t.config.response_body_buffer_size)
             ~done_reading:(fun len ->
               let len = Int32.of_int len in
@@ -323,7 +323,7 @@ let handle_response_headers t stream ~end_stream active_request headers =
       if end_stream then (
         (* Deliver EOF to the response body, as the handler might be waiting
          * on it to act. *)
-        Body.close_reader response_body;
+        Body.Reader.close response_body;
         (* From RFC7540§5.1:
          *   [...] an endpoint receiving an END_STREAM flag causes the stream
          *   state to become "half-closed (remote)". *)
@@ -411,7 +411,7 @@ let handle_headers_block
       else if Headers.trailers_valid headers then (
         Respd.deliver_trailer_headers respd headers;
         let response_body = Respd.response_body_exn respd in
-        Body.close_reader response_body)
+        Body.Reader.close response_body)
       else
         (* From RFC7540§8.1.2.1:
          *   Pseudo-header fields MUST NOT appear in trailers. Endpoints MUST
@@ -631,10 +631,10 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
            * Note: we send these WINDOW_UPDATE frames once the body bytes
            * have been surfaced to the application. This is done in the
            * record field `done_reading` of `Body.t`. *)
-          let faraday = Body.unsafe_faraday response_body in
+          let faraday = Body.Reader.unsafe_faraday response_body in
           if not (Faraday.is_closed faraday) then (
             Faraday.schedule_bigstring faraday bstr;
-            if end_stream then Body.close_reader response_body);
+            if end_stream then Body.Reader.close response_body);
           Respd.flush_response_body descriptor;
           if end_stream && not (Respd.requires_output descriptor) then
             (* From RFC7540§6.1:
@@ -1348,7 +1348,7 @@ let create_h2c
              *   entirety before the client can send HTTP/2 frames. This means
              *   that a large request can block the use of the connection until
              *   it is completely sent. *)
-          ; request_body = Body.empty
+          ; request_body = Body.Writer.empty
           ; response_handler
           ; trailers_handler = ignore
           } );
@@ -1368,7 +1368,7 @@ let request
   let max_frame_size = t.settings.max_frame_size in
   let respd = create_and_add_stream t ~error_handler in
   let request_body =
-    Body.create_writer
+    Body.Writer.create
       (Bigstringaf.create max_frame_size)
       ~ready_to_write:(fun () -> Writer.wakeup t.writer)
   in

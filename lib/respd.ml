@@ -46,11 +46,11 @@ type error =
 
 type error_handler = error -> unit
 
-type response_handler = Response.t -> [ `read ] Body.t -> unit
+type response_handler = Response.t -> Body.Reader.t -> unit
 
 type response_info =
   { response : Response.t
-  ; response_body : [ `read ] Body.t
+  ; response_body : Body.Reader.t
   ; mutable response_body_bytes : int64
   ; mutable trailers_parser : Stream.partial_headers option
   }
@@ -59,7 +59,7 @@ type trailers_handler = Headers.t -> unit
 
 type active_request =
   { request : Request.t
-  ; request_body : [ `writer ] Body.t
+  ; request_body : Body.Writer.t
   ; response_handler : response_handler
   ; trailers_handler : trailers_handler
   }
@@ -136,10 +136,10 @@ let _report_error t ?response_body error error_code =
   | `Ok ->
     (match response_body with
     | Some response_body ->
-      Body.close_reader response_body;
+      Body.Reader.close response_body;
       (* do we even need to execute this read? `close_reader` already does
          it. *)
-      Body.execute_read response_body
+      Body.Reader.execute_read response_body
     | None ->
       ());
     t.error_code <- (error :> [ `Ok | error ]), Some error_code;
@@ -158,11 +158,11 @@ let report_error t error error_code =
       ( ( Open (ActiveMessage { response_body; _ })
         | HalfClosed (ActiveMessage { response_body; _ }) )
       , s ) ->
-    Body.close_writer s.request_body;
+    Body.Writer.close s.request_body;
     if _report_error t ~response_body error error_code then
       reset_stream t error_code
   | Reserved (ActiveMessage s) | Active (_, s) ->
-    Body.close_writer s.request_body;
+    Body.Writer.close s.request_body;
     if _report_error t error error_code then
       reset_stream t error_code
   | Reserved _ ->
@@ -192,14 +192,14 @@ let requires_output t =
 let flush_request_body t ~max_bytes =
   match t.state with
   | Active (Open active_state, ({ request_body; _ } as s)) ->
-    if Body.has_pending_output request_body && max_bytes > 0 then
-      Body.transfer_to_writer
+    if Body.Writer.has_pending_output request_body && max_bytes > 0 then
+      Body.Writer.transfer_to_writer
         request_body
         t.writer
         ~max_frame_size:t.max_frame_size
         ~max_bytes
         t.id
-    else if Body.is_closed request_body then (
+    else if Body.Writer.is_closed request_body then (
       (* closed and no pending output *)
       (* From RFC7540§6.9.1:
        *   Frames with zero length with the END_STREAM flag set (that is, an
@@ -234,8 +234,8 @@ let flush_response_body t =
       ( ( Open (ActiveMessage { response_body; _ })
         | HalfClosed (ActiveMessage { response_body; _ }) )
       , _ ) ->
-    if Body.has_pending_output response_body then (
-      try Body.execute_read response_body with
+    if Body.Reader.has_pending_output response_body then (
+      try Body.Reader.execute_read response_body with
       | exn ->
         report_error t (`Exn exn) InternalError)
   | _ ->

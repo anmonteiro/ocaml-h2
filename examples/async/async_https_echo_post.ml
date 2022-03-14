@@ -7,11 +7,11 @@ let error_handler _ ?request:_ error start_response =
   let response_body = start_response Headers.empty in
   (match error with
   | `Exn exn ->
-    Body.write_string response_body (Exn.to_string exn);
-    Body.write_string response_body "\n"
+    Body.Writer.write_string response_body (Exn.to_string exn);
+    Body.Writer.write_string response_body "\n"
   | #Status.standard as error ->
-    Body.write_string response_body (Status.default_reason_phrase error));
-  Body.close_writer response_body
+    Body.Writer.write_string response_body (Status.default_reason_phrase error));
+  Body.Writer.close response_body
 
 let request_handler _ reqd =
   match Reqd.request reqd with
@@ -31,13 +31,13 @@ let request_handler _ reqd =
     let request_body = Reqd.request_body reqd in
     let response_body = Reqd.respond_with_streaming reqd response in
     let rec on_read buffer ~off ~len =
-      Body.write_bigstring response_body buffer ~off ~len;
-      Body.schedule_read request_body ~on_eof ~on_read
+      Body.Writer.write_bigstring response_body buffer ~off ~len;
+      Body.Reader.schedule_read request_body ~on_eof ~on_read
     and on_eof () =
       print_endline "eof";
-      Body.close_writer response_body
+      Body.Writer.close response_body
     in
-    Body.schedule_read (Reqd.request_body reqd) ~on_eof ~on_read
+    Body.Reader.schedule_read (Reqd.request_body reqd) ~on_eof ~on_read
   | _ ->
     Reqd.respond_with_string reqd (Response.create `Method_not_allowed) ""
 

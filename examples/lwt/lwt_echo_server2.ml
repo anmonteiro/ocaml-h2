@@ -28,7 +28,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
           "application/octet-stream"
       in
       let rec respond () =
-        Body.schedule_read
+        Body.Reader.schedule_read
           request_body
           ~on_eof:(fun () ->
             let response =
@@ -62,19 +62,19 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
         Reqd.respond_with_streaming request_descriptor response
       in
       let rec respond () =
-        Body.schedule_read
+        Body.Reader.schedule_read
           request_body
           ~on_eof:(fun () ->
             set_interval
               1
               (fun () ->
-                Body.write_string response_body "FOO";
+                Body.Writer.write_string response_body "FOO";
                 (* Body.flush response_body ignore; *)
                 true)
               (* Body.flush response_body ignore; *)
-                (fun () -> Body.close_writer response_body))
+                (fun () -> Body.Writer.close response_body))
           ~on_read:(fun request_data ~off ~len ->
-            Body.write_bigstring response_body request_data ~off ~len;
+            Body.Writer.write_bigstring response_body request_data ~off ~len;
             respond ())
       in
       respond ()
@@ -90,20 +90,25 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
       in
       (* let (finished, notify) = Lwt.wait () in *)
       let rec on_read _request_data ~off:_ ~len:_ =
-        Body.flush response_body (fun () ->
-            Body.schedule_read request_body ~on_eof ~on_read)
+        Body.Writer.flush response_body (fun () ->
+            Body.Reader.schedule_read request_body ~on_eof ~on_read)
       and on_eof () =
         set_interval
           2
           (fun () ->
-            let _ = Body.write_string response_body "data: some data\n\n" in
-            Body.flush response_body (fun () -> ());
+            let _ =
+              Body.Writer.write_string response_body "data: some data\n\n"
+            in
+            Body.Writer.flush response_body (fun () -> ());
             true)
           (fun () ->
-            let _ = Body.write_string response_body "event: end\ndata: 1\n\n" in
-            Body.flush response_body (fun () -> Body.close_writer response_body))
+            let _ =
+              Body.Writer.write_string response_body "event: end\ndata: 1\n\n"
+            in
+            Body.Writer.flush response_body (fun () ->
+                Body.Writer.close response_body))
       in
-      Body.schedule_read ~on_read ~on_eof request_body;
+      Body.Reader.schedule_read ~on_read ~on_eof request_body;
       ()
     | _ ->
       Reqd.respond_with_string
@@ -113,17 +118,19 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
   in
   let error_handler
       :  Unix.sockaddr -> ?request:H2.Request.t -> _
-      -> (Headers.t -> [ `write ] Body.t) -> unit
+      -> (Headers.t -> Body.Writer.t) -> unit
     =
    fun _client_address ?request:_ error start_response ->
     let response_body = start_response Headers.empty in
     (match error with
     | `Exn exn ->
-      Body.write_string response_body (Printexc.to_string exn);
-      Body.write_string response_body "\n"
+      Body.Writer.write_string response_body (Printexc.to_string exn);
+      Body.Writer.write_string response_body "\n"
     | #Status.standard as error ->
-      Body.write_string response_body (Status.default_reason_phrase error));
-    Body.close_writer response_body
+      Body.Writer.write_string
+        response_body
+        (Status.default_reason_phrase error));
+    Body.Writer.close response_body
   in
   H2_lwt_unix.Server.create_connection_handler
     ?config:None

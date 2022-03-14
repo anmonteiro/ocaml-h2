@@ -330,7 +330,7 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -372,7 +372,7 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -411,7 +411,7 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -436,7 +436,7 @@ module Client_connection_tests = struct
         ~response_handler:second_response_handler
     in
     flush_request t;
-    Body.close_writer second_request_body;
+    Body.Writer.close second_request_body;
     let _, _ = flush_pending_writes t in
     let headers, continuation = header_and_continuation_frames in
     read_frames t [ headers; continuation ];
@@ -472,7 +472,7 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -521,7 +521,7 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -598,7 +598,7 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -707,7 +707,7 @@ module Client_connection_tests = struct
       "Stream is in the open state"
       true
       (Stream.is_open stream);
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -790,7 +790,7 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -876,7 +876,7 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let _, lenv = flush_pending_writes t in
     report_write_result t (`Ok lenv);
     let hpack_encoder = Hpack.Encoder.create 4096 in
@@ -901,7 +901,7 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let _, lenv = flush_pending_writes t in
     write_eof t;
     writer_closed t ~unread:lenv
@@ -923,7 +923,7 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -1001,8 +1001,8 @@ module Client_connection_tests = struct
     Alcotest.(check bool) "Response handler called" true !handler_called;
     Alcotest.(check bool) "error handler not called" false !error_handler_called;
     (* Send the rest of the request body. *)
-    Body.write_string request_body "hello";
-    Body.close_writer request_body;
+    Body.Writer.write_string request_body "hello";
+    Body.Writer.close request_body;
     writer_yielded t
 
   let test_connection_shutdown () =
@@ -1028,7 +1028,7 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.close_writer body;
+    Body.Writer.close body;
     let _frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     report_write_result t (`Ok lenv);
@@ -1063,7 +1063,7 @@ module Client_connection_tests = struct
     let body_read_called = ref false in
     let body_eof_called = ref false in
     let response_handler _response response_body =
-      Body.schedule_read
+      Body.Reader.schedule_read
         response_body
         ~on_eof:ignore
         ~on_read:(fun _bs ~off:_ ~len:_ ->
@@ -1071,10 +1071,10 @@ module Client_connection_tests = struct
           Alcotest.(check bool)
             "Response body isn't closed (yet) when reading"
             false
-            (Body.is_closed response_body);
-          Body.schedule_read
+            (Body.Reader.is_closed response_body);
+          Body.Reader.schedule_read
             ~on_read:(fun _ ~off:_ ~len:_ ->
-              Body.schedule_read
+              Body.Reader.schedule_read
                 ~on_read:(fun _ ~off:_ ~len:_ -> ())
                 ~on_eof:(fun () -> body_eof_called := true)
                 response_body)
@@ -1090,7 +1090,7 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let _, lenv = flush_pending_writes t in
     report_write_result t (`Ok lenv);
     writer_yielded t;
@@ -1116,7 +1116,7 @@ module Client_connection_tests = struct
     let request = Request.create ~scheme:"http" `GET "/" in
     let body_read_called = ref false in
     let response_handler _response response_body =
-      Body.schedule_read
+      Body.Reader.schedule_read
         response_body
         ~on_eof:ignore
         ~on_read:(fun _bs ~off:_ ~len:_ -> body_read_called := true)
@@ -1130,7 +1130,7 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     flush_request t;
     let hpack_encoder = Hpack.Encoder.create 4096 in
     read_response
@@ -1167,9 +1167,9 @@ module Client_connection_tests = struct
         ~response_handler
     in
     flush_request t;
-    Body.write_string request_body "hello";
+    Body.Writer.write_string request_body "hello";
     flush_request t;
-    Body.flush request_body (fun () -> Body.close_writer request_body);
+    Body.Writer.flush request_body (fun () -> Body.Writer.close request_body);
     let frames, _lenv = flush_pending_writes t in
     Alcotest.(check (list int))
       "Writes empty DATA frame"
@@ -1202,7 +1202,7 @@ module Client_connection_tests = struct
     (* Writer yields when `~flush_headers_immediately` is false *)
     writer_yielded t;
     (* Write to the body *)
-    Body.write_string request_body "Hello";
+    Body.Writer.write_string request_body "Hello";
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check (list int))
       "Batches headers and data frames together"
@@ -1212,7 +1212,7 @@ module Client_connection_tests = struct
            Frame.FrameType.serialize frame_type)
          frames);
     report_write_result t (`Ok lenv);
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, _lenv = flush_pending_writes t in
     Alcotest.(check (list int))
       "Writes empty DATA frame"
