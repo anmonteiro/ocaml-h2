@@ -19,7 +19,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
           "application/octet-stream"
       in
       let request_body = Reqd.request_body request_descriptor in
-      Body.close_reader request_body;
+      Body.Reader.close request_body;
       let response =
         Response.create
           ~headers:(Headers.of_list [ "content-type", response_content_type ])
@@ -38,7 +38,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
           "application/octet-stream"
       in
       let rec respond () =
-        Body.schedule_read
+        Body.Reader.schedule_read
           request_body
           ~on_eof:(fun () ->
             let response =
@@ -52,13 +52,13 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
               let response_body =
                 Reqd.respond_with_streaming request_descriptor response
               in
-              Body.write_string response_body (String.make 100 'a');
+              Body.Writer.write_string response_body (String.make 100 'a');
               set_interval 1 (fun () ->
                   ignore
                   @@ Reqd.try_with request_descriptor (fun () ->
-                         Body.write_string response_body " data");
-                  Body.flush response_body (fun () ->
-                      Body.close_writer response_body))
+                         Body.Writer.write_string response_body " data");
+                  Body.Writer.flush response_body (fun () ->
+                      Body.Writer.close response_body))
             | "/bigstring" ->
               let res_body = "non-empty data." in
               let bs =
@@ -79,17 +79,19 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
   in
   let error_handler
       :  Unix.sockaddr -> ?request:H2.Request.t -> _
-      -> (Headers.t -> [ `write ] Body.t) -> unit
+      -> (Headers.t -> Body.Writer.t) -> unit
     =
    fun _client_address ?request:_ error start_response ->
     let response_body = start_response Headers.empty in
     (match error with
     | `Exn exn ->
-      Body.write_string response_body (Printexc.to_string exn);
-      Body.write_string response_body "\n"
+      Body.Writer.write_string response_body (Printexc.to_string exn);
+      Body.Writer.write_string response_body "\n"
     | #Status.standard as error ->
-      Body.write_string response_body (Status.default_reason_phrase error));
-    Body.close_writer response_body
+      Body.Writer.write_string
+        response_body
+        (Status.default_reason_phrase error));
+    Body.Writer.close response_body
   in
   H2_lwt_unix.Server.create_connection_handler
     ~config:{ H2.Config.default with max_concurrent_streams = 2l }

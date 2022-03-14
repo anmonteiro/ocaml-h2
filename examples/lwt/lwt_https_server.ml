@@ -81,7 +81,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
   in
   let error_handler
       :  Unix.sockaddr -> ?request:H2.Request.t -> _
-      -> (Headers.t -> [ `write ] Body.t) -> unit
+      -> (Headers.t -> Body.Writer.t) -> unit
     =
    fun _client_address ?request:_ _error start_response ->
     let response_body = start_response Headers.empty in
@@ -90,7 +90,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
 
        | #Status.standard as error -> Body.write_string response_body
        (Status.default_reason_phrase error) end; *)
-    Body.close_writer response_body
+    Body.Writer.close response_body
   in
   let certfile = "./certificates/server.pem" in
   let keyfile = "./certificates/server.key" in
