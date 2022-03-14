@@ -14,6 +14,8 @@ Unreleased
   be scheduled and batch `HEADERS` and `DATA` frames when sending requests
   ([#163](https://github.com/anmonteiro/ocaml-h2/pull/163),
   [#164](https://github.com/anmonteiro/ocaml-h2/pull/164))
+- h2: Split `Body.t` into `Body.Writer.t` and `Body.Reader.t`
+  ([#165](https://github.com/anmonteiro/ocaml-h2/pull/165))
 
 0.8.0 2021-04-11
 ---------------
