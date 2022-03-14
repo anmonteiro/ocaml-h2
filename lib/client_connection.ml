@@ -1359,7 +1359,7 @@ let create_h2c
 
 let request
     t
-    ?(flush_headers_immediately = true)
+    ?(flush_headers_immediately = false)
     ?(trailers_handler = ignore)
     request
     ~error_handler

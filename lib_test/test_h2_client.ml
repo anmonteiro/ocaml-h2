@@ -325,6 +325,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
@@ -366,6 +367,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:stream_level_error_handler
         ~response_handler
     in
@@ -404,6 +406,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
@@ -428,6 +431,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler:second_response_handler
     in
@@ -463,6 +467,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
@@ -511,6 +516,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
@@ -587,6 +593,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
@@ -690,6 +697,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
@@ -777,6 +785,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:stream_level_error_handler
         ~response_handler
     in
@@ -862,6 +871,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
@@ -886,6 +896,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
@@ -905,6 +916,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:(fun _ ->
           error_handler_called := true;
           Alcotest.fail "Didn't expect error handler to be called.")
@@ -961,6 +973,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:(fun _ ->
           error_handler_called := true;
           Alcotest.fail "Didn't expect error handler to be called.")
@@ -1008,6 +1021,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:(fun _ ->
           error_handler_called := true;
           Alcotest.fail "Didn't expect error handler to be called.")
@@ -1071,6 +1085,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
@@ -1110,6 +1125,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
@@ -1146,6 +1162,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
