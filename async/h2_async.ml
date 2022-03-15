@@ -156,9 +156,24 @@ module Client = struct
       >>| fun runtime -> { runtime; connection }
 
     let create_connection_with_default
-        ?(config = Config.default) ?push_handler ~error_handler socket
+        ?crt_file
+        ?key_file
+        ?ca_file
+        ?ca_path
+        ?verify_modes
+        ?(config = Config.default)
+        ?push_handler
+        ~error_handler
+        socket
       =
-      Client_runtime.create_default ~alpn_protocols:[ "http/1.1" ] socket
+      Client_runtime.create_default
+        ?crt_file
+        ?key_file
+        ?ca_file
+        ?ca_path
+        ?verify_modes
+        ~alpn_protocols:[ "http/1.1" ]
+        socket
       >>= fun ssl_client ->
       create_connection ~config ?push_handler ~error_handler ssl_client
 

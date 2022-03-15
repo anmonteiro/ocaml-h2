@@ -69,7 +69,18 @@ module Client : sig
       H2_async_intf.Client with type socket = Gluten_async.Client.SSL.socket
 
     val create_connection_with_default
-      :  ?config:Config.t
+      :  ?crt_file:string
+      -> ?key_file:string
+      -> ?ca_file:string
+      -> ?ca_path:string
+      -> ?verify_modes:
+           [< `Verify_client_once
+           | `Verify_fail_if_no_peer_ert
+           | `Verify_none
+           | `Verify_peer
+           ]
+           list
+      -> ?config:Config.t
       -> ?push_handler:
            (Request.t -> (Client_connection.response_handler, unit) result)
       -> error_handler:Client_connection.error_handler
