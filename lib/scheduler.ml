@@ -37,6 +37,7 @@ module StreamsTbl = struct
     let equal = Stream_identifier.( === )
 
     let hash i k = Hashtbl.seeded_hash i k
+    let seeded_hash = hash
   end)
 
   let[@inline] find_opt h key = try Some (find h key) with Not_found -> None

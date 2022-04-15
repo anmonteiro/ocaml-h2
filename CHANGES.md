@@ -16,6 +16,8 @@ Unreleased
   [#164](https://github.com/anmonteiro/ocaml-h2/pull/164))
 - h2: Split `Body.t` into `Body.Writer.t` and `Body.Reader.t`
   ([#165](https://github.com/anmonteiro/ocaml-h2/pull/165))
+- h2: OCaml 5.00 compatibility -- add `seeded_hash` to `scheduler.ml`
+  ([#168](https://github.com/anmonteiro/ocaml-h2/pull/168))
 
 0.8.0 2021-04-11
 ---------------
