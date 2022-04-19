@@ -35,11 +35,11 @@
         "flake-utils": "flake-utils_2"
       },
       "locked": {
-        "lastModified": 1649698420,
-        "narHash": "sha256-vT4vDRz/bgQIoqQe5VtPLBKcW5Tga7uLYNtrF+M6l/M=",
+        "lastModified": 1650394481,
+        "narHash": "sha256-8vs+x5uSF4mxkMDqJU+YbMAkMCJXNq5b3QGtIOFc+Ts=",
         "owner": "anmonteiro",
         "repo": "nix-overlays",
-        "rev": "861deb21cbad308821626b7266a626292bd17697",
+        "rev": "7a667fa299fddd2f95b8c684e2e5bf3ebe6ea026",
         "type": "github"
       },
       "original": {
