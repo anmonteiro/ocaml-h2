@@ -170,4 +170,52 @@ module Client = struct
 
     let is_closed t = Client_runtime.is_closed t.runtime
   end
+
+  module TLS = struct
+    module Client_runtime = Gluten_async.Client.TLS
+
+    type socket = Client_runtime.socket
+
+    type runtime = Client_runtime.t
+
+    type t =
+      { connection : Client_connection.t
+      ; runtime : runtime
+      }
+
+    let create_connection
+        ?(config = Config.default) ?push_handler ~error_handler socket
+      =
+      let connection =
+        Client_connection.create ~config ?push_handler ~error_handler
+      in
+      Client_runtime.create
+        ~read_buffer_size:config.read_buffer_size
+        ~protocol:(module Client_connection)
+        connection
+        socket
+      >>| fun runtime -> { runtime; connection }
+
+    let create_connection_with_default
+        ?(config = Config.default)
+        ?push_handler
+        ~error_handler
+        socket
+        where_to_connect
+      =
+      Client_runtime.create_default
+        ~alpn_protocols:[ "http/1.1" ]
+        socket
+        where_to_connect
+      >>= fun ssl_client ->
+      create_connection ~config ?push_handler ~error_handler ssl_client
+
+    let request t = Client_connection.request t.connection
+
+    let ping t = Client_connection.ping t.connection
+
+    let shutdown t = Client_runtime.shutdown t.runtime
+
+    let is_closed t = Client_runtime.is_closed t.runtime
+  end
 end

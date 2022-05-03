@@ -76,4 +76,18 @@ module Client : sig
       -> ([ `Active ], [< Socket.Address.t ]) Socket.t
       -> t Deferred.t
   end
+
+  module TLS : sig
+    include
+      H2_async_intf.Client with type socket = Gluten_async.Client.TLS.socket
+
+    val create_connection_with_default
+      :  ?config:Config.t
+      -> ?push_handler:
+           (Request.t -> (Client_connection.response_handler, unit) result)
+      -> error_handler:Client_connection.error_handler
+      -> ([ `Unconnected ], Socket.Address.t) Socket.t
+      -> Socket.Address.t Tcp.Where_to_connect.t
+      -> t Deferred.t
+  end
 end
