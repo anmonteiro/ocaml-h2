@@ -30,22 +30,6 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
-module StreamsTbl = struct
-  include Hashtbl.MakeSeeded (struct
-    type t = Stream_identifier.t
-
-    let equal = Stream_identifier.( === )
-
-    let hash i k = Hashtbl.seeded_hash i k
-
-    (* Required for OCaml >= 5.0.0, but causes errors for older compilers
-       because it is an unused value declaration. *)
-    let[@warning "-32"] seeded_hash = hash
-  end)
-
-  let[@inline] find_opt h key = try Some (find h key) with Not_found -> None
-end
-
 module type StreamDescriptor = sig
   type t
 
@@ -82,7 +66,7 @@ module Make (Streamd : StreamDescriptor) = struct
        *   allowing us to enforce that all (other) streams in the tree are
        *   associated with a request descriptor. *)
       | Connection :
-          { all_streams : stream StreamsTbl.t
+          { all_streams : stream Streamtbl.t
           ; mutable t_last : int
           ; mutable children : PriorityQueue.t
                 (* Connection-level flow control window.
@@ -141,7 +125,7 @@ module Make (Streamd : StreamDescriptor) = struct
     Connection
       { t_last = 0
       ; children = PriorityQueue.empty
-      ; all_streams = StreamsTbl.create ~random:true capacity
+      ; all_streams = Streamtbl.create ~random:true capacity
       ; flow = Settings.WindowSize.default_initial_window_size
       ; inflow = Settings.WindowSize.default_initial_window_size
       ; marked_for_removal = []
@@ -249,7 +233,7 @@ module Make (Streamd : StreamDescriptor) = struct
         Parent t, priority
       else
         match
-          StreamsTbl.find_opt root.all_streams priority.stream_dependency
+          Streamtbl.find_opt root.all_streams priority.stream_dependency
         with
         | Some parent_stream ->
           Parent parent_stream, priority
@@ -310,14 +294,14 @@ module Make (Streamd : StreamDescriptor) = struct
         descriptor
     in
     let stream_id = Streamd.id descriptor in
-    StreamsTbl.add root.all_streams stream_id stream;
+    Streamtbl.add root.all_streams stream_id stream;
     root.children <- pq_add stream_id stream root.children;
     if priority != Priority.default_priority then
       reprioritize_stream t ~priority stream;
     stream
 
   let get_node (Connection root) stream_id =
-    StreamsTbl.find_opt root.all_streams stream_id
+    Streamtbl.find_opt root.all_streams stream_id
 
   let find t stream_id =
     match get_node t stream_id with
@@ -327,7 +311,7 @@ module Make (Streamd : StreamDescriptor) = struct
       None
 
   let iter (Connection { all_streams; _ }) ~f =
-    StreamsTbl.iter (fun _id -> f) all_streams
+    Streamtbl.iter (fun _id -> f) all_streams
 
   let allowed_to_transmit (Connection root) (Stream stream) =
     Int32.compare root.flow 0l > 0 && Int32.compare stream.flow 0l > 0
@@ -470,7 +454,7 @@ module Make (Streamd : StreamDescriptor) = struct
            * stream's state at the * cost of keeping it around for a little
            * while longer. *)
           if closed.Stream.ttl = 0 then (
-            StreamsTbl.remove root.all_streams id;
+            Streamtbl.remove root.all_streams id;
             acc)
           else (
             closed.ttl <- closed.ttl - 1;
