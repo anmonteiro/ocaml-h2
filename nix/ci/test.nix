@@ -8,8 +8,7 @@ let
     # inherit (lock.nodes.nixpkgs.original) ref;
   };
   pkgs = import "${src}/boot.nix" {
-    overlays = [
-      (import src)
+    extraOverlays = [
       (self: super: {
         h2spec = super.callPackage ../h2spec.nix { };
         ocamlPackages = super.ocaml-ng."ocamlPackages_${ocamlVersion}";

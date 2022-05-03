@@ -1,5 +1,5 @@
 (executables
- (libraries h2 h2-async async core)
+ (libraries h2 h2-async async core core_unix.command_unix)
  (names async_https_echo_post))
 
 (alias

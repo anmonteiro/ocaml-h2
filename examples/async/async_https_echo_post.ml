@@ -75,4 +75,4 @@ let () =
            (optional_with_default 1 int)
            ~doc:"int Maximum accepts per batch")
     main
-  |> Command.run
+  |> Command_unix.run
