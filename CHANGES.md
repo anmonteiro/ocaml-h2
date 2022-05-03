@@ -18,6 +18,9 @@ Unreleased
   ([#165](https://github.com/anmonteiro/ocaml-h2/pull/165))
 - h2: OCaml 5.00 compatibility -- add `seeded_hash` to `scheduler.ml`
   ([#168](https://github.com/anmonteiro/ocaml-h2/pull/168))
+- h2: Use a tail-recursive version of `Angstrom.skip_many`. Fixes a memory leak
+  in long-running connections e.g. gRPC
+  ([#172](https://github.com/anmonteiro/ocaml-h2/pull/172))
 
 0.8.0 2021-04-11
 ---------------
