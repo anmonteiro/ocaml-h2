@@ -34,6 +34,18 @@
 
 open Angstrom
 
+(* We use the tail-recursive variant of `skip_many` from
+ * https://github.com/inhabitedtype/angstrom/pull/219 to avoid memory leaks in
+ * long-running connections. The original `skip_many` can build up a list of
+ * error handlers that may never be released. *)
+let skip_many p =
+  fix (fun m ->
+      p >>| (fun _ -> true) <|> return false >>= function
+      | true ->
+        m
+      | false ->
+        return ())
+
 let default_frame_header =
   { Frame.payload_length = 0
   ; flags = Flags.default_flags
