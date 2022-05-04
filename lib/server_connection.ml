@@ -82,6 +82,16 @@ type t =
   ; hpack_decoder : Hpack.Decoder.t
   }
 
+let stats t =
+  let (Scheduler.Connection { all_streams; marked_for_removal; _ }) =
+    t.streams
+  in
+  { Stats.total_streams = Streamtbl.length all_streams
+  ; total_marked_for_removal = List.length marked_for_removal
+  ; currently_open_peer_streams = t.current_client_streams
+  ; total_unacked_settings_frames = t.unacked_settings
+  }
+
 let is_closed t = Reader.is_closed t.reader && Writer.is_closed t.writer
 
 let wakeup_writer t = Writer.wakeup t.writer
@@ -598,7 +608,6 @@ let process_headers_frame t { Frame.frame_header; _ } ~priority headers_block =
         report_connection_error t Error_code.StreamClosed)
 
 let process_data_frame t { Frame.frame_header; _ } bstr =
-  let open Scheduler in
   let { Frame.flags; stream_id; payload_length; _ } = frame_header in
   if not (Stream_identifier.is_request stream_id) then
     (* From RFC7540§5.1.1:

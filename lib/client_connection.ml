@@ -84,6 +84,16 @@ type t =
 
 let default_push_handler = Sys.opaque_identity (fun _ -> Ok (fun _ _ -> ()))
 
+let stats t =
+  let (Scheduler.Connection { all_streams; marked_for_removal; _ }) =
+    t.streams
+  in
+  { Stats.total_streams = Streamtbl.length all_streams
+  ; total_marked_for_removal = List.length marked_for_removal
+  ; currently_open_peer_streams = t.current_server_streams
+  ; total_unacked_settings_frames = t.unacked_settings
+  }
+
 let is_closed t = Reader.is_closed t.reader && Writer.is_closed t.writer
 
 let shutdown_reader t = Reader.force_close t.reader

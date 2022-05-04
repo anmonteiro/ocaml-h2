@@ -44,4 +44,5 @@ module Error_code = Error_code
 module Config = Config
 module Server_connection = Server_connection
 module Client_connection = Client_connection
+module Stats = Stats
 module Settings = Settings

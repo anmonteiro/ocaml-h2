@@ -156,7 +156,7 @@ module Status : sig
 
   val of_string : string -> t
 
-  val pp_hum : Format.formatter -> t -> unit
+  val pp_hum : Format.formatter -> t -> unit [@@ocaml.toplevel_printer]
 end
 
 (** Header Fields
@@ -321,7 +321,7 @@ module Headers : sig
 
   val to_string : t -> string
 
-  val pp_hum : Format.formatter -> t -> unit
+  val pp_hum : Format.formatter -> t -> unit [@@ocaml.toplevel_printer]
 end
 
 (** {2 Message Body} *)
@@ -434,7 +434,7 @@ module Request : sig
       See {{:https://tools.ietf.org/html/rfc7230#section-3.3.3} RFC7230§3.3.3}
       for more details. *)
 
-  val pp_hum : Format.formatter -> t -> unit
+  val pp_hum : Format.formatter -> t -> unit [@@ocaml.toplevel_printer]
 end
 
 (** Response
@@ -465,7 +465,7 @@ module Response : sig
       See {{:https://tools.ietf.org/html/rfc7230#section-3.3.3} RFC7230§3.3.3}
       for more details. *)
 
-  val pp_hum : Format.formatter -> t -> unit
+  val pp_hum : Format.formatter -> t -> unit [@@ocaml.toplevel_printer]
 end
 
 (** IOVec *)
@@ -631,7 +631,7 @@ module Error_code : sig
 
   val to_string : t -> string
 
-  val pp_hum : Format.formatter -> t -> unit
+  val pp_hum : Format.formatter -> t -> unit [@@ocaml.toplevel_printer]
 end
 
 (* TODO: needs docs *)
@@ -653,7 +653,7 @@ module Settings : sig
   val to_base64 : t -> (string, string) result
   (** {{:https://tools.ietf.org/html/rfc7540#section-3.2.1} RFC7540§3.2.1} *)
 
-  val pp_hum : Format.formatter -> t -> unit
+  val pp_hum : Format.formatter -> t -> unit [@@ocaml.toplevel_printer]
 end
 
 (** {2 HTTP/2 Configuration} *)
@@ -680,6 +680,17 @@ module Config : sig
       default values. *)
 
   val to_settings : t -> Settings.t
+end
+
+module Stats : sig
+  type t = private
+    { total_streams : int
+    ; total_marked_for_removal : int
+    ; currently_open_peer_streams : int
+    ; total_unacked_settings_frames : int
+    }
+
+  val pp_hum : Format.formatter -> t -> unit
 end
 
 (** {2 Server Connection} *)
@@ -786,6 +797,8 @@ module Server_connection : sig
   (* val error_code : t -> error option *)
   (** [error_code t] returns the [error_code] that caused the connection to
       close, if one exists. *)
+
+  val stats : t -> Stats.t
 
   (**/**)
 
@@ -943,4 +956,6 @@ module Client_connection : sig
       [`Close _] and {!next_write_operation} will do the same will return a
       [`Write _] until all buffered output has been flushed, at which point it
       will return [`Close]. *)
+
+  val stats : t -> Stats.t
 end
