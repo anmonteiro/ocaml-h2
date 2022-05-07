@@ -13,7 +13,8 @@ let error_handler _ ?request:_ error start_response =
     Body.Writer.write_string response_body (Status.default_reason_phrase error));
   Body.Writer.close response_body
 
-let request_handler _ reqd =
+let request_handler sock reqd =
+  eprintf "Received request from %s\n%!" (Socket.Address.Inet.to_string sock);
   match Reqd.request reqd with
   | { Request.meth = `POST; headers; _ } ->
     let response =
@@ -63,11 +64,11 @@ let main port max_accepts_per_batch () =
 
 let () =
   Command.async_spec
-    ~summary:"Start a hello world Async server"
+    ~summary:"Start a hello world async_ssl server"
     Command.Spec.(
       empty
       +> flag
-           "-p"
+           "-port"
            (optional_with_default 8080 int)
            ~doc:"int Source port to listen on"
       +> flag

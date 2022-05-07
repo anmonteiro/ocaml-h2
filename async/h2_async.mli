@@ -86,8 +86,8 @@ module Client : sig
       -> ?push_handler:
            (Request.t -> (Client_connection.response_handler, unit) result)
       -> error_handler:Client_connection.error_handler
-      -> ([ `Unconnected ], Socket.Address.t) Socket.t
-      -> Socket.Address.t Tcp.Where_to_connect.t
+      -> ([ `Unconnected ], 'addr) Socket.t
+      -> 'addr Tcp.Where_to_connect.t
       -> t Deferred.t
   end
 end
