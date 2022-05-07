@@ -140,7 +140,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
 let () =
   let open Lwt.Infix in
   Sys.(set_signal sigpipe Signal_ignore);
-  let port = ref 8080 in
+  let port = ref 8081 in
   Arg.parse
     [ "-p", Arg.Set_int port, " Listening port number (8080 by default)" ]
     ignore
