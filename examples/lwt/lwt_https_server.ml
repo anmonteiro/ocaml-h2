@@ -2,11 +2,9 @@ let set_interval ?(times = 5) s f destroy =
   let rec set_interval_loop s f n =
     let timeout =
       Lwt_timeout.create s (fun () ->
-          if n > 0 then (
-            if f () then
-              set_interval_loop s f (n - 1))
-          else
-            destroy ())
+          if n > 0
+          then (if f () then set_interval_loop s f (n - 1))
+          else destroy ())
     in
     Lwt_timeout.start timeout
   in
@@ -22,10 +20,8 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
       (* let request_body = Reqd.request_body request_descriptor in *)
       let response_content_type =
         match Headers.get request.headers "Content-Type" with
-        | Some request_content_type ->
-          request_content_type
-        | None ->
-          "application/octet-stream"
+        | Some request_content_type -> request_content_type
+        | None -> "application/octet-stream"
       in
       let response =
         Response.create
@@ -36,6 +32,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
                ])
           `OK
       in
+
       (* let response_body = Reqd.respond_with_streaming request_descriptor
          response in *)
 
@@ -51,10 +48,8 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
         (fun () ->
           let response_content_type =
             match Headers.get request.headers "Content-Type" with
-            | Some request_content_type ->
-              request_content_type
-            | None ->
-              "application/octet-stream"
+            | Some request_content_type -> request_content_type
+            | None -> "application/octet-stream"
           in
           let response =
             Response.create

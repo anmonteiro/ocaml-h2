@@ -60,24 +60,17 @@ let make_node ?(left = Missing) ?(right = Missing) () =
   }
 
 let rec add_symbol tree symbol = function
-  | [] ->
-    Symbol symbol
+  | [] -> Symbol symbol
   | false :: bits ->
     (match tree with
-    | Missing ->
-      Node (make_node ~left:(add_symbol tree symbol bits) ())
-    | Node node ->
-      Node { node with left = add_symbol node.left symbol bits }
-    | Symbol _ ->
-      failwith "add_symbol")
+    | Missing -> Node (make_node ~left:(add_symbol tree symbol bits) ())
+    | Node node -> Node { node with left = add_symbol node.left symbol bits }
+    | Symbol _ -> failwith "add_symbol")
   | true :: bits ->
     (match tree with
-    | Missing ->
-      Node (make_node ~right:(add_symbol tree symbol bits) ())
-    | Node node ->
-      Node { node with right = add_symbol node.right symbol bits }
-    | Symbol _ ->
-      failwith "add_symbol")
+    | Missing -> Node (make_node ~right:(add_symbol tree symbol bits) ())
+    | Node node -> Node { node with right = add_symbol node.right symbol bits }
+    | Symbol _ -> failwith "add_symbol")
 
 let rec set_ids tree eos next_id =
   match tree with
@@ -85,25 +78,19 @@ let rec set_ids tree eos next_id =
     node.id <- next_id;
     if eos < 8 then node.accept <- true;
     next_id + 1 |> set_ids node.left 8 |> set_ids node.right (eos + 1)
-  | _ ->
-    next_id
+  | _ -> next_id
 
 let rec traverse root transitions failed symbol node remaining i =
   let failed, node, symbol =
     match node with
-    | Symbol symbol ->
-      failed, root, Some symbol
-    | Node node ->
-      failed, node, symbol
-    | Missing ->
-      true, root, None
+    | Symbol symbol -> failed, root, Some symbol
+    | Node node -> failed, node, symbol
+    | Missing -> true, root, None
   in
-  if remaining = 0 then (
+  if remaining = 0
+  then (
     transitions.(i) <-
-      (if failed then
-         None, false, None
-      else
-        Some node.id, node.accept, symbol);
+      (if failed then None, false, None else Some node.id, node.accept, symbol);
     i + 1)
   else
     traverse root transitions failed symbol node.left (remaining - 1) i
@@ -115,8 +102,7 @@ let rec make_transitions root = function
     assert (i = 16);
     make_transitions root node.left;
     make_transitions root node.right
-  | _ ->
-    ()
+  | _ -> ()
 
 let mk_encode_table encode_table =
   let items =
@@ -136,10 +122,8 @@ let mk_encode_table encode_table =
 
 let output_transition (id, accept, symbol) =
   let output_int = function
-    | Some i ->
-      Exp.constant (Pconst_integer (string_of_int i, None))
-    | None ->
-      Exp.constant (Pconst_integer ("-1", None))
+    | Some i -> Exp.constant (Pconst_integer (string_of_int i, None))
+    | None -> Exp.constant (Pconst_integer ("-1", None))
   in
   let output_bool b =
     Exp.construct
@@ -149,10 +133,8 @@ let output_transition (id, accept, symbol) =
       None
   in
   let output_char = function
-    | Some c ->
-      Exp.constant (Pconst_char c)
-    | None ->
-      Exp.constant (Pconst_char '\000')
+    | Some c -> Exp.constant (Pconst_char c)
+    | None -> Exp.constant (Pconst_char '\000')
   in
   Exp.tuple [ output_int id; output_bool accept; output_char symbol ]
 
@@ -168,8 +150,7 @@ let mk_decode_table tree =
           node.transitions
       in
       (i + 1, acc') |> loop node.left |> loop node.right
-    | _ ->
-      i, acc
+    | _ -> i, acc
   in
   let i, items = loop tree (0, []) in
   assert (i = 256);
@@ -177,18 +158,14 @@ let mk_decode_table tree =
 
 let bits_of_string s =
   let rec aux i =
-    if i < String.length s then
+    if i < String.length s
+    then
       match s.[i] with
-      | '|' ->
-        aux (i + 1)
-      | '0' ->
-        false :: aux (i + 1)
-      | '1' ->
-        true :: aux (i + 1)
-      | _ ->
-        failwith "bits_of_string"
-    else
-      []
+      | '|' -> aux (i + 1)
+      | '0' -> false :: aux (i + 1)
+      | '1' -> true :: aux (i + 1)
+      | _ -> failwith "bits_of_string"
+    else []
   in
   aux 0
 
@@ -196,7 +173,8 @@ let () =
   let ic = Scanf.Scanning.from_file Sys.argv.(1) in
   let encode_table = Array.make 256 (0, 0) in
   let rec loop tree i =
-    if i < 256 then (
+    if i < 256
+    then (
       Scanf.bscanf ic "%_c%_c%_c ( %d ) %s %x [ %d ]\n"
       @@ fun _i s code length ->
       assert (i = _i);

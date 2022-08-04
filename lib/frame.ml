@@ -81,52 +81,30 @@ module FrameType = struct
     | Unknown of int
 
   let serialize = function
-    | Data ->
-      0
-    | Headers ->
-      1
-    | Priority ->
-      2
-    | RSTStream ->
-      3
-    | Settings ->
-      4
-    | PushPromise ->
-      5
-    | Ping ->
-      6
-    | GoAway ->
-      7
-    | WindowUpdate ->
-      8
-    | Continuation ->
-      9
-    | Unknown x ->
-      x
+    | Data -> 0
+    | Headers -> 1
+    | Priority -> 2
+    | RSTStream -> 3
+    | Settings -> 4
+    | PushPromise -> 5
+    | Ping -> 6
+    | GoAway -> 7
+    | WindowUpdate -> 8
+    | Continuation -> 9
+    | Unknown x -> x
 
   let parse = function
-    | 0 ->
-      Data
-    | 1 ->
-      Headers
-    | 2 ->
-      Priority
-    | 3 ->
-      RSTStream
-    | 4 ->
-      Settings
-    | 5 ->
-      PushPromise
-    | 6 ->
-      Ping
-    | 7 ->
-      GoAway
-    | 8 ->
-      WindowUpdate
-    | 9 ->
-      Continuation
-    | x ->
-      Unknown x
+    | 0 -> Data
+    | 1 -> Headers
+    | 2 -> Priority
+    | 3 -> RSTStream
+    | 4 -> Settings
+    | 5 -> PushPromise
+    | 6 -> Ping
+    | 7 -> GoAway
+    | 8 -> WindowUpdate
+    | 9 -> Continuation
+    | x -> Unknown x
 end
 
 (* From RFC7540§4.1:

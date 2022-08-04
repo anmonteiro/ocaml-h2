@@ -45,7 +45,6 @@ type error =
   ]
 
 type error_handler = error -> unit
-
 type response_handler = Response.t -> Body.Reader.t -> unit
 
 type response_info =
@@ -94,8 +93,7 @@ let response_body_exn t =
     response_body
   | Active ((Open _ | HalfClosed _), _) ->
     failwith "h2.Respd.response_exn: response has not arrived"
-  | Closed _ ->
-    failwith "h2.Respd.response_exn: stream already closed"
+  | Closed _ -> failwith "h2.Respd.response_exn: stream already closed"
 
 (* let close_stream t =
  *match t.error_code with
@@ -127,8 +125,7 @@ let close_stream t =
     (* Still not done sending, reset stream with no error? *)
     (* TODO: *)
     ()
-  | _ ->
-    ()
+  | _ -> ()
 
 (* returns whether we should send an RST_STREAM frame or not. *)
 let _report_error t ?response_body error error_code =
@@ -140,14 +137,11 @@ let _report_error t ?response_body error error_code =
       (* do we even need to execute this read? `close_reader` already does
          it. *)
       Body.Reader.execute_read response_body
-    | None ->
-      ());
+    | None -> ());
     t.error_code <- (error :> [ `Ok | error ]), Some error_code;
     t.error_handler error;
     true
-  | `Exn _
-  | `Protocol_error _
-  | `Invalid_response_body_length _
+  | `Exn _ | `Protocol_error _ | `Invalid_response_body_length _
   | `Malformed_response _ ->
     (* XXX: Is this even possible? *)
     failwith "h2.Reqd.report_exn: NYI"
@@ -159,12 +153,11 @@ let report_error t error error_code =
         | HalfClosed (ActiveMessage { response_body; _ }) )
       , s ) ->
     Body.Writer.close s.request_body;
-    if _report_error t ~response_body error error_code then
-      reset_stream t error_code
+    if _report_error t ~response_body error error_code
+    then reset_stream t error_code
   | Reserved (ActiveMessage s) | Active (_, s) ->
     Body.Writer.close s.request_body;
-    if _report_error t error error_code then
-      reset_stream t error_code
+    if _report_error t error error_code then reset_stream t error_code
   | Reserved _ ->
     (* Streams in the reserved state don't yet have a stream-level error
      * handler registered with them *)
@@ -178,28 +171,25 @@ let error_code t =
 
 let requires_output t =
   match t.state with
-  | Idle ->
-    true
-  | Reserved _ ->
-    false
-  | Active (Open _, _) ->
-    true
-  | Active (HalfClosed _, _) ->
-    false
-  | Closed _ ->
-    false
+  | Idle -> true
+  | Reserved _ -> false
+  | Active (Open _, _) -> true
+  | Active (HalfClosed _, _) -> false
+  | Closed _ -> false
 
 let flush_request_body t ~max_bytes =
   match t.state with
   | Active (Open active_state, ({ request_body; _ } as s)) ->
-    if Body.Writer.has_pending_output request_body && max_bytes > 0 then
+    if Body.Writer.has_pending_output request_body && max_bytes > 0
+    then
       Body.Writer.transfer_to_writer
         request_body
         t.writer
         ~max_frame_size:t.max_frame_size
         ~max_bytes
         t.id
-    else if Body.Writer.is_closed request_body then (
+    else if Body.Writer.is_closed request_body
+    then (
       (* closed and no pending output *)
       (* From RFC7540§6.9.1:
        *   Frames with zero length with the END_STREAM flag set (that is, an
@@ -216,8 +206,7 @@ let flush_request_body t ~max_bytes =
       0)
     else (* not closed and no pending output *)
       0
-  | _ ->
-    0
+  | _ -> 0
 
 let deliver_trailer_headers t headers =
   match t.state with
@@ -225,8 +214,7 @@ let deliver_trailer_headers t headers =
       ( (Open (ActiveMessage _) | HalfClosed (ActiveMessage _))
       , { trailers_handler; _ } ) ->
     trailers_handler headers
-  | _ ->
-    assert false
+  | _ -> assert false
 
 let flush_response_body t =
   match t.state with
@@ -234,9 +222,8 @@ let flush_response_body t =
       ( ( Open (ActiveMessage { response_body; _ })
         | HalfClosed (ActiveMessage { response_body; _ }) )
       , _ ) ->
-    if Body.Reader.has_pending_output response_body then (
+    if Body.Reader.has_pending_output response_body
+    then (
       try Body.Reader.execute_read response_body with
-      | exn ->
-        report_error t (`Exn exn) InternalError)
-  | _ ->
-    ()
+      | exn -> report_error t (`Exn exn) InternalError)
+  | _ -> ()

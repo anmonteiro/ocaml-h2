@@ -5,10 +5,8 @@ let request_handler : Reqd.t -> unit =
   let { Request.headers; _ } = Reqd.request request_descriptor in
   let response_content_type =
     match Headers.get headers "Content-Type" with
-    | Some request_content_type ->
-      request_content_type
-    | None ->
-      "application/octet-stream"
+    | Some request_content_type -> request_content_type
+    | None -> "application/octet-stream"
   in
   let response =
     Response.create

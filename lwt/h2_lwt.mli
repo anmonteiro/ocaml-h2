@@ -33,7 +33,6 @@
  *---------------------------------------------------------------------------*)
 
 module type Server = H2_lwt_intf.Server
-
 module type Client = H2_lwt_intf.Client
 
 (* The function that results from [create_connection_handler] should be passed

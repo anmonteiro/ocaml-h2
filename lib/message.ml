@@ -53,9 +53,5 @@ let body_length headers =
   match unique_content_length_values headers with
   | [ len ] ->
     let len = content_length_of_string len in
-    if Int64.compare len 0L >= 0 then
-      `Fixed len
-    else
-      `Error `Bad_request
-  | _ ->
-    `Unknown
+    if Int64.compare len 0L >= 0 then `Fixed len else `Error `Bad_request
+  | _ -> `Unknown

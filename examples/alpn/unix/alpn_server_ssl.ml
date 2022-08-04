@@ -26,12 +26,9 @@ let start_http_server () =
   forever
 
 let rec first_match l1 = function
-  | [] ->
-    None
-  | x :: _ when List.mem x l1 ->
-    Some x
-  | _ :: xs ->
-    first_match l1 xs
+  | [] -> None
+  | x :: _ when List.mem x l1 -> Some x
+  | _ :: xs -> first_match l1 xs
 
 let start_https_server () =
   let open Lwt.Infix in
@@ -56,17 +53,14 @@ let start_https_server () =
                 (fun client_protos -> first_match client_protos protos);
               Lwt_ssl.ssl_accept fd server_ctx >>= fun ssl_server ->
               match Lwt_ssl.ssl_socket ssl_server with
-              | None ->
-                assert false
+              | None -> assert false
               | Some ssl_socket ->
                 (match Ssl.get_negotiated_alpn_protocol ssl_socket with
                 | None ->
                   (* Unable to negotiate a protocol *)
                   Lwt.return_unit
-                | Some "http/1.1" ->
-                  http1_handler client_addr ssl_server
-                | Some "h2" ->
-                  h2_handler client_addr ssl_server
+                | Some "http/1.1" -> http1_handler client_addr ssl_server
+                | Some "h2" -> h2_handler client_addr ssl_server
                 | Some _ ->
                   (* Can't really happen - would mean that TLS negotiated a
                    * protocol that we didn't specify. *)
