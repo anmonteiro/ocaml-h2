@@ -214,7 +214,7 @@ module Client = struct
         ~alpn_protocols:[ "http/1.1" ]
         socket
         where_to_connect
-      >>= fun ssl_client ->
+      >>= fun tls_client ->
       create_connection ~config ?push_handler ~error_handler ssl_client
 
     let request t = Client_connection.request t.connection
