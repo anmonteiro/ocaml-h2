@@ -215,7 +215,7 @@ module Client = struct
         socket
         where_to_connect
       >>= fun tls_client ->
-      create_connection ~config ?push_handler ~error_handler ssl_client
+      create_connection ~config ?push_handler ~error_handler tls_client
 
     let request t = Client_connection.request t.connection
     let ping t = Client_connection.ping t.connection
