@@ -21,7 +21,6 @@
 open Lwt.Infix
 
 module type HTTP = Httpaf_mirage.Server
-
 module type HTTP2 = H2_mirage.Server
 
 module Dispatch (Http : HTTP) (Https : HTTP) (Http2 : HTTP2) = struct
@@ -104,10 +103,8 @@ struct
               | None ->
                 (* Unable to negotiate a protocol *)
                 Lwt.return_unit
-              | Some "http/1.1" ->
-                D.http1_handler flow
-              | Some "h2" ->
-                D.h2_handler flow
+              | Some "http/1.1" -> D.http1_handler flow
+              | Some "h2" -> D.h2_handler flow
               | _ ->
                 (* Can't really happen - would mean that TLS negotiated a
                  * protocol that we didn't specify. *)

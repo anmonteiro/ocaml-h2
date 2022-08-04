@@ -13,10 +13,8 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
     | "/immediately" ->
       let response_content_type =
         match Headers.get request.headers "content-type" with
-        | Some request_content_type ->
-          request_content_type
-        | None ->
-          "application/octet-stream"
+        | Some request_content_type -> request_content_type
+        | None -> "application/octet-stream"
       in
       let request_body = Reqd.request_body request_descriptor in
       Body.Reader.close request_body;
@@ -32,10 +30,8 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
       let request_body = Reqd.request_body request_descriptor in
       let response_content_type =
         match Headers.get request.headers "content-type" with
-        | Some request_content_type ->
-          request_content_type
-        | None ->
-          "application/octet-stream"
+        | Some request_content_type -> request_content_type
+        | None -> "application/octet-stream"
       in
       let rec respond () =
         Body.Reader.schedule_read

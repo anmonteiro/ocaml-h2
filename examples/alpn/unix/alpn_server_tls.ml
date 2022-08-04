@@ -59,10 +59,8 @@ let start_https_server () =
                 | None ->
                   (* Unable to negotiate a protocol *)
                   Lwt.return_unit
-                | Some "http/1.1" ->
-                  http1_handler client_addr tls_server
-                | Some "h2" ->
-                  h2_handler client_addr tls_server
+                | Some "http/1.1" -> http1_handler client_addr tls_server
+                | Some "h2" -> h2_handler client_addr tls_server
                 | _ ->
                   (* Can't really happen - would mean that TLS negotiated a
                    * protocol that we didn't specify. *)

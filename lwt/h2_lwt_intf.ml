@@ -34,7 +34,6 @@ open H2
 
 module type Server = sig
   type socket
-
   type addr
 
   val create_connection_handler
@@ -75,8 +74,6 @@ module type Client = sig
     -> Body.Writer.t
 
   val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
-
   val shutdown : t -> unit Lwt.t
-
   val is_closed : t -> bool
 end

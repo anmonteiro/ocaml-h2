@@ -32,10 +32,8 @@ let () =
     "lwt_get.exe [-p N] HOST";
   let host =
     match !host with
-    | None ->
-      failwith "No hostname provided"
-    | Some host ->
-      host
+    | None -> failwith "No hostname provided"
+    | Some host -> host
   in
   Lwt_main.run
     ( Lwt_unix.getaddrinfo

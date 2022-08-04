@@ -28,10 +28,8 @@ module P = struct
 
   let parse_fn wire success_handler error_handler =
     let handler = function
-      | Ok frame ->
-        success_handler frame
-      | Error e ->
-        error_handler e
+      | Ok frame -> success_handler frame
+      | Error e -> error_handler e
     in
     let reader =
       Reader.server_frames
@@ -57,8 +55,7 @@ module P = struct
           Alcotest.(fail "Expected to have thrown an error parsing frame."))
     in
     match Reader.next reader with
-    | `Read ->
-      ()
+    | `Read -> ()
     | `Close | `Error _ ->
       Alcotest.(fail "Expected to have sucessfully parsed frame.")
 
@@ -71,12 +68,10 @@ module P = struct
         handler
     in
     match Reader.next reader with
-    | `Read ->
-      ()
+    | `Read -> ()
     | `Close ->
       Alcotest.(fail "Expected to have thrown an error parsing frame.")
-    | `Error e ->
-      handler e
+    | `Error e -> handler e
 
   let serialize ?padding frame =
     let output = Test_common.serialize_frame_string ?padding frame in
@@ -88,14 +83,14 @@ let frame_testable =
     type t = Frame.t
 
     let priority_to_yojson priority =
-      if priority != Priority.default_priority then
+      if priority != Priority.default_priority
+      then
         let { Priority.exclusive; stream_dependency; weight } = priority in
         [ "stream_dependency", `Int (Int32.to_int stream_dependency)
         ; "weight", `Int weight
         ; "exclusive", `Bool exclusive
         ]
-      else
-        [ "stream_dependency", `Null; "weight", `Null; "exclusive", `Null ]
+      else [ "stream_dependency", `Null; "weight", `Null; "exclusive", `Null ]
 
     let bs_to_string bs =
       let off = 0 in
@@ -105,13 +100,11 @@ let frame_testable =
     let frame_payload_to_json frame_type payload =
       let others =
         match payload with
-        | Frame.Data data ->
-          [ "data", `String (bs_to_string data) ]
+        | Frame.Data data -> [ "data", `String (bs_to_string data) ]
         | Headers (priority, fragment) ->
           ("header_block_fragment", `String (bs_to_string fragment))
           :: priority_to_yojson priority
-        | Priority priority ->
-          priority_to_yojson priority
+        | Priority priority -> priority_to_yojson priority
         | RSTStream error_code ->
           [ "error_code", `Int (Error_code.serialize error_code |> Int32.to_int)
           ]
@@ -139,8 +132,7 @@ let frame_testable =
           [ "header_block_fragment", `String (bs_to_string fragment)
           ; "promised_stream_id", `Int (Int32.to_int stream_identifier)
           ]
-        | Ping data ->
-          [ "opaque_data", `String (bs_to_string data) ]
+        | Ping data -> [ "opaque_data", `String (bs_to_string data) ]
         | GoAway (stream_identifier, error_code, debug_data) ->
           [ "error_code", `Int (Error_code.serialize error_code |> Int32.to_int)
           ; "additional_debug_data", `String (bs_to_string debug_data)
@@ -150,8 +142,7 @@ let frame_testable =
           [ "window_size_increment", `Int (Int32.to_int increment) ]
         | Continuation fragment ->
           [ "header_block_fragment", `String (bs_to_string fragment) ]
-        | Unknown (_frame_type, _) ->
-          assert false
+        | Unknown (_frame_type, _) -> assert false
       in
       `Assoc (("type", `Int (Frame.FrameType.serialize frame_type)) :: others)
 
@@ -187,32 +178,20 @@ let priority_of_json json =
     ; stream_dependency = Int32.of_int stream_dependency
     ; weight
     }
-  | _ ->
-    Priority.default_priority
+  | _ -> Priority.default_priority
 
 let frame_type_of_string = function
-  | "data" ->
-    Frame.FrameType.Data
-  | "headers" ->
-    Headers
-  | "priority" ->
-    Priority
-  | "rst_stream" ->
-    RSTStream
-  | "settings" ->
-    Settings
-  | "push_promise" ->
-    PushPromise
-  | "ping" ->
-    Ping
-  | "goaway" ->
-    GoAway
-  | "window_update" ->
-    WindowUpdate
-  | "continuation" ->
-    Continuation
-  | _ ->
-    assert false
+  | "data" -> Frame.FrameType.Data
+  | "headers" -> Headers
+  | "priority" -> Priority
+  | "rst_stream" -> RSTStream
+  | "settings" -> Settings
+  | "push_promise" -> PushPromise
+  | "ping" -> Ping
+  | "goaway" -> GoAway
+  | "window_update" -> WindowUpdate
+  | "continuation" -> Continuation
+  | _ -> assert false
 
 let frame_payload_of_json frame_type json =
   match frame_type with
@@ -224,8 +203,7 @@ let frame_payload_of_json frame_type json =
       Json.(json |> member "header_block_fragment" |> to_string |> bs_of_string)
     in
     Headers (priority, fragment)
-  | Priority ->
-    Priority (priority_of_json json)
+  | Priority -> Priority (priority_of_json json)
   | RSTStream ->
     let error_code =
       Json.(json |> member "error_code" |> to_int |> Int32.of_int)
@@ -238,20 +216,13 @@ let frame_payload_of_json frame_type json =
           let setting = Json.to_list setting_json in
           let key_value = List.nth setting 1 |> Json.to_int in
           match Json.to_int (List.hd setting) with
-          | 0x1 ->
-            Settings.HeaderTableSize key_value
-          | 0x2 ->
-            EnablePush key_value
-          | 0x3 ->
-            MaxConcurrentStreams (Int32.of_int key_value)
-          | 0x4 ->
-            InitialWindowSize (Int32.of_int key_value)
-          | 0x5 ->
-            MaxFrameSize key_value
-          | 0x6 ->
-            MaxHeaderListSize key_value
-          | _ ->
-            raise (Invalid_argument "settings key id"))
+          | 0x1 -> Settings.HeaderTableSize key_value
+          | 0x2 -> EnablePush key_value
+          | 0x3 -> MaxConcurrentStreams (Int32.of_int key_value)
+          | 0x4 -> InitialWindowSize (Int32.of_int key_value)
+          | 0x5 -> MaxFrameSize key_value
+          | 0x6 -> MaxHeaderListSize key_value
+          | _ -> raise (Invalid_argument "settings key id"))
         Json.(json |> member "settings" |> to_list)
     in
     Settings settings
@@ -289,8 +260,7 @@ let frame_payload_of_json frame_type json =
       Json.(json |> member "header_block_fragment" |> to_string |> bs_of_string)
     in
     Continuation fragment
-  | Unknown _ ->
-    assert false
+  | Unknown _ -> assert false
 
 let success_suites =
   let gen_suite ~frame_type filename =
@@ -336,8 +306,7 @@ let success_suites =
                 Some
                   Bigstringaf.(
                     of_string ~off:0 ~len:(String.length padding) padding)
-              | None ->
-                None
+              | None -> None
             in
             let serialized_wire = P.serialize ?padding frame in
             Alcotest.(

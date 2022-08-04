@@ -23,10 +23,8 @@ let request_handler : Reqd.t Gluten.reqd -> unit =
   let { Request.headers; _ } = Reqd.request reqd in
   let response_content_type =
     match Headers.get headers "Content-Type" with
-    | Some request_content_type ->
-      request_content_type
-    | None ->
-      "application/octet-stream"
+    | Some request_content_type -> request_content_type
+    | None -> "application/octet-stream"
   in
   let response_body = "Welcome to an ALPN-negotiated HTTP/1.1 connection" in
   let response =

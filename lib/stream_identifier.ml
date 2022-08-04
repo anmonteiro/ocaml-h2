@@ -35,11 +35,8 @@
 type t = int32
 
 let ( === ) = Int32.equal
-
 let[@inline] ( <= ) s1 s2 = Int32.compare s1 s2 <= 0
-
 let[@inline] ( > ) s1 s2 = Int32.compare s1 s2 > 0
-
 let[@inline] ( >= ) s1 s2 = Int32.compare s1 s2 >= 0
 
 (* From RFC7540§5.1.1:
