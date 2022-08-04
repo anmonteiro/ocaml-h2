@@ -17,10 +17,8 @@ module Http2 = struct
         let request_body = Reqd.request_body request_descriptor in
         let response_content_type =
           match Headers.get request.headers "content-type" with
-          | Some request_content_type ->
-            request_content_type
-          | None ->
-            "application/octet-stream"
+          | Some request_content_type -> request_content_type
+          | None -> "application/octet-stream"
         in
         let buf = Buffer.create 10 in
         let rec respond () =
@@ -99,8 +97,7 @@ let connection_handler =
   let http_error_handler _client_address ?request:_ error handle =
     let message =
       match error with
-      | `Exn exn ->
-        Printexc.to_string exn
+      | `Exn exn -> Printexc.to_string exn
       | (#Status.client_error | #Status.server_error) as error ->
         Status.to_string error
     in

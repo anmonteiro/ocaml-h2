@@ -14,8 +14,8 @@
         });
       in
       rec {
-        packages = pkgs.callPackage ./nix { inherit pkgs; };
+        packages = pkgs.callPackage ./nix { };
         defaultPackage = packages.h2;
-        devShell = import ./shell.nix { inherit pkgs; };
+        devShell = pkgs.callPackage ./shell.nix { };
       });
 }

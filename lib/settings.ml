@@ -70,22 +70,17 @@ type settings_list = setting list
 let octets_per_setting = 6
 
 let serialize_key = function
-  | HeaderTableSize _ ->
-    0x1
-  | EnablePush _ ->
-    0x2
-  | MaxConcurrentStreams _ ->
-    0x3
-  | InitialWindowSize _ ->
-    0x4
-  | MaxFrameSize _ ->
-    0x5
-  | MaxHeaderListSize _ ->
-    0x6
+  | HeaderTableSize _ -> 0x1
+  | EnablePush _ -> 0x2
+  | MaxConcurrentStreams _ -> 0x3
+  | InitialWindowSize _ -> 0x4
+  | MaxFrameSize _ -> 0x5
+  | MaxHeaderListSize _ -> 0x6
 
 let check_value ~is_client = function
   | EnablePush v ->
-    if v <> 0 && v <> 1 then
+    if v <> 0 && v <> 1
+    then
       (* From RFC7540§6.5.2
        *   The initial value is 1, which indicates that server push is
        *   permitted. Any value other than 0 or 1 MUST be treated as a
@@ -93,7 +88,8 @@ let check_value ~is_client = function
       Error
         Error.(
           ConnectionError (ProtocolError, "SETTINGS_ENABLE_PUSH must be 0 or 1"))
-    else if is_client && v = 1 then
+    else if is_client && v = 1
+    then
       (* From RFC7540§8.2:
        *   Clients MUST reject any attempt to change the
        *   SETTINGS_ENABLE_PUSH setting to a value other than 0 by
@@ -103,8 +99,7 @@ let check_value ~is_client = function
         Error.(
           ConnectionError
             (ProtocolError, "Server must not try to enable SETTINGS_ENABLE_PUSH"))
-    else
-      Ok ()
+    else Ok ()
   | InitialWindowSize v when WindowSize.is_window_overflow v ->
     (* From RFC7540§6.5.2
      *   Values above the maximum flow-control window size of 2^31-1 MUST be
@@ -128,20 +123,16 @@ let check_value ~is_client = function
       Error.(
         ConnectionError
           (ProtocolError, "Max frame size must be in the 16384 - 16777215 range"))
-  | _ ->
-    Ok ()
+  | _ -> Ok ()
 
 (* Check incoming settings and report an error if any. *)
 let check_settings_list ?(is_client = false) settings =
   let rec loop = function
-    | [] ->
-      Ok ()
+    | [] -> Ok ()
     | x :: xs ->
       (match check_value ~is_client x with
-      | Ok () ->
-        loop xs
-      | Error _ as err ->
-        err)
+      | Ok () -> loop xs
+      | Error _ as err -> err)
   in
   loop settings
 
@@ -171,29 +162,26 @@ let default =
 
 let settings_for_the_connection settings =
   let settings_list =
-    if settings.max_frame_size <> default.max_frame_size then
-      [ MaxFrameSize settings.max_frame_size ]
-    else
-      []
+    if settings.max_frame_size <> default.max_frame_size
+    then [ MaxFrameSize settings.max_frame_size ]
+    else []
   in
   let settings_list =
-    if settings.max_concurrent_streams <> default.max_concurrent_streams then
-      MaxConcurrentStreams settings.max_concurrent_streams :: settings_list
-    else
-      settings_list
+    if settings.max_concurrent_streams <> default.max_concurrent_streams
+    then MaxConcurrentStreams settings.max_concurrent_streams :: settings_list
+    else settings_list
   in
   let settings_list =
-    if settings.initial_window_size <> default.initial_window_size then
+    if settings.initial_window_size <> default.initial_window_size
+    then
       (* FIXME: don't convert *)
       InitialWindowSize settings.initial_window_size :: settings_list
-    else
-      settings_list
+    else settings_list
   in
   let settings_list =
-    if settings.enable_push <> default.enable_push then
-      EnablePush (if settings.enable_push then 1 else 0) :: settings_list
-    else
-      settings_list
+    if settings.enable_push <> default.enable_push
+    then EnablePush (if settings.enable_push then 1 else 0) :: settings_list
+    else settings_list
   in
   settings_list
 
@@ -203,24 +191,18 @@ let parse_settings_payload num_settings =
     (* From RFC7540§6.5.3:
      *   The values in the SETTINGS frame MUST be processed in the order
      *   they appear, with no other frame processing between values. *)
-    if remaining <= 0 then
-      return (List.rev acc)
+    if remaining <= 0
+    then return (List.rev acc)
     else
       lift2
         (fun k (v : int32) ->
           match k with
-          | 0x1 ->
-            HeaderTableSize (Int32.to_int v) :: acc
-          | 0x2 ->
-            EnablePush (Int32.to_int v) :: acc
-          | 0x3 ->
-            MaxConcurrentStreams v :: acc
-          | 0x4 ->
-            InitialWindowSize v :: acc
-          | 0x5 ->
-            MaxFrameSize (Int32.to_int v) :: acc
-          | 0x6 ->
-            MaxHeaderListSize (Int32.to_int v) :: acc
+          | 0x1 -> HeaderTableSize (Int32.to_int v) :: acc
+          | 0x2 -> EnablePush (Int32.to_int v) :: acc
+          | 0x3 -> MaxConcurrentStreams v :: acc
+          | 0x4 -> InitialWindowSize v :: acc
+          | 0x5 -> MaxFrameSize (Int32.to_int v) :: acc
+          | 0x6 -> MaxHeaderListSize (Int32.to_int v) :: acc
           | _ ->
             (* Note: This ignores unknown settings.
              *
@@ -257,18 +239,12 @@ let of_settings_list settings =
   List.fold_left
     (fun (acc : t) item ->
       match item with
-      | HeaderTableSize x ->
-        { acc with header_table_size = x }
-      | EnablePush x ->
-        { acc with enable_push = x = 1 }
-      | MaxConcurrentStreams x ->
-        { acc with max_concurrent_streams = x }
-      | InitialWindowSize new_val ->
-        { acc with initial_window_size = new_val }
-      | MaxFrameSize x ->
-        { acc with max_frame_size = x }
-      | MaxHeaderListSize x ->
-        { acc with max_header_list_size = Some x })
+      | HeaderTableSize x -> { acc with header_table_size = x }
+      | EnablePush x -> { acc with enable_push = x = 1 }
+      | MaxConcurrentStreams x -> { acc with max_concurrent_streams = x }
+      | InitialWindowSize new_val -> { acc with initial_window_size = new_val }
+      | MaxFrameSize x -> { acc with max_frame_size = x }
+      | MaxHeaderListSize x -> { acc with max_header_list_size = Some x })
     default
     settings
 
@@ -284,12 +260,9 @@ let of_base64 encoded =
          (parse_settings_payload settings_payload_length)
          settings_payload
      with
-    | Ok settings ->
-      Ok (of_settings_list settings)
-    | Error _ as e ->
-      e)
-  | Error (`Msg msg) ->
-    Error msg
+    | Ok settings -> Ok (of_settings_list settings)
+    | Error _ as e -> e)
+  | Error (`Msg msg) -> Error msg
 
 let to_base64 t =
   let settings = settings_for_the_connection t in
@@ -297,27 +270,19 @@ let to_base64 t =
   write_settings_payload faraday settings;
   let settings_hex = Faraday.serialize_to_string faraday in
   match Base64.encode ~alphabet:Base64.uri_safe_alphabet settings_hex with
-  | Ok r ->
-    Ok r
-  | Error (`Msg msg) ->
-    Error msg
+  | Ok r -> Ok r
+  | Error (`Msg msg) -> Error msg
 
 let pp_hum formatter t =
   let pp_elem formatter setting =
     let key, value =
       match setting with
-      | HeaderTableSize v ->
-        "HEADER_TABLE_SIZE", Int64.of_int v
-      | EnablePush v ->
-        "ENABLE_PUSH", Int64.of_int v
-      | MaxConcurrentStreams v ->
-        "MAX_CONCURRENT_STREAMS", Int64.of_int32 v
-      | InitialWindowSize v ->
-        "INITIAL_WINDOW_SIZE", Int64.of_int32 v
-      | MaxFrameSize v ->
-        "MAX_FRAME_SIZE", Int64.of_int v
-      | MaxHeaderListSize v ->
-        "MAX_HEADER_LIST_SIZE", Int64.of_int v
+      | HeaderTableSize v -> "HEADER_TABLE_SIZE", Int64.of_int v
+      | EnablePush v -> "ENABLE_PUSH", Int64.of_int v
+      | MaxConcurrentStreams v -> "MAX_CONCURRENT_STREAMS", Int64.of_int32 v
+      | InitialWindowSize v -> "INITIAL_WINDOW_SIZE", Int64.of_int32 v
+      | MaxFrameSize v -> "MAX_FRAME_SIZE", Int64.of_int v
+      | MaxHeaderListSize v -> "MAX_HEADER_LIST_SIZE", Int64.of_int v
     in
     Format.fprintf formatter "@[(%S %Ld)@]" key value
   in

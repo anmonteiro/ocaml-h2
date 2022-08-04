@@ -43,9 +43,7 @@ module Reader = struct
     }
 
   let default_done_reading = Sys.opaque_identity (fun _ -> ())
-
   let default_on_eof = Sys.opaque_identity (fun () -> ())
-
   let default_on_read = Sys.opaque_identity (fun _ ~off:_ ~len:_ -> ())
 
   let create buffer ~done_reading =
@@ -63,22 +61,18 @@ module Reader = struct
     t
 
   let empty = create_empty ()
-
   let is_closed t = Faraday.is_closed t.faraday
-
   let unsafe_faraday t = t.faraday
 
   let rec do_execute_read t on_eof on_read =
     match Faraday.operation t.faraday with
-    | `Yield ->
-      ()
+    | `Yield -> ()
     | `Close ->
       t.read_scheduled <- false;
       t.on_eof <- default_on_eof;
       t.on_read <- default_on_read;
       on_eof ()
-    | `Writev [] ->
-      assert false
+    | `Writev [] -> assert false
     | `Writev (iovec :: _) ->
       t.read_scheduled <- false;
       t.on_eof <- default_on_eof;
@@ -95,10 +89,10 @@ module Reader = struct
     if t.read_scheduled then do_execute_read t t.on_eof t.on_read
 
   let schedule_read t ~on_eof ~on_read =
-    if t.read_scheduled then
-      failwith "Body.schedule_read: reader already scheduled";
-    if is_closed t then
-      do_execute_read t on_eof on_read
+    if t.read_scheduled
+    then failwith "Body.schedule_read: reader already scheduled";
+    if is_closed t
+    then do_execute_read t on_eof on_read
     else (
       t.read_scheduled <- true;
       t.on_eof <- on_eof;
@@ -132,7 +126,6 @@ module Writer = struct
     t
 
   let empty = create_empty ()
-
   let ready_to_write t = t.ready_to_write ()
 
   let write_char t c =
@@ -156,7 +149,6 @@ module Writer = struct
     ready_to_write t
 
   let is_closed t = Faraday.is_closed t.faraday
-
   let has_pending_output t = Faraday.has_pending_output t.faraday
 
   let close t =
@@ -168,8 +160,7 @@ module Writer = struct
   let transfer_to_writer t writer ~max_frame_size ~max_bytes stream_id =
     let faraday = t.faraday in
     match Faraday.operation faraday with
-    | `Yield | `Close ->
-      0
+    | `Yield | `Close -> 0
     | `Writev iovecs ->
       let buffered = t.buffered_bytes in
       let iovecs = Httpaf.IOVec.shiftv iovecs !buffered in

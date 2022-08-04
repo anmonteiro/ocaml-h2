@@ -123,9 +123,7 @@ let create id ~max_frame_size writer error_handler on_close_stream =
   }
 
 let id { id; _ } = id
-
 let is_idle t = match t.state with Idle -> true | _ -> false
-
 let is_open t = match t.state with Active (Open _, _) -> true | _ -> false
 
 let finish_stream t reason =

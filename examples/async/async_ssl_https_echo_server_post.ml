@@ -20,10 +20,8 @@ let request_handler sock reqd =
     let response =
       let content_type =
         match Headers.get headers "content-type" with
-        | None ->
-          "application/octet-stream"
-        | Some x ->
-          x
+        | None -> "application/octet-stream"
+        | Some x -> x
       in
       Response.create
         ~headers:(Headers.of_list [ "content-type", content_type ])
@@ -39,8 +37,7 @@ let request_handler sock reqd =
       Body.Writer.close response_body
     in
     Body.Reader.schedule_read (Reqd.request_body reqd) ~on_eof ~on_read
-  | _ ->
-    Reqd.respond_with_string reqd (Response.create `Method_not_allowed) ""
+  | _ -> Reqd.respond_with_string reqd (Response.create `Method_not_allowed) ""
 
 let main port max_accepts_per_batch () =
   let where_to_listen =

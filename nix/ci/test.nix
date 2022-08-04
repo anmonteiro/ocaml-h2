@@ -7,15 +7,11 @@ let
     inherit (lock.nodes.nixpkgs.locked) rev;
     # inherit (lock.nodes.nixpkgs.original) ref;
   };
-  pkgs = import "${src}/boot.nix" {
+  pkgs = import "${src}" {
     extraOverlays = [
       (self: super: {
         h2spec = super.callPackage ../h2spec.nix { };
         ocamlPackages = super.ocaml-ng."ocamlPackages_${ocamlVersion}";
-
-        pkgsCross.musl64 = super.pkgsCross.musl64 // {
-          ocamlPackages = super.pkgsCross.musl64.ocaml-ng."ocamlPackages_${ocamlVersion}";
-        };
       })
     ];
   };
@@ -56,8 +52,8 @@ stdenv.mkDerivation {
   '';
   buildInputs =
     (lib.attrValues h2Drvs) ++
-    (with ocamlPackages; [ ocaml dune findlib ]) ++
-    (with pkgs; [ ocamlformat lsof h2spec ]);
+    (with ocamlPackages; [ ocaml dune findlib ocamlformat ]) ++
+    (with pkgs; [ lsof h2spec ]);
   doCheck = true;
   checkPhase = ''
     # Check code is formatted with OCamlformat

@@ -53,15 +53,15 @@ let mk_tokens static_table =
   let _, tokens =
     Array.fold_left
       (fun (prev_token, acc) (i, name, _) ->
-        if name <> prev_token then
+        if name <> prev_token
+        then
           let token =
             let_
               (Printf.sprintf "token_%s" (token_of_name name))
               (Exp.constant (Pconst_integer (string_of_int i, None)))
           in
           name, token :: acc
-        else
-          name, acc)
+        else name, acc)
       ("", [])
       static_table
   in
@@ -77,15 +77,12 @@ let find_pos names =
   let n = Hashtbl.length names in
   let names = Hashtbl.fold (fun k _ lst -> k :: lst) names [] in
   let rec loop pos =
-    if
-      List.map (fun name -> name.[pos]) names
-      |> CharSet.of_list
-      |> CharSet.cardinal
-      |> ( = ) n
-    then
-      pos
-    else
-      loop (pos + 1)
+    if List.map (fun name -> name.[pos]) names
+       |> CharSet.of_list
+       |> CharSet.cardinal
+       |> ( = ) n
+    then pos
+    else loop (pos + 1)
   in
   loop 0
 
@@ -96,10 +93,8 @@ let make_token_map static_table =
       let length = String.length name in
       let string_tbl =
         match Hashtbl.find_opt tbl length with
-        | Some string_tbl ->
-          string_tbl
-        | None ->
-          Hashtbl.create 10
+        | Some string_tbl -> string_tbl
+        | None -> Hashtbl.create 10
       in
       Hashtbl.add string_tbl name i)
     static_table;
@@ -204,12 +199,9 @@ let () =
     Array.init 61 @@ fun i ->
     let line = input_line ic in
     match String.split_on_char '\t' line with
-    | [ s; name ] when int_of_string s == i + 1 ->
-      i, name, ""
-    | [ s; name; value ] when int_of_string s == i + 1 ->
-      i, name, value
-    | _ ->
-      assert false
+    | [ s; name ] when int_of_string s == i + 1 -> i, name, ""
+    | [ s; name; value ] when int_of_string s == i + 1 -> i, name, value
+    | _ -> assert false
   in
   let token_map = make_token_map static_table in
   let ppf = Format.std_formatter in

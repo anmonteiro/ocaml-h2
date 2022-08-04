@@ -16,8 +16,7 @@ module Client_connection_tests = struct
     let pp_hum fmt t =
       let str =
         match t with
-        | `Read ->
-          "Read"
+        | `Read -> "Read"
         | `Error (Error.ConnectionError (e, msg)) ->
           Format.sprintf "ConnectionError: %ld %S" (Error_code.serialize e) msg
         | `Error (Error.StreamError (stream_id, e)) ->
@@ -25,8 +24,7 @@ module Client_connection_tests = struct
             "StreamError on %ld: %ld"
             stream_id
             (Error_code.serialize e)
-        | `Close ->
-          "Close"
+        | `Close -> "Close"
       in
       Format.pp_print_string fmt str
   end
@@ -58,21 +56,16 @@ module Client_connection_tests = struct
       match t with
       | `Write iovecs ->
         Format.fprintf fmt "Write %S" (iovecs_to_string iovecs |> hex_of_string)
-      | `Yield ->
-        Format.pp_print_string fmt "Yield"
-      | `Close len ->
-        Format.fprintf fmt "Close %i" len
+      | `Yield -> Format.pp_print_string fmt "Yield"
+      | `Close len -> Format.fprintf fmt "Close %i" len
 
     let to_write_as_string t =
       match t with
-      | `Write iovecs ->
-        Some (iovecs_to_string iovecs)
-      | `Close _ | `Yield ->
-        None
+      | `Write iovecs -> Some (iovecs_to_string iovecs)
+      | `Close _ | `Yield -> None
   end
 
   let read_operation = Alcotest.of_pp Read_operation.pp_hum
-
   let write_operation = Alcotest.of_pp Write_operation.pp_hum
 
   let reader_closed ?(msg = "Reader closed") t =
@@ -148,7 +141,10 @@ module Client_connection_tests = struct
       read_headers
 
   let read_response_body
-      t ?(stream_id = 1l) ?(flags = Flags.(default_flags |> set_end_stream)) s
+      t
+      ?(stream_id = 1l)
+      ?(flags = Flags.(default_flags |> set_end_stream))
+      s
     =
     let writer = Writer.create 4096 in
     let frame_info = Writer.make_frame_info ~flags stream_id in
@@ -360,8 +356,7 @@ module Client_connection_tests = struct
           "Stream error handler gets an invalid response body length"
           true
           true
-      | _ ->
-        Alcotest.fail "Expected stream error handler to pass"
+      | _ -> Alcotest.fail "Expected stream error handler to pass"
     in
     let request_body =
       Client_connection.request
@@ -660,8 +655,7 @@ module Client_connection_tests = struct
       match error with
       | `Protocol_error _ ->
         Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
-      | _ ->
-        Alcotest.fail "Expected stream error handler to pass"
+      | _ -> Alcotest.fail "Expected stream error handler to pass"
     in
     let response_handler _response _response_body = () in
     let _request_body =
@@ -778,8 +772,7 @@ module Client_connection_tests = struct
       match error with
       | `Protocol_error _ ->
         Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
-      | _ ->
-        Alcotest.fail "Expected stream error handler to pass"
+      | _ -> Alcotest.fail "Expected stream error handler to pass"
     in
     let request_body =
       Client_connection.request
@@ -859,8 +852,7 @@ module Client_connection_tests = struct
         "Response handler called"
         true
         !response_handler_called
-    | Error msg ->
-      Alcotest.fail msg
+    | Error msg -> Alcotest.fail msg
 
   let test_nonzero_content_length_no_data_frames () =
     let t = create_and_handle_preface () in
