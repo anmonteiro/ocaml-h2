@@ -21,6 +21,8 @@ Unreleased
 - h2: Use a tail-recursive version of `Angstrom.skip_many`. Fixes a memory leak
   in long-running connections e.g. gRPC
   ([#172](https://github.com/anmonteiro/ocaml-h2/pull/172))
+- h2-async: Add an OCaml-TLS client to `h2-async`
+  ([#174](https://github.com/anmonteiro/ocaml-h2/pull/174))
 
 0.8.0 2021-04-11
 ---------------
