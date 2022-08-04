@@ -6,10 +6,8 @@ open H2_async
 let error_handler = function
   | `Invalid_response_body_length _resp ->
     printf "invalid response body length\n%!"
-  | `Exn _exn ->
-    printf "exception!\n%!"
-  | `Malformed_response s ->
-    printf "malformed response: %s\n%!" s
+  | `Exn _exn -> printf "exception!\n%!"
+  | `Malformed_response s -> printf "malformed response: %s\n%!" s
   | `Protocol_error (code, s) ->
     printf "protocol error: %s, %s\n%!" (H2.Error_code.to_string code) s
 

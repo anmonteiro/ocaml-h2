@@ -180,7 +180,6 @@ module Client = struct
     module Client_runtime = Gluten_async.Client.TLS
 
     type socket = Client_runtime.socket
-
     type runtime = Client_runtime.t
 
     type t =
@@ -189,7 +188,10 @@ module Client = struct
       }
 
     let create_connection
-        ?(config = Config.default) ?push_handler ~error_handler socket
+        ?(config = Config.default)
+        ?push_handler
+        ~error_handler
+        socket
       =
       let connection =
         Client_connection.create ~config ?push_handler ~error_handler
@@ -216,11 +218,8 @@ module Client = struct
       create_connection ~config ?push_handler ~error_handler ssl_client
 
     let request t = Client_connection.request t.connection
-
     let ping t = Client_connection.ping t.connection
-
     let shutdown t = Client_runtime.shutdown t.runtime
-
     let is_closed t = Client_runtime.is_closed t.runtime
   end
 end
