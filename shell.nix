@@ -1,7 +1,6 @@
-{ pkgs, release-mode ? false }:
+{ pkgs, stdenv, lib, release-mode ? false }:
 
 let
-  inherit (pkgs) stdenv lib;
   h2Pkgs = pkgs.recurseIntoAttrs (import ./nix { inherit pkgs; doCheck = false; });
   h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
 
