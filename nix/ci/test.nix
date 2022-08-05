@@ -32,7 +32,7 @@ in
 
 stdenv.mkDerivation {
   name = "h2-conformance-tests";
-  srcs = srcs;
+  inherit srcs;
   sourceRoot = "./h2-tests";
   unpackPhase = ''
     shopt -s dotglob
