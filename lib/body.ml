@@ -80,8 +80,8 @@ module Reader = struct
       let { Httpaf.IOVec.buffer; off; len } = iovec in
       Faraday.shift t.faraday len;
       on_read buffer ~off ~len;
-      (* Application is done reading, we can give flow control tokens back to the
-       * peer. *)
+      (* Application is done reading, we can give flow control tokens back to
+         the peer. *)
       t.done_reading len;
       execute_read t
 

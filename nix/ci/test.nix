@@ -3,10 +3,21 @@
 let
   lock = builtins.fromJSON (builtins.readFile ./../../flake.lock);
   src = fetchGit {
-    url = with lock.nodes.nixpkgs.locked;"https://github.com/${owner}/${repo}";
+    url = with lock.nodes.nixpkgs.locked; "https://github.com/${owner}/${repo}";
     inherit (lock.nodes.nixpkgs.locked) rev;
     # inherit (lock.nodes.nixpkgs.original) ref;
+    allRefs = true;
   };
+
+  nix-filter-src = fetchGit {
+    url = with lock.nodes.nix-filter.locked; "https://github.com/${owner}/${repo}";
+    inherit (lock.nodes.nix-filter.locked) rev;
+    # inherit (lock.nodes.nixpkgs.original) ref;
+    allRefs = true;
+  };
+  nix-filter = import "${nix-filter-src}";
+
+
   pkgs = import "${src}" {
     extraOverlays = [
       (self: super: {
@@ -19,7 +30,7 @@ let
 
   inherit (pkgs) lib stdenv fetchTarball ocamlPackages h2spec;
 
-  h2Pkgs = import ./.. { inherit pkgs; };
+  h2Pkgs = import ./.. { inherit pkgs nix-filter; };
   h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
   srcs = lib.mapAttrsFlatten (n: v: v.src) h2Drvs ++ [
     (lib.filterGitSource {
@@ -32,7 +43,7 @@ in
 
 stdenv.mkDerivation {
   name = "h2-conformance-tests";
-  srcs = srcs;
+  inherit srcs;
   sourceRoot = "./h2-tests";
   unpackPhase = ''
     shopt -s dotglob
