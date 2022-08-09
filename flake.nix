@@ -2,7 +2,7 @@
   description = "H2 Nix Flake";
 
   inputs.flake-utils.url = "github:numtide/flake-utils";
-  inputs.nixpkgs.url = "github:anmonteiro/nix-overlays";
+  inputs.nixpkgs.url = "github:anmonteiro/nix-overlays?rev=5d3c6e7c37bf9487a88cc5466dd632282cea928c";
   inputs.nixpkgs.inputs.flake-utils.follows = "flake-utils";
 
   outputs = { self, nixpkgs, flake-utils }:
