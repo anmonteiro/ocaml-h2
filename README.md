@@ -73,9 +73,7 @@ let request_handler _client_address reqd =
   match meth with
   | `GET ->
     let response_body =
-      Printf.sprintf
-        "You made a request to the following resource: %s\n"
-        target
+      Printf.sprintf "You made a request to the following resource: %s\n" target
     in
     (* Specify the length of the response body. Two notes to make here:
      *
@@ -129,16 +127,18 @@ let request_handler _client_address reqd =
  * This is also where we first encounter the concept of a `Body` (which were
  * briefly mentioned above) that can be written to (potentially
  * asynchronously). *)
-let error_handler _client_address ?request:_ error start_response =
+let error_handler _client_address ?request:_ _error start_response =
   (* We start the error response by calling the `start_response` function. We
    * get back a response body. *)
   let response_body = start_response Headers.empty in
   (* Once we get the response body, we can immediately start writing to it. In
    * this case, it might be sufficient to say that there was an error. *)
-  Body.write_string response_body "There was an error handling your request.\n";
+  Body.Writer.write_string
+    response_body
+    "There was an error handling your request.\n";
   (* Finally, we close the streaming response body to signal to the underlying
    * HTTP/2 framing layer that we have finished sending the response. *)
-  Body.close_writer response_body
+  Body.Writer.close response_body
 
 let () =
   (* We're going to be using the `H2_lwt_unix` module from the `h2-lwt-unix`
@@ -158,10 +158,9 @@ let () =
   let listen_address = Unix.(ADDR_INET (inet_addr_loopback, 8080)) in
   (* The final step is to start a server that will set up all the low-level
    * networking communication for us, and let it run forever. *)
-  Lwt.async (fun () ->
-      Lwt_io.establish_server_with_client_socket
-        listen_address
-        connection_handler);
+  let _server =
+    Lwt_io.establish_server_with_client_socket listen_address connection_handler
+  in
   let forever, _ = Lwt.wait () in
   Lwt_main.run forever
 ```
@@ -198,7 +197,7 @@ let response_handler notify_response_received response response_body =
        *    body has arrived. In our case, this is where we fulfill the promise
        *    that we're done handling the response.
        *)
-      Body.schedule_read
+      Body.Reader.schedule_read
         response_body
         ~on_read:(fun bigstring ~off ~len ->
           (* Once a response body chunk is handed to us (as a bigarray, and an
@@ -301,7 +300,8 @@ let () =
        * stream-level in H2 and HTTP/2 in general here:
        * https://anmonteiro.com/ocaml-h2/h2/H2/Client_connection/index.html#val-create)
        * and the file descriptor that we created above. *)
-      Client.TLS.create_connection_with_default ~error_handler socket >>= fun connection ->
+      Client.TLS.create_connection_with_default ~error_handler socket
+      >>= fun connection ->
       (* Once the connection has been created, we can initiate our request. For
        * that, we call the `request` function, which will send the request that
        * we created to the server, and direct its response to either the
@@ -315,7 +315,7 @@ let () =
        * but in our case just the headers are sufficient. We close the request
        * body immediately to signal to the underlying HTTP/2 framing layer that
        * we're done sending our request. *)
-      Body.close_writer request_body;
+      Body.Writer.close request_body;
       (* Our call to `Lwt_main.run` above will wait until this promise is
        * filled  before exiting the program. *)
       response_received )
