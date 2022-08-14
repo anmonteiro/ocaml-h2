@@ -1214,6 +1214,94 @@ module Client_connection_tests = struct
            Frame.FrameType.serialize frame_type)
          frames)
 
+  let test_header_buffer_sharing () =
+    let t = create_and_handle_preface () in
+    let request1 =
+      Request.create
+        ~scheme:"http"
+        `GET
+        "/"
+        ~headers:
+          Headers.(
+            of_list
+              [ "headerA", "valueA"; "headerB", "valueB"; "headerC", "valueC" ])
+    in
+    let request2 =
+      Request.create
+        ~scheme:"http"
+        `GET
+        "/"
+        ~headers:
+          Headers.(
+            of_list
+              [ "headerD", "valueD"; "headerE", "valueE"; "headerF", "valueF" ])
+    in
+    let response_handler _response _response_body = assert false in
+    let do_request req =
+      Client_connection.request
+        ~flush_headers_immediately:false
+        t
+        req
+        ~error_handler:default_error_handler
+        ~response_handler
+    in
+    let req1_body = do_request request1 in
+    let req2_body = do_request request2 in
+    (* Writer yields when `~flush_headers_immediately` is false *)
+    writer_yielded t;
+    (* Write to the body *)
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check (list int))
+      "Batches both header frames together"
+      (List.map Frame.FrameType.serialize Frame.FrameType.[ Headers; Headers ])
+      (List.map
+         (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+           Frame.FrameType.serialize frame_type)
+         frames);
+
+    let[@ocaml.warning "-8"] [ headers1; headers2 ] = frames in
+    (match headers1.frame_payload, headers2.frame_payload with
+    | Headers (_, block1), Headers (_, block2) ->
+      let headers1 = decode_headers t.hpack_decoder block1 in
+      let headers2 = decode_headers t.hpack_decoder block2 in
+      let headers_testable = Alcotest.of_pp Headers.pp_hum in
+      Alcotest.(check headers_testable)
+        "Headers block 1 matches"
+        (Headers.of_list
+           [ ":method", "GET"
+           ; ":path", "/"
+           ; ":scheme", "http"
+           ; "headerA", "valueA"
+           ; "headerB", "valueB"
+           ; "headerC", "valueC"
+           ])
+        headers1;
+
+      Alcotest.(check headers_testable)
+        "Headers block 2 matches"
+        (Headers.of_list
+           [ ":method", "GET"
+           ; ":path", "/"
+           ; ":scheme", "http"
+           ; "headerD", "valueD"
+           ; "headerE", "valueE"
+           ; "headerF", "valueF"
+           ])
+        headers2
+    | _ -> Alcotest.fail "expected both frame payloads to be header blocks");
+
+    Body.Writer.close req1_body;
+    Body.Writer.close req2_body;
+    report_write_result t (`Ok lenv);
+    let frames, _lenv = flush_pending_writes t in
+    Alcotest.(check (list int))
+      "Writes empty DATA frame"
+      (List.map Frame.FrameType.serialize Frame.FrameType.[ Data ])
+      (List.map
+         (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+           Frame.FrameType.serialize frame_type)
+         frames)
+
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
@@ -1259,6 +1347,7 @@ module Client_connection_tests = struct
     ; ( "don't flush headers immediately"
       , `Quick
       , test_dont_flush_headers_immediately )
+    ; "headers blocks don't share buffers", `Quick, test_header_buffer_sharing
     ]
 end
 
