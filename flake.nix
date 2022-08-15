@@ -11,11 +11,15 @@
       let
         pkgs = nixpkgs.legacyPackages."${system}".extend (self: super: {
           h2spec = super.callPackage ./nix/h2spec.nix { };
+          ocamlPackages = super.ocaml-ng.ocamlPackages_5_00;
         });
       in
       rec {
-        packages = (pkgs.callPackage ./nix { nix-filter = nix-filter.lib; });
+        packages = pkgs.callPackage ./nix { nix-filter = nix-filter.lib; };
         defaultPackage = packages.h2;
-        devShell = pkgs.callPackage ./shell.nix { };
+        devShells = rec {
+          default = pkgs.callPackage ./shell.nix { inherit packages; };
+          release = default.override { release-mode = true; };
+        };
       });
 }

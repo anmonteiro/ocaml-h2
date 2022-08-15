@@ -1,5 +1,5 @@
-Unreleased
------------
+0.9.0 2022-08-14
+---------------
 
 - h2: Fix tests on 32-bit platforms
   ([#152](https://github.com/anmonteiro/ocaml-h2/pull/152))

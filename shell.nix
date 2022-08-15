@@ -1,12 +1,20 @@
-{ pkgs, stdenv, lib, release-mode ? false }:
+{ packages
+, mkShell
+, stdenv
+, lib
+, cacert
+, curl
+, ocamlPackages
+, git
+, h2spec
+, release-mode ? false
+}:
 
 let
-  h2Pkgs = pkgs.recurseIntoAttrs (import ./nix { inherit pkgs; doCheck = false; });
-  h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
+  h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) packages;
 
 in
 
-with pkgs;
 
 (mkShell {
   inputsFrom = lib.attrValues h2Drvs;
@@ -16,7 +24,6 @@ with pkgs;
       curl
       ocamlPackages.dune-release
       git
-      opam
     ] else [ ])
     ++ (with ocamlPackages; [ merlin ocamlformat utop h2spec ]);
 }).overrideAttrs (o: {
