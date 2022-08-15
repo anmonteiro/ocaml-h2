@@ -71,6 +71,14 @@ let encode_headers hpack_encoder headers =
   Serialize.Writer.encode_headers hpack_encoder f headers;
   Faraday.serialize_to_bigstring f
 
+let decode_headers decoder bigstring =
+  let parser = Angstrom.Buffered.parse (Hpack.Decoder.decode_headers decoder) in
+  let state = Angstrom.Buffered.feed parser (`Bigstring bigstring) in
+  let state' = Angstrom.Buffered.feed state `Eof in
+  match Angstrom.Buffered.state_to_option state' with
+  | Some (Ok headers) -> headers
+  | Some _ | None -> assert false
+
 let preface =
   let writer = Serialize.Writer.create 0x400 in
   Serialize.Writer.write_connection_preface writer [];

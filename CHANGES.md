@@ -23,6 +23,8 @@ Unreleased
   ([#172](https://github.com/anmonteiro/ocaml-h2/pull/172))
 - h2-async: Add an OCaml-TLS client to `h2-async`
   ([#174](https://github.com/anmonteiro/ocaml-h2/pull/174))
+- h2: Fix a bug that caused different requests to share the same headers buffer
+  under concurrency ([#182](https://github.com/anmonteiro/ocaml-h2/pull/182))
 
 0.8.0 2021-04-11
 ---------------

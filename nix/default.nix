@@ -12,8 +12,7 @@ let
     with nix-filter; filter {
       root = ./..;
       include = [ "dune-project" ] ++ files ++ (builtins.map inDirectory dirs);
-    }
-  ;
+    };
   buildH2 = args: buildDunePackage ({
     version = "0.6.0-dev";
     useDune2 = true;

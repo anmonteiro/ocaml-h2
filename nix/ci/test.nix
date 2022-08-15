@@ -5,7 +5,6 @@ let
   src = fetchGit {
     url = with lock.nodes.nixpkgs.locked; "https://github.com/${owner}/${repo}";
     inherit (lock.nodes.nixpkgs.locked) rev;
-    # inherit (lock.nodes.nixpkgs.original) ref;
     allRefs = true;
   };
 
