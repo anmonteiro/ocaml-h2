@@ -113,11 +113,24 @@ let add ({ table; lookup_table; next_seq } as encoder) entry =
   encoder.next_seq <- next_seq + 1;
   HeaderFieldsTbl.replace lookup_table name map
 
-let[@inline] find_token encoder without_indexing token name value =
+  let[@inline] find_token encoder without_indexing token name value =
   let rec loop i =
-    let name', value' = Static_table.table.(i) in
-    if name' = name
-    then
+    let value' =
+      if i >= Static_table.table_size
+      then
+        None
+      else
+        let name', value' =
+          Static_table.table.(i)
+        in
+        if name = name'
+        then
+          Some value'
+        else
+          None
+    in
+    match value' with
+    | Some value' ->
       if value' = value
       then
         (* From RFC7541§6.1: Indexed Header Field Representation
@@ -130,7 +143,7 @@ let[@inline] find_token encoder without_indexing token name value =
          * always get the first token (index) in the static table for `name`,
          * because that's what `Static_table.lookup_token` returns. *)
         loop (i + 1)
-    else
+    | None ->
       (* This is a header field whose value we didn't find in the static table
        * after looping. We ended here (name <> name') because we looped to
        * check whether the value was indexed in the static table. We can still
