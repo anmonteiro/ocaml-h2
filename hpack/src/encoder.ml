@@ -113,7 +113,7 @@ let add ({ table; lookup_table; next_seq } as encoder) entry =
   encoder.next_seq <- next_seq + 1;
   HeaderFieldsTbl.replace lookup_table name map
 
-  let[@inline] find_token encoder without_indexing token name value =
+let[@inline] find_token encoder without_indexing token name value =
   let rec loop i =
     let value' =
       if i >= Static_table.table_size
