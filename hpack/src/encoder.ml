@@ -117,17 +117,10 @@ let[@inline] find_token encoder without_indexing token name value =
   let rec loop i =
     let value' =
       if i >= Static_table.table_size
-      then
-        None
+      then None
       else
-        let name', value' =
-          Static_table.table.(i)
-        in
-        if name = name'
-        then
-          Some value'
-        else
-          None
+        let name', value' = Static_table.table.(i) in
+        if name = name' then Some value' else None
     in
     match value' with
     | Some value' ->
