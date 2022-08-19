@@ -113,49 +113,48 @@ let add ({ table; lookup_table; next_seq } as encoder) entry =
   encoder.next_seq <- next_seq + 1;
   HeaderFieldsTbl.replace lookup_table name map
 
-let[@inline] find_token encoder without_indexing token name value =
+let encode_missing_value encoder without_indexing token name value =
+  (* This is a header field whose value we didn't find in the static
+   * table after looping. We ended up here (name <> name') because we
+   * looped to check whether the value was indexed in the static table.
+   * We can still use the token index to encode the header name. *)
+  let index = token + 1 in
+  if without_indexing
+  then
+    (* From RFC7541§6.2.2: Literal Header Field without Indexing
+     *   If the header field name matches the header field name of an entry
+     *   stored in the static table or the dynamic table, the header field
+     *   name can be represented using the index of that entry. *)
+    BinaryFormat.without_indexing, index
+  else (
+    (* From RFC7541§6.2.1: Literal Header Field with Incremental Indexing
+     *   A literal header field with incremental indexing representation
+     *   results in appending a header field to the decoded header list and
+     *   inserting it as a new entry into the dynamic table. *)
+    add encoder (name, value);
+    BinaryFormat.incremental_indexing, index)
+
+let find_token encoder without_indexing token name value =
   let rec loop i =
-    let value' =
-      if i >= Static_table.table_size
-      then None
-      else
-        let name', value' = Static_table.table.(i) in
-        if name = name' then Some value' else None
-    in
-    match value' with
-    | Some value' ->
-      if value' = value
+    if i >= Static_table.table_size
+    then encode_missing_value encoder without_indexing token name value
+    else
+      let name', value' = Static_table.table.(i) in
+      if name = name'
       then
-        (* From RFC7541§6.1: Indexed Header Field Representation
-         *   An indexed header field starts with the '1' 1-bit pattern,
-         *   followed by the index of the matching header field. *)
-        BinaryFormat.indexed, i + 1
-      else
-        (* Advance one token in the static table, as the next entry might have
-         * a value that can fall into the above branch. We're guaranteed to
-         * always get the first token (index) in the static table for `name`,
-         * because that's what `Static_table.lookup_token` returns. *)
-        loop (i + 1)
-    | None ->
-      (* This is a header field whose value we didn't find in the static table
-       * after looping. We ended here (name <> name') because we looped to
-       * check whether the value was indexed in the static table. We can still
-       * use the token index to encode the header name. *)
-      let index = token + 1 in
-      if without_indexing
-      then
-        (* From RFC7541§6.2.2: Literal Header Field without Indexing
-         *   If the header field name matches the header field name of an entry
-         *   stored in the static table or the dynamic table, the header field
-         *   name can be represented using the index of that entry. *)
-        BinaryFormat.without_indexing, index
-      else (
-        (* From RFC7541§6.2.1: Literal Header Field with Incremental Indexing
-         *   A literal header field with incremental indexing representation
-         *   results in appending a header field to the decoded header list and
-         *   inserting it as a new entry into the dynamic table. *)
-        add encoder (name, value);
-        BinaryFormat.incremental_indexing, index)
+        if value' = value
+        then
+          (* From RFC7541§6.1: Indexed Header Field Representation
+           *   An indexed header field starts with the '1' 1-bit pattern,
+           *   followed by the index of the matching header field. *)
+          BinaryFormat.indexed, i + 1
+        else
+          (* Advance one token in the static table, as the next entry might have
+           * a value that can fall into the above branch. We're guaranteed to
+           * always get the first token (index) in the static table for `name`,
+           * because that's what `Static_table.lookup_token` returns. *)
+          loop (i + 1)
+      else encode_missing_value encoder without_indexing token name value
   in
   loop token
 
