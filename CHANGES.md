@@ -1,3 +1,10 @@
+Unreleased
+-----------
+
+- hpack: fix a case where hpack would raise an array out of bounds exception
+  ([#183](https://github.com/anmonteiro/ocaml-h2/pull/183))
+  (@jonathanjameswatson)
+
 0.9.0 2022-08-14
 ---------------
 
