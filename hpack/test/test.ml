@@ -273,6 +273,26 @@ let test_evicting_table_size_0_followup () =
     hs
     decoded_headers
 
+let test_end_of_table () =
+  let hs =
+    [ { name = ":method"; value = "GET"; sensitive = false }
+    ; { name = "www-authenticate"; value = "Basic"; sensitive = false }
+    ]
+  in
+  let encoder = Encoder.create 60 in
+  let encoded_headers = encode_headers encoder hs in
+  Alcotest.(check bool)
+    "Encodes to non-zero hex"
+    true
+    (String.length encoded_headers > 0);
+  let decoder = Decoder.create 60 in
+  let decoded_headers = decode_headers decoder 60 encoded_headers in
+  List.iter2
+    (fun h1 h2 ->
+      Alcotest.(check header_testable "Decoded headers are roundtripped" h1 h2))
+    hs
+    decoded_headers
+
 let () =
   let fixtures_dir = "hpack-test-case" in
   let raw_data_dir = Filename.concat fixtures_dir "raw-data" in
@@ -297,5 +317,8 @@ let () =
        ; ( "Evictions from the dynamic table with 0 capacity (followup test)"
          , `Quick
          , test_evicting_table_size_0_followup )
+       ; ( "Encoding the header from the end of the static table"
+         , `Quick
+         , test_end_of_table )
        ] )
     :: suites)
