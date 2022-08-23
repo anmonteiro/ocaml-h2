@@ -1379,10 +1379,10 @@ module Client_connection_tests = struct
     ; "ping", `Quick, test_ping
     ; ( "stream level error handler called on RST_STREAM frames"
       , `Quick
-      , test_error_handler_double_rst_stream )
+      , test_error_handler_rst_stream )
     ; ( "stream level error handler called on two RST_STREAM frames"
       , `Quick
-      , test_error_handler_rst_stream_twice )
+      , test_error_handler_double_rst_stream )
     ; "starting an h2c connection", `Quick, test_h2c
     ; ( "non-zero `content-length` and no DATA frames"
       , `Quick
