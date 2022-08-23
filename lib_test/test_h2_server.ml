@@ -1096,7 +1096,7 @@ module Server_connection_tests = struct
           ; flags = Flags.default_flags
           ; frame_type = RSTStream
           }
-      ; frame_payload = Frame.RSTStream Error_code.NoError
+      ; frame_payload = Frame.RSTStream Error_code.ProtocolError
       }
     in
     read_frames t [ data_frame; rst_stream; rst_stream ];
