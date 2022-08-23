@@ -817,6 +817,61 @@ module Client_connection_tests = struct
       `Yield
       (next_write_operation t)
 
+  let test_error_handler_double_rst_stream () =
+    let t = create_and_handle_preface () in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let response_handler _response _response_body = () in
+    let error_handler_called = ref false in
+    let stream_level_error_handler error =
+      error_handler_called := true;
+      match error with
+      | `Protocol_error _ ->
+        Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
+      | _ -> Alcotest.fail "Expected stream error handler to pass"
+    in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~flush_headers_immediately:true
+        ~error_handler:stream_level_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    Body.Writer.close request_body;
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
+    let frame = List.hd frames in
+    Alcotest.(check int)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      (Frame.FrameType.serialize Data)
+      Frame.(frame.frame_header.frame_type |> FrameType.serialize);
+    Alcotest.(check bool)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      true
+      (Flags.test_end_stream frame.frame_header.flags);
+    report_write_result t (`Ok lenv);
+    let rst_stream =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = RSTStream
+          }
+      ; frame_payload = Frame.RSTStream Error_code.ProtocolError
+      }
+    in
+    read_frames t [ rst_stream; rst_stream ];
+    Alcotest.(check bool)
+      "Stream level error handler called"
+      true
+      !error_handler_called;
+    (* Don't loop *)
+    Alcotest.(check write_operation)
+      "Writer yields, i.e. don't send an RST_STREAM frame in response to one"
+      `Yield
+      (next_write_operation t)
+
   let test_h2c () =
     let settings_payload = Settings.[ EnablePush 0; MaxConcurrentStreams 2l ] in
     let f = Faraday.create 100 in
@@ -1324,7 +1379,10 @@ module Client_connection_tests = struct
     ; "ping", `Quick, test_ping
     ; ( "stream level error handler called on RST_STREAM frames"
       , `Quick
-      , test_error_handler_rst_stream )
+      , test_error_handler_double_rst_stream )
+    ; ( "stream level error handler called on two RST_STREAM frames"
+      , `Quick
+      , test_error_handler_rst_stream_twice )
     ; "starting an h2c connection", `Quick, test_h2c
     ; ( "non-zero `content-length` and no DATA frames"
       , `Quick
