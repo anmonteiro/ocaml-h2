@@ -761,6 +761,16 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *)
       (* XXX(anmonteiro): When we add logging support, add something here. *)
       ()
+    | Closed _, Error_code.ProtocolError ->
+      (* From RFC7540§5.1:
+       *   Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received
+       *   in this state, though endpoints MAY choose to treat frames that
+       *   arrive a significant time after sending END_STREAM as a connection
+       *   error (Section 5.4.1) of type PROTOCOL_ERROR.
+       *
+       * We ignore further RST_STREAM frames.
+       *)
+      ()
     | Active _, Error_code.NoError ->
       (* If we're active (i.e. not done sending the request body), finish the
        * stream, in order to mark it for cleanup.
