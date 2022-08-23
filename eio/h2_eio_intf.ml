@@ -3,7 +3,6 @@ module type Server = sig
 
   val create_connection_handler
     :  ?config:H2.Config.t
-    -> domain_mgr:Eio.Domain_manager.t
     -> request_handler:(Eio.Net.Sockaddr.stream -> H2.Reqd.t -> unit)
     -> error_handler:
          (Eio.Net.Sockaddr.stream -> H2.Server_connection.error_handler)
@@ -15,13 +14,17 @@ end
 module type Client = sig
   type socket
   type runtime
-  type t
+
+  type t =
+    { connection : H2.Client_connection.t
+    ; runtime : runtime
+    }
 
   val create_connection
     :  ?config:H2.Config.t
     -> ?push_handler:
          (H2.Request.t -> (H2.Client_connection.response_handler, unit) result)
-    -> domain_mgr:Eio.Domain_manager.t
+    -> sw:Eio.Switch.t
     -> error_handler:H2.Client_connection.error_handler
     -> socket
     -> t

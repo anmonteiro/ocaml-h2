@@ -40,7 +40,6 @@ module Server : sig
       :  certfile:string
       -> keyfile:string
       -> ?config:H2.Config.t
-      -> domain_mgr:Eio.Domain_manager.t
       -> request_handler:(Eio.Net.Sockaddr.stream -> H2.Reqd.t -> unit)
       -> error_handler:
            (Eio.Net.Sockaddr.stream -> H2.Server_connection.error_handler)
@@ -49,6 +48,9 @@ module Server : sig
       -> unit
   end
 end
+
+module type Client = H2_eio_intf.Client
+module type Server = H2_eio_intf.Server
 
 module Client : sig
   include
@@ -67,7 +69,7 @@ module Client : sig
       -> ?push_handler:
            (H2.Request.t
             -> (H2.Client_connection.response_handler, unit) result)
-      -> domain_mgr:Eio.Domain_manager.t
+      -> sw:Eio.Switch.t
       -> error_handler:H2.Client_connection.error_handler
       -> Eio_unix.socket
       -> t

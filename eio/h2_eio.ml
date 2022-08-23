@@ -35,7 +35,6 @@ module MakeServer (Server_runtime : Gluten_eio.Server.S) = struct
 
   let create_connection_handler
       ?(config = H2.Config.default)
-      ~domain_mgr
       ~request_handler
       ~error_handler
       client_addr
@@ -48,7 +47,6 @@ module MakeServer (Server_runtime : Gluten_eio.Server.S) = struct
         (request_handler client_addr)
     in
     Server_runtime.create_connection_handler
-      ~domain_mgr
       ~read_buffer_size:config.read_buffer_size
       ~protocol:(module H2.Server_connection)
       connection
@@ -68,7 +66,7 @@ module MakeClient (Client_runtime : Gluten_eio.Client.S) = struct
   let create_connection
       ?(config = H2.Config.default)
       ?push_handler
-      ~domain_mgr
+      ~sw
       ~error_handler
       socket
     =
@@ -78,7 +76,7 @@ module MakeClient (Client_runtime : Gluten_eio.Client.S) = struct
     let runtime =
       Client_runtime.create
         ~read_buffer_size:config.read_buffer_size
-        ~domain_mgr
+        ~sw
         ~protocol:(module H2.Client_connection)
         connection
         socket
@@ -91,6 +89,9 @@ module MakeClient (Client_runtime : Gluten_eio.Client.S) = struct
   let is_closed t = Client_runtime.is_closed t.runtime
 end
 
+module type Client = H2_eio_intf.Client
+module type Server = H2_eio_intf.Server
+
 module Server = struct
   include MakeServer (Gluten_eio.Server)
 
@@ -101,7 +102,6 @@ module Server = struct
         ~certfile
         ~keyfile
         ?config
-        ~domain_mgr
         ~request_handler
         ~error_handler
       =
@@ -115,7 +115,6 @@ module Server = struct
         let ssl_server = make_ssl_server client_addr socket in
         create_connection_handler
           ?config
-          ~domain_mgr
           ~request_handler
           ~error_handler
           client_addr
@@ -132,18 +131,13 @@ module Client = struct
     let create_connection_with_default
         ?config
         ?push_handler
-        ~domain_mgr
+        ~sw
         ~error_handler
         socket
       =
       let ssl_client =
         Gluten_eio.Client.SSL.create_default ~alpn_protocols:[ "h2" ] socket
       in
-      create_connection
-        ?config
-        ?push_handler
-        ~domain_mgr
-        ~error_handler
-        ssl_client
+      create_connection ?config ?push_handler ~sw ~error_handler ssl_client
   end
 end
