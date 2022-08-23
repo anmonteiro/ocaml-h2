@@ -761,6 +761,15 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *)
       (* XXX(anmonteiro): When we add logging support, add something here. *)
       ()
+    | Active _, Error_code.NoError ->
+      (* If we're active (i.e. not done sending the request body), finish the
+       * stream, in order to mark it for cleanup.
+       *
+       * Note: we don't close the request body here because the client may be
+       * in the process of writing to it, and while we're not going to send
+       * those bytes to the output channel, we don't want to fail when writing
+       * either. *)
+      Stream.finish_stream respd (ResetByThem error_code)
     | Closed _, Error_code.ProtocolError ->
       (* From RFC7540§5.1:
        *   Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received
@@ -771,15 +780,6 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        * We ignore further RST_STREAM frames.
        *)
       ()
-    | Active _, Error_code.NoError ->
-      (* If we're active (i.e. not done sending the request body), finish the
-       * stream, in order to mark it for cleanup.
-       *
-       * Note: we don't close the request body here because the client may be
-       * in the process of writing to it, and while we're not going to send
-       * those bytes to the output channel, we don't want to fail when writing
-       * either. *)
-      Stream.finish_stream respd (ResetByThem error_code)
     | _ ->
       (* From RFC7540§6.4:
        *   The RST_STREAM frame fully terminates the referenced stream and
