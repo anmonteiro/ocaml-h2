@@ -872,6 +872,52 @@ module Client_connection_tests = struct
       `Yield
       (next_write_operation t)
 
+  let test_error_handler_double_rst_stream_no_error () =
+    let t = create_and_handle_preface () in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let response_handler _response _response_body = () in
+    let stream_level_error_handler _error =
+      Alcotest.fail "didn't expect error handler to be called"
+    in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~flush_headers_immediately:true
+        ~error_handler:stream_level_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    Body.Writer.close request_body;
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
+    let frame = List.hd frames in
+    Alcotest.(check int)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      (Frame.FrameType.serialize Data)
+      Frame.(frame.frame_header.frame_type |> FrameType.serialize);
+    Alcotest.(check bool)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      true
+      (Flags.test_end_stream frame.frame_header.flags);
+    report_write_result t (`Ok lenv);
+    let rst_stream =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = RSTStream
+          }
+      ; frame_payload = Frame.RSTStream Error_code.NoError
+      }
+    in
+    read_frames t [ rst_stream; rst_stream ];
+    (* Don't loop *)
+    Alcotest.(check write_operation)
+      "Writer yields, i.e. don't send an RST_STREAM frame in response to one"
+      `Yield
+      (next_write_operation t)
+
   let test_h2c () =
     let settings_payload = Settings.[ EnablePush 0; MaxConcurrentStreams 2l ] in
     let f = Faraday.create 100 in
@@ -1383,6 +1429,9 @@ module Client_connection_tests = struct
     ; ( "stream level error handler called on two RST_STREAM frames"
       , `Quick
       , test_error_handler_double_rst_stream )
+    ; ( "two RST_STREAM frames no error code"
+      , `Quick
+      , test_error_handler_double_rst_stream_no_error )
     ; "starting an h2c connection", `Quick, test_h2c
     ; ( "non-zero `content-length` and no DATA frames"
       , `Quick
