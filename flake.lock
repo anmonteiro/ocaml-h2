@@ -17,11 +17,11 @@
     },
     "nix-filter": {
       "locked": {
-        "lastModified": 1660220294,
-        "narHash": "sha256-l22Z88iegFq7xCLr1/jkgX9svnnWA7kTLgDOAi9iq6k=",
+        "lastModified": 1661201956,
+        "narHash": "sha256-RizGJH/buaw9A2+fiBf9WnXYw4LZABB5kMAZIEE5/T8=",
         "owner": "numtide",
         "repo": "nix-filter",
-        "rev": "825abbb40ed6b1e5e5fce95e2c21a1f5881ecf61",
+        "rev": "3b821578685d661a10b563cba30b1861eec05748",
         "type": "github"
       },
       "original": {
