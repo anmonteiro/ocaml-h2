@@ -247,7 +247,7 @@ let handle_push_promise_headers t respd headers =
       | Ok response_handler ->
         (* From RFC7540§8.2:
          *   Promised requests [...] MUST NOT include a request body. *)
-        let request_body = Body.Writer.empty in
+        let request_body = Body.Writer.create_empty ~writer:t.writer in
         (* From RFC7540§5.1:
          *   reserved (remote): [...] Receiving a HEADERS frame causes the
          *   stream to transition to "half-closed (local)". *)
@@ -1359,7 +1359,7 @@ let create_h2c
              *   entirety before the client can send HTTP/2 frames. This means
              *   that a large request can block the use of the connection until
              *   it is completely sent. *)
-          ; request_body = Body.Writer.empty
+          ; request_body = Body.Writer.create_empty ~writer:t.writer
           ; response_handler
           ; trailers_handler = ignore
           } );
@@ -1378,9 +1378,7 @@ let request
   let max_frame_size = t.settings.max_frame_size in
   let respd = create_and_add_stream t ~error_handler in
   let request_body =
-    Body.Writer.create
-      (Bigstringaf.create max_frame_size)
-      ~ready_to_write:(fun () -> Writer.wakeup t.writer)
+    Body.Writer.create (Bigstringaf.create max_frame_size) ~writer:t.writer
   in
   let frame_info =
     Writer.make_frame_info
