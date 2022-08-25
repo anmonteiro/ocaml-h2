@@ -590,6 +590,12 @@ module Writer = struct
     Optional_thunk.call_if_some f
 
   let flush t f = flush t.encoder f
+
+  let unyield t =
+    (* Faraday doesn't have a function to take the serializer out of a yield
+       state. In the meantime, `flush` does it. *)
+    flush t (fun () -> ())
+
   let yield t = Faraday.yield t.encoder
   let close t = Faraday.close t.encoder
 

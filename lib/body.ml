@@ -111,22 +111,18 @@ module Writer = struct
   type t =
     { faraday : Faraday.t
     ; buffered_bytes : int ref
-    ; ready_to_write : unit -> unit
+    ; writer : Serialize.Writer.t
     }
 
-  let create buffer ~ready_to_write =
-    { faraday = Faraday.of_bigstring buffer
-    ; buffered_bytes = ref 0
-    ; ready_to_write
-    }
+  let create buffer ~writer =
+    { faraday = Faraday.of_bigstring buffer; buffered_bytes = ref 0; writer }
 
-  let create_empty () =
-    let t = create Bigstringaf.empty ~ready_to_write:ignore in
+  let create_empty ~writer =
+    let t = create Bigstringaf.empty ~writer in
     Faraday.close t.faraday;
     t
 
-  let empty = create_empty ()
-  let ready_to_write t = t.ready_to_write ()
+  let ready_to_write t = Serialize.Writer.wakeup t.writer
 
   let write_char t c =
     Faraday.write_char t.faraday c;
@@ -152,6 +148,7 @@ module Writer = struct
   let has_pending_output t = Faraday.has_pending_output t.faraday
 
   let close t =
+    Serialize.Writer.unyield t.writer;
     Faraday.close t.faraday;
     ready_to_write t
 

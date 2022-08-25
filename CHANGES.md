@@ -7,6 +7,9 @@ Unreleased
 - h2: (client) handle multiple RST_STREAM frames
   ([#184](https://github.com/anmonteiro/ocaml-h2/pull/184))
   ([@jonathanjameswatson](https://github.com/jonathanjameswatson))
+- h2: (client) Fix a race condition with `~flush_headers_immediately:false` and
+  empty request bodies
+  ([#186](https://github.com/anmonteiro/ocaml-h2/pull/186))
 
 0.9.0 2022-08-14
 ---------------
