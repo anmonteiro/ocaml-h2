@@ -746,7 +746,16 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *   received, the recipient MUST treat this as a connection error
        *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
       report_connection_error t Error_code.ProtocolError
-    | Closed _, Error_code.NoError ->
+    | Active _, Error_code.NoError ->
+      (* If we're active (i.e. not done sending the request body), finish the
+       * stream, in order to mark it for cleanup.
+       *
+       * Note: we don't close the request body here because the client may be
+       * in the process of writing to it, and while we're not going to send
+       * those bytes to the output channel, we don't want to fail when writing
+       * either. *)
+      Stream.finish_stream respd (ResetByThem error_code)
+    | Closed _, _ ->
       (* From RFC7540§8.1:
        *   A server can send a complete response prior to the client sending an
        *   entire request if the response does not depend on any portion of the
@@ -758,20 +767,8 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *
        * If we're done sending the request there's nothing to do here, allow
        * the stream to finish successfully.
-       *)
-      (* XXX(anmonteiro): When we add logging support, add something here. *)
-      ()
-    | Active _, Error_code.NoError ->
-      (* If we're active (i.e. not done sending the request body), finish the
-       * stream, in order to mark it for cleanup.
        *
-       * Note: we don't close the request body here because the client may be
-       * in the process of writing to it, and while we're not going to send
-       * those bytes to the output channel, we don't want to fail when writing
-       * either. *)
-      Stream.finish_stream respd (ResetByThem error_code)
-    | Closed _, Error_code.ProtocolError ->
-      (* From RFC7540§5.1:
+       * From RFC7540§5.1:
        *   Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received
        *   in this state, though endpoints MAY choose to treat frames that
        *   arrive a significant time after sending END_STREAM as a connection
@@ -779,6 +776,7 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *
        * We ignore further RST_STREAM frames.
        *)
+      (* XXX(anmonteiro): When we add logging support, add something here. *)
       ()
     | _ ->
       (* From RFC7540§6.4:
