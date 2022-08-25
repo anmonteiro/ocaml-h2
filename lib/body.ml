@@ -148,6 +148,7 @@ module Writer = struct
   let has_pending_output t = Faraday.has_pending_output t.faraday
 
   let close t =
+    Serialize.Writer.unyield t.writer;
     Faraday.close t.faraday;
     ready_to_write t
 
