@@ -1075,6 +1075,39 @@ module Server_connection_tests = struct
       true
       !body_eof_called
 
+  let test_rst_stream_frames () =
+    let t = create_and_handle_preface default_request_handler in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    read_request ~body:"request body" t request;
+    let data_frame =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = Data
+          }
+      ; frame_payload = Frame.Data (Bigstringaf.of_string ~off:0 ~len:3 "foo")
+      }
+    in
+    let rst_stream =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = RSTStream
+          }
+      ; frame_payload = Frame.RSTStream Error_code.ProtocolError
+      }
+    in
+    read_frames t [ data_frame; rst_stream; rst_stream ];
+    let window_update_and_response_frames =
+      next_write_operation t |> Write_operation.to_write_as_string |> Option.get
+    in
+    report_write_result
+      t
+      (`Ok (String.length window_update_and_response_frames));
+    writer_yields t
+
   let test_flow_control () =
     let body_read_called = ref false in
     let request = Request.create ~scheme:"http" `GET "/" in
@@ -1293,6 +1326,7 @@ module Server_connection_tests = struct
     ; ( "reading the request body as it arrives"
       , `Quick
       , test_reading_request_body )
+    ; "accepting multiple RST_STREAM frames", `Quick, test_rst_stream_frames
     ; "flow control", `Quick, test_flow_control
     ; ( "flow control -- can send empty data frame"
       , `Quick
