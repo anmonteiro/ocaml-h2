@@ -1,0 +1,4 @@
+(library
+ (public_name h2-eio)
+ (name h2_eio)
+ (libraries h2 eio gluten-eio))
