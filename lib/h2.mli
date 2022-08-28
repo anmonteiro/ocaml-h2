@@ -469,6 +469,12 @@ module IOVec : module type of Httpaf.IOVec
 
 (** {2 Request Descriptor} *)
 module Reqd : sig
+  type error =
+    [ `Bad_request
+    | `Internal_server_error
+    | `Exn of exn
+    ]
+
   type t
 
   val request : t -> Request.t
@@ -549,6 +555,7 @@ module Reqd : sig
 
   (** {3 Exception Handling} *)
 
+  val error_code : t -> error option
   val report_exn : t -> exn -> unit
   val try_with : t -> (unit -> unit) -> (unit, exn) result
 end
