@@ -10,6 +10,8 @@ Unreleased
 - h2: (client) Fix a race condition with `~flush_headers_immediately:false` and
   empty request bodies
   ([#186](https://github.com/anmonteiro/ocaml-h2/pull/186))
+- h2: Make `H2.Reqd.error_code` part of the public interface
+  ([#188](https://github.com/anmonteiro/ocaml-h2/pull/188))
 
 0.9.0 2022-08-14
 ---------------
