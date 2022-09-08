@@ -96,8 +96,6 @@ module Headers_tests = struct
 end
 
 module Body_length_tests = struct
-  let check = Alcotest.(check (list (pair string string)))
-
   let test_request () =
     let content_length_request =
       Request.create
