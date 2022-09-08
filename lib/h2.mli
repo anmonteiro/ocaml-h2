@@ -457,7 +457,7 @@ module Response : sig
     :  request_method:Method.standard
     -> t
     -> [ `Error of [ `Bad_request ] | `Fixed of int64 | `Unknown ]
-  (** [body_length t] is the length of the message body accompanying [t]
+  (** [body_length ~request_method t] is the length of the message body accompanying [t]
       assuming it is a response to a request whose method was [request_method].
 
       See {{:https://tools.ietf.org/html/rfc7230#section-3.3.3} RFC7230§3.3.3}
