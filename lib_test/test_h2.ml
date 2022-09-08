@@ -136,6 +136,11 @@ module Body_length_tests = struct
     | `Fixed 10L -> ()
     | _ -> Alcotest.fail "Expected `Fixed 10L");
     (match
+       Response.body_length ~request_method:`HEAD content_length_response
+     with
+    | `Fixed 0L -> ()
+    | _ -> Alcotest.fail "Expected `Fixed 0L");
+    (match
        Response.body_length ~request_method:`GET invalid_content_length_response
      with
     | `Error `Bad_request -> ()
