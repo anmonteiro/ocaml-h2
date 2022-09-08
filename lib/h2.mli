@@ -454,7 +454,7 @@ module Response : sig
       RFC7540§8.1.2.4} for more details. *)
 
   val body_length
-    :  request_method:Httpaf.Method.standard
+    :  request_method:Method.standard
     -> t
     -> [ `Error of [ `Bad_request ] | `Fixed of int64 | `Unknown ]
   (** [body_length t] is the length of the message body accompanying [t]
