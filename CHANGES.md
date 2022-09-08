@@ -12,6 +12,9 @@ Unreleased
   ([#186](https://github.com/anmonteiro/ocaml-h2/pull/186))
 - h2: Make `H2.Reqd.error_code` part of the public interface
   ([#188](https://github.com/anmonteiro/ocaml-h2/pull/188))
+- h2: Add `~request_method` argument to `H2.Method.body_length`
+  ([#190](https://github.com/anmonteiro/ocaml-h2/pull/190))
+  ([@jonathanjameswatson](https://github.com/jonathanjameswatson))
 
 0.9.0 2022-08-14
 ---------------
