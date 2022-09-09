@@ -36,6 +36,8 @@ open Async
 open H2
 
 module Server = struct
+  type 'a socket = ([ `Active ], ([< Socket.Address.t ] as 'a)) Socket.t
+
   let create_connection_handler
       ?(config = H2.Config.default)
       ~request_handler
@@ -104,12 +106,12 @@ end
 module Client = struct
   module Client_runtime = Gluten_async.Client
 
-  type socket = Client_runtime.socket
-  type runtime = Client_runtime.t
+  type 'a socket = 'a Client_runtime.socket
+  type 'a runtime = 'a Client_runtime.t
 
-  type t =
+  type 'a t =
     { connection : Client_connection.t
-    ; runtime : runtime
+    ; runtime : 'a runtime
     }
 
   let create_connection
@@ -136,12 +138,12 @@ module Client = struct
   module SSL = struct
     module Client_runtime = Gluten_async.Client.SSL
 
-    type socket = Client_runtime.socket
-    type runtime = Client_runtime.t
+    type 'a socket = 'a Client_runtime.socket
+    type 'a runtime = 'a Client_runtime.t
 
-    type t =
+    type 'a t =
       { connection : Client_connection.t
-      ; runtime : runtime
+      ; runtime : 'a runtime
       }
 
     let create_connection
@@ -179,12 +181,12 @@ module Client = struct
   module TLS = struct
     module Client_runtime = Gluten_async.Client.TLS
 
-    type socket = Client_runtime.socket
-    type runtime = Client_runtime.t
+    type 'a socket = 'a Client_runtime.socket
+    type 'a runtime = 'a Client_runtime.t
 
-    type t =
+    type 'a t =
       { connection : Client_connection.t
-      ; runtime : runtime
+      ; runtime : 'a runtime
       }
 
     let create_connection
