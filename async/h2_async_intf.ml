@@ -34,25 +34,24 @@ open Async
 open H2
 
 module type Server = sig
-  type socket
-  type addr
+  type 'a socket constraint 'a = [< Socket.Address.t ]
 
   val create_connection_handler
     :  ?config:Config.t
-    -> request_handler:(addr -> Server_connection.request_handler)
-    -> error_handler:(addr -> Server_connection.error_handler)
-    -> addr
-    -> socket
+    -> request_handler:('a -> Server_connection.request_handler)
+    -> error_handler:('a -> Server_connection.error_handler)
+    -> 'a
+    -> 'a socket
     -> unit Deferred.t
 end
 
 module type Client = sig
-  type socket
-  type runtime
+  type 'a socket constraint 'a = [< Socket.Address.t ]
+  type 'a runtime constraint 'a = [< Socket.Address.t ]
 
-  type t =
+  type 'a t =
     { connection : Client_connection.t
-    ; runtime : runtime
+    ; runtime : 'a runtime
     }
 
   val create_connection
@@ -60,11 +59,11 @@ module type Client = sig
     -> ?push_handler:
          (Request.t -> (Client_connection.response_handler, unit) result)
     -> error_handler:Client_connection.error_handler
-    -> socket
-    -> t Deferred.t
+    -> 'a socket
+    -> 'a t Deferred.t
 
   val request
-    :  t
+    :  'a t
     -> ?flush_headers_immediately:bool
     -> ?trailers_handler:Client_connection.trailers_handler
     -> Request.t
@@ -72,7 +71,7 @@ module type Client = sig
     -> response_handler:Client_connection.response_handler
     -> Body.Writer.t
 
-  val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
-  val shutdown : t -> unit Deferred.t
-  val is_closed : t -> bool
+  val ping : _ t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
+  val shutdown : _ t -> unit Deferred.t
+  val is_closed : _ t -> bool
 end

@@ -38,14 +38,13 @@ open H2
 module Server : sig
   include
     H2_async_intf.Server
-      with type socket := ([ `Active ], Socket.Address.Inet.t) Socket.t
-       and type addr := Socket.Address.Inet.t
+      with type 'a socket =
+        ([ `Active ], ([< Socket.Address.t ] as 'a)) Socket.t
 
   module SSL : sig
     include
       H2_async_intf.Server
-        with type socket := Gluten_async.Server.SSL.socket
-         and type addr := Socket.Address.Inet.t
+        with type 'a socket := 'a Gluten_async.Server.SSL.socket
 
     val create_connection_handler_with_default
       :  certfile:string
@@ -62,24 +61,27 @@ end
 module Client : sig
   include
     H2_async_intf.Client
-      with type socket = ([ `Active ], Socket.Address.Inet.t) Socket.t
+      with type 'a socket =
+        ([ `Active ], ([< Socket.Address.t ] as 'a)) Socket.t
 
   module SSL : sig
     include
-      H2_async_intf.Client with type socket = Gluten_async.Client.SSL.socket
+      H2_async_intf.Client
+        with type 'a socket = 'a Gluten_async.Client.SSL.socket
 
     val create_connection_with_default
       :  ?config:Config.t
       -> ?push_handler:
            (Request.t -> (Client_connection.response_handler, unit) result)
       -> error_handler:Client_connection.error_handler
-      -> ([ `Active ], [< Socket.Address.t ]) Socket.t
-      -> t Deferred.t
+      -> ([ `Active ], 'a) Socket.t
+      -> 'a t Deferred.t
   end
 
   module TLS : sig
     include
-      H2_async_intf.Client with type socket = Gluten_async.Client.TLS.socket
+      H2_async_intf.Client
+        with type 'a socket = 'a Gluten_async.Client.TLS.socket
 
     val create_connection_with_default
       :  ?config:Config.t
@@ -88,6 +90,6 @@ module Client : sig
       -> error_handler:Client_connection.error_handler
       -> ([ `Unconnected ], 'addr) Socket.t
       -> 'addr Tcp.Where_to_connect.t
-      -> t Deferred.t
+      -> 'addr t Deferred.t
   end
 end
