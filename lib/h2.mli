@@ -303,7 +303,7 @@ module Headers : sig
 
   val get_exn : t -> name -> value
   (** [get t name] returns the last header from [t] with name [name], or raises
-      if no such header is present. *)
+      [Not_found] if no such header is present. *)
 
   val get_multi : t -> name -> value list
   (** [get_multi t name] is the list of header values in [t] whose names are

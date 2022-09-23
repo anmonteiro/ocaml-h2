@@ -140,7 +140,7 @@ let get t name =
 let get_exn t name =
   let rec loop t =
     match t with
-    | [] -> failwith (Printf.sprintf "Headers.get_exn: %S not found" name)
+    | [] -> raise Not_found
     | { name = n; value; _ } :: t' -> if CI.equal name n then value else loop t'
   in
   loop t
