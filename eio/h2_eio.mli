@@ -31,47 +31,41 @@
  *---------------------------------------------------------------------------*)
 
 module Server : sig
-  include H2_eio_intf.Server with type socket = Gluten_eio.Server.socket
-
-  module SSL : sig
-    include H2_eio_intf.Server with type socket = Gluten_eio.Server.SSL.socket
-
-    val create_connection_handler_with_default
-      :  certfile:string
-      -> keyfile:string
-      -> ?config:H2.Config.t
-      -> request_handler:(Eio.Net.Sockaddr.stream -> H2.Reqd.t -> unit)
-      -> error_handler:
-           (Eio.Net.Sockaddr.stream -> H2.Server_connection.error_handler)
-      -> Eio.Net.Sockaddr.stream
-      -> Eio.Net.stream_socket
-      -> unit
-  end
+  val create_connection_handler
+    :  ?config:H2.Config.t
+    -> request_handler:(Eio.Net.Sockaddr.stream -> H2.Reqd.t -> unit)
+    -> error_handler:
+         (Eio.Net.Sockaddr.stream -> H2.Server_connection.error_handler)
+    -> Eio.Net.Sockaddr.stream
+    -> Eio.Flow.two_way
+    -> unit
 end
 
-module type Client = H2_eio_intf.Client
-module type Server = H2_eio_intf.Server
-
 module Client : sig
-  include
-    H2_eio_intf.Client
-      with type socket = Gluten_eio.Client.socket
-       and type runtime = Gluten_eio.Client.t
+  type t =
+    { connection : H2.Client_connection.t
+    ; runtime : Gluten_eio.Client.t
+    }
 
-  module SSL : sig
-    include
-      H2_eio_intf.Client
-        with type socket = Gluten_eio.Client.SSL.socket
-         and type runtime = Gluten_eio.Client.SSL.t
+  val create_connection
+    :  ?config:H2.Config.t
+    -> ?push_handler:
+         (H2.Request.t -> (H2.Client_connection.response_handler, unit) result)
+    -> sw:Eio.Switch.t
+    -> error_handler:H2.Client_connection.error_handler
+    -> Eio.Flow.two_way
+    -> t
 
-    val create_connection_with_default
-      :  ?config:H2.Config.t
-      -> ?push_handler:
-           (H2.Request.t
-            -> (H2.Client_connection.response_handler, unit) result)
-      -> sw:Eio.Switch.t
-      -> error_handler:H2.Client_connection.error_handler
-      -> Eio.Net.stream_socket
-      -> t
-  end
+  val request
+    :  t
+    -> ?flush_headers_immediately:bool
+    -> ?trailers_handler:H2.Client_connection.trailers_handler
+    -> H2.Request.t
+    -> error_handler:H2.Client_connection.error_handler
+    -> response_handler:H2.Client_connection.response_handler
+    -> H2.Body.Writer.t
+
+  val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
+  val shutdown : t -> unit
+  val is_closed : t -> bool
 end
