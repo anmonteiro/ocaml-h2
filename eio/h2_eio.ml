@@ -30,8 +30,8 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
-module MakeServer (Server_runtime : Gluten_eio.Server.S) = struct
-  type socket = Server_runtime.socket
+module Server = struct
+  module Server_runtime = Gluten_eio.Server
 
   let create_connection_handler
       ?(config = H2.Config.default)
@@ -54,13 +54,12 @@ module MakeServer (Server_runtime : Gluten_eio.Server.S) = struct
       socket
 end
 
-module MakeClient (Client_runtime : Gluten_eio.Client.S) = struct
-  type socket = Client_runtime.socket
-  type runtime = Client_runtime.t
+module Client = struct
+  module Client_runtime = Gluten_eio.Client
 
   type t =
     { connection : H2.Client_connection.t
-    ; runtime : runtime
+    ; runtime : Client_runtime.t
     }
 
   let create_connection
@@ -87,57 +86,4 @@ module MakeClient (Client_runtime : Gluten_eio.Client.S) = struct
   let ping t = H2.Client_connection.ping t.connection
   let shutdown t = Client_runtime.shutdown t.runtime
   let is_closed t = Client_runtime.is_closed t.runtime
-end
-
-module type Client = H2_eio_intf.Client
-module type Server = H2_eio_intf.Server
-
-module Server = struct
-  include MakeServer (Gluten_eio.Server)
-
-  module SSL = struct
-    include MakeServer (Gluten_eio.Server.SSL)
-
-    let create_connection_handler_with_default
-        ~certfile
-        ~keyfile
-        ?config
-        ~request_handler
-        ~error_handler
-      =
-      let make_ssl_server =
-        Gluten_eio.Server.SSL.create_default
-          ~alpn_protocols:[ "h2" ]
-          ~certfile
-          ~keyfile
-      in
-      fun client_addr socket ->
-        let ssl_server = make_ssl_server client_addr socket in
-        create_connection_handler
-          ?config
-          ~request_handler
-          ~error_handler
-          client_addr
-          ssl_server
-  end
-end
-
-module Client = struct
-  include MakeClient (Gluten_eio.Client)
-
-  module SSL = struct
-    include MakeClient (Gluten_eio.Client.SSL)
-
-    let create_connection_with_default
-        ?config
-        ?push_handler
-        ~sw
-        ~error_handler
-        socket
-      =
-      let ssl_client =
-        Gluten_eio.Client.SSL.create_default ~alpn_protocols:[ "h2" ] socket
-      in
-      create_connection ?config ?push_handler ~sw ~error_handler ssl_client
-  end
 end
