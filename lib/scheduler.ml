@@ -451,12 +451,11 @@ module Make (Streamd : StreamDescriptor) = struct
       List.fold_left
         (fun acc (id, closed) ->
           (* When a stream completes, i.e. doesn't require more output and
-           * enters the `Closed` state, we set a TTL value which represents
-           * the * number of writer yields that the stream has before it is
-           * removed * from the connection Hash Table. By doing this we avoid
-           * losing some * potentially useful information regarding the
-           * stream's state at the * cost of keeping it around for a little
-           * while longer. *)
+           * enters the `Closed` state, we set a TTL value which represents the
+           * number of writer yields that the stream has before it is removed
+           * from the connection Hash Table. By doing this we avoid losing some
+           * potentially useful information regarding the stream's state at the
+           * cost of keeping it around for a little while longer. *)
           if closed.Stream.ttl = 0
           then (
             StreamsTbl.remove root.all_streams id;

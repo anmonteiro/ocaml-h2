@@ -112,13 +112,13 @@ type ('state, 'error, 'error_handler) stream =
   ; mutable state : 'state
         (* The largest frame payload we're allowed to write. *)
   ; mutable max_frame_size : int
-  ; on_close_stream : active:bool -> closed -> unit
+  ; on_close : active:bool -> closed -> unit
   }
   constraint 'state = (_, _, _) state
 
 let initial_ttl = 10
 
-let create id ~max_frame_size writer error_handler on_close_stream =
+let create id ~max_frame_size writer error_handler on_close =
   { id
   ; writer
   ; error_handler
@@ -127,7 +127,7 @@ let create id ~max_frame_size writer error_handler on_close_stream =
   ; state = Idle
   ; error_code = No_error
   ; max_frame_size
-  ; on_close_stream
+  ; on_close
   }
 
 let id { id; _ } = id
@@ -137,7 +137,7 @@ let is_open t = match t.state with Active (Open _, _) -> true | _ -> false
 let finish_stream t reason =
   let active = match t.state with Active _ -> true | _ -> false in
   let closed = { reason; ttl = initial_ttl } in
-  t.on_close_stream ~active closed;
+  t.on_close ~active closed;
   t.state <- Closed closed
 
 let error_code t =
@@ -154,4 +154,4 @@ let error_to_code error error_code =
 let reset_stream t error_code =
   let frame_info = Writer.make_frame_info t.id in
   Writer.write_rst_stream t.writer frame_info error_code;
-  Writer.flush t.writer (fun () -> finish_stream t (ResetByUs error_code))
+  finish_stream t (ResetByUs error_code)

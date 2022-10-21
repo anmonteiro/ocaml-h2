@@ -182,8 +182,8 @@ let send_fixed_response t s response data =
     else s.response_state <- Complete response;
     Writer.wakeup t.writer
   | Streaming _ -> failwith "h2.Reqd.respond_with_*: response already started"
-  | Fixed _ | Complete _ ->
-    failwith "h2.Reqd.respond_with_*: response already complete"
+  | Fixed _ -> failwith "h2.Reqd.respond_with_*: response already sent"
+  | Complete _ -> failwith "h2.Reqd.respond_with_*: response already complete"
 
 let schedule_trailers t new_trailers =
   match t.state with
@@ -350,16 +350,17 @@ let _report_error ?request (t : t) s (error : error) error_code =
     Body.Writer.close response_body;
     t.error_code <- error_to_code error error_code;
     reset_stream t error_code
+  | Fixed _, No_error ->
+    (* Still need to send an RST_STREAM frame. Set t.error_code with
+     * `error_code` and `flush_response_body` below will reset the stream after
+     * flushing any remaining body bytes. *)
+    t.error_code <- error_to_code error error_code;
+    reset_stream t error_code
   | (Waiting | Fixed _ | Streaming _), Exn _ ->
     (* XXX(seliopou): Decide what to do in this unlikely case. There is an
      * outstanding call to the [error_handler], but an intervening exception
      * has been reported as well. *)
     failwith "h2.Reqd.report_exn: NYI"
-  | Fixed _, No_error ->
-    (* Still need to send an RST_STREAM frame. Set t.error_code with
-     * `error_code` and `flush_response_body` below will reset the stream after
-     * flushing any remaining body bytes. *)
-    t.error_code <- error_to_code error error_code
   | (Waiting | Streaming _ | Fixed _ | Complete _), _ -> ()
 
 let report_error t exn error_code =
@@ -425,10 +426,8 @@ let write_buffer_data writer ~off ~len frame_info buffer =
   | `Bigstring bstr -> Writer.schedule_data writer ~off ~len frame_info bstr
 
 let close_stream t =
-  match t.state, t.error_code with
-  | Active _, Exn _ -> reset_stream t InternalError
-  | Active _, Other { code; _ } -> reset_stream t code
-  | Active (Open (FullHeaders | ActiveMessage _), _), No_error ->
+  match t.state with
+  | Active (Open (FullHeaders | ActiveMessage _), _) ->
     (* From RFC7540§8.1:
      *   A server can send a complete response prior to the client sending an
      *   entire request if the response does not depend on any portion of the
@@ -438,7 +437,7 @@ let close_stream t =
      *   after sending a complete response (i.e., a frame with the END_STREAM
      *   flag). *)
     reset_stream t Error_code.NoError
-  | Active (HalfClosed _, _), _ ->
+  | Active (HalfClosed _, _) ->
     Writer.flush t.writer (fun () -> Stream.finish_stream t Finished)
   | _ -> assert false
 
@@ -456,7 +455,7 @@ let flush_response_body t ~max_bytes =
           ~max_bytes
           t.id
       else if Body.Writer.is_closed response_body
-      then
+      then (
         (* no pending output and closed, we can finalize the message and close
            the stream *)
         let frame_info =
@@ -465,8 +464,8 @@ let flush_response_body t ~max_bytes =
             ~flags:Flags.(set_end_stream default_flags)
             t.id
         in
-        if trailers <> Headers.empty
-        then (
+        match trailers with
+        | _ :: _ ->
           Writer.write_response_trailers
             t.writer
             stream.encoder
@@ -474,12 +473,13 @@ let flush_response_body t ~max_bytes =
             trailers;
           close_stream t;
           stream.response_state <- Complete response;
-          0)
-        else (
+          0
+        | [] ->
+          Format.eprintf "write more@.";
           (* From RFC7540§6.9.1:
-           *   Frames with zero length with the END_STREAM flag set (that is, an
-           *   empty DATA frame) MAY be sent if there is no available space in
-           *   either flow-control window. *)
+           *   Frames with zero length with the END_STREAM flag set (that is,
+           *   an empty DATA frame) MAY be sent if there is no available space
+           *   in either flow-control window. *)
           Writer.schedule_data t.writer frame_info ~len:0 Bigstringaf.empty;
           close_stream t;
           stream.response_state <- Complete response;
