@@ -35,6 +35,7 @@
 module AB = Angstrom.Buffered
 module Reader = Parse.Reader
 module Writer = Serialize.Writer
+module StreamsTbl = Scheduler.StreamsTbl
 
 module Scheduler = Scheduler.Make (struct
   include Stream
@@ -68,7 +69,9 @@ type t =
   ; mutable receiving_headers_for_stream : Stream_identifier.t option
   ; mutable did_send_go_away : bool
   ; mutable unacked_settings : int
-  ; pending_pings : (unit -> unit) Queue.t
+  ; pending_pings : ((unit, [ `EOF ]) result -> unit) Queue.t
+        (* TODO(anmonteiro): What to do with pending pings if connection
+           closes? *)
   ; error_handler : error -> unit
   ; push_handler : Request.t -> (response_handler, unit) result
         (* From RFC7540§4.3:
@@ -128,13 +131,13 @@ let report_error t = function
           then Stream_identifier.connection
           else t.current_stream_id)
         error;
+      t.did_send_go_away <- true;
       if error <> Error_code.NoError
       then t.error_handler (`Protocol_error (error, data));
       Writer.flush t.writer (fun () ->
           (* XXX: We need to allow lower numbered streams to complete before
            * shutting down. *)
           shutdown_rw t);
-      t.did_send_go_away <- true;
       Writer.wakeup t.writer)
   | StreamError (stream_id, error) ->
     (match Scheduler.find t.streams stream_id with
@@ -149,8 +152,8 @@ let report_error t = function
         Writer.write_rst_stream t.writer frame_info error);
     Writer.wakeup t.writer
 
-let report_connection_error t ?(additional_debug_data = "") error =
-  report_error t (ConnectionError (error, additional_debug_data))
+let report_connection_error t ?(reason = "") error =
+  report_error t (ConnectionError (error, reason))
 
 let report_stream_error t stream_id error =
   report_error t (StreamError (stream_id, error))
@@ -169,8 +172,8 @@ let set_error_and_handle t stream error error_code =
 let report_exn t exn =
   if not (is_closed t)
   then
-    let additional_debug_data = Printexc.to_string exn in
-    report_connection_error t ~additional_debug_data Error_code.InternalError
+    let reason = Printexc.to_string exn in
+    report_connection_error t ~reason Error_code.InternalError
 
 let send_window_update
     : type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
@@ -425,10 +428,7 @@ let handle_headers_block
     | Done (_, Error _) | Partial _ ->
       report_connection_error t Error_code.CompressionError
     | Fail (_, _, message) ->
-      report_connection_error
-        t
-        ~additional_debug_data:message
-        Error_code.CompressionError)
+      report_connection_error t ~reason:message Error_code.CompressionError)
   else partial_headers.parse_state <- parse_state'
 
 let handle_trailer_headers = handle_headers_block ~is_trailers:true
@@ -830,10 +830,10 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
     if t.unacked_settings < 0
     then
       (* The server is ACKing a SETTINGS frame that we didn't send *)
-      let additional_debug_data =
-        "Received SETTINGS with ACK but no ACK was pending"
-      in
-      report_connection_error t ~additional_debug_data Error_code.ProtocolError)
+      report_connection_error
+        t
+        ~reason:"Received unexpected SETTINGS frame with acknowledgement"
+        Error_code.ProtocolError)
   else
     match Settings.check_settings_list ~is_client:true settings with
     | Ok () ->
@@ -891,7 +891,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
               | exception Local ->
                 report_connection_error
                   t
-                  ~additional_debug_data:
+                  ~reason:
                     (Format.sprintf
                        "Window size for stream would exceed %ld"
                        Settings.WindowSize.max_window_size)
@@ -970,8 +970,10 @@ let process_push_promise_frame
      *   and has received acknowledgement MUST treat the receipt of a
      *   PUSH_PROMISE frame as a connection error (Section 5.4.1) of type
      *   PROTOCOL_ERROR. *)
-    let additional_debug_data = "Push is not enabled for the connection" in
-    report_connection_error t ~additional_debug_data Error_code.ProtocolError
+    report_connection_error
+      t
+      ~reason:"Push is disabled for this connection"
+      Error_code.ProtocolError
   else if not Stream_identifier.(promised_stream_id > t.max_pushed_stream_id)
   then
     (* From RFC7540§6.6:
@@ -980,17 +982,18 @@ let process_push_promise_frame
      *   (Section 5.4.1) of type PROTOCOL_ERROR. Note that an illegal stream
      *   identifier is an identifier for a stream that is not currently in the
      *   "idle" state. *)
-    let additional_debug_data =
-      "Illegal stream identifier promised by PUSH_PROMISE"
-    in
-    report_connection_error t ~additional_debug_data Error_code.ProtocolError
+    report_connection_error
+      t
+      ~reason:"Illegal stream identifier promised by PUSH_PROMISE"
+      Error_code.ProtocolError
   else
     let send_connection_error () =
-      let additional_debug_data =
-        "Received PUSH_PROMISE on a stream that is neither open nor \
-         half-closed (local)"
-      in
-      report_connection_error t ~additional_debug_data Error_code.ProtocolError
+      report_connection_error
+        t
+        ~reason:
+          "Received PUSH_PROMISE on a stream that is neither open nor \
+           half-closed (local)"
+        Error_code.ProtocolError
     in
     t.max_pushed_stream_id <- promised_stream_id;
     match Scheduler.find t.streams stream_id with
@@ -1006,6 +1009,8 @@ let process_push_promise_frame
         reserve_stream t frame promised_stream_id headers_block
       | _ -> send_connection_error ())
 
+let ok = Ok ()
+
 let process_ping_frame t { Frame.frame_header; _ } payload =
   let { Frame.flags; _ } = frame_header in
   (* From RFC7540§6.7:
@@ -1015,11 +1020,13 @@ let process_ping_frame t { Frame.frame_header; _ } payload =
   if Flags.test_ack flags
   then
     match Queue.take_opt t.pending_pings with
-    | Some callback -> callback ()
+    | Some callback -> callback ok
     | None ->
       (* server is ACKing a PING that we didn't send? *)
-      let additional_debug_data = "Unexpected PING acknowledgement" in
-      report_connection_error t ~additional_debug_data Error_code.ProtocolError
+      report_connection_error
+        t
+        ~reason:"Unexpected PING acknowledgement"
+        Error_code.ProtocolError
   else
     (* From RFC7540§6.7:
      *   Receivers of a PING frame that does not include an ACK flag MUST send
@@ -1074,7 +1081,7 @@ let add_window_increment
   then
     report_connection_error
       t
-      ~additional_debug_data:
+      ~reason:
         (Printf.sprintf
            "Window size for stream would exceed %ld"
            Settings.WindowSize.max_window_size)
@@ -1161,11 +1168,7 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
 (* From RFC7540§1:
  *   HTTP/2 [...] allows interleaving of request and response messages on the
  *   same connection and uses an efficient coding for HTTP header fields. *)
-let[@ocaml.warning "-16"] create
-    ?(config = Config.default)
-    ?push_handler
-    ~error_handler
-  =
+let create ?(config = Config.default) ?push_handler ~error_handler () =
   let push_handler =
     match push_handler with
     | Some push_handler -> push_handler
@@ -1201,7 +1204,7 @@ let[@ocaml.warning "-16"] create
          *   PROTOCOL_ERROR. *)
         report_connection_error
           t
-          ~additional_debug_data:
+          ~reason:
             "HEADERS or PUSH_PROMISE without the END_HEADERS flag set must be \
              followed by a CONTINUATION frame for the same stream"
           Error_code.ProtocolError
@@ -1335,7 +1338,7 @@ let create_h2c
     (* From RFC7540§3.2:
      *   Upon receiving the 101 response, the client MUST send a connection
      *   preface (Section 3.5), which includes a SETTINGS frame. *)
-    let t = create ?config ?push_handler ~error_handler in
+    let t = create ?config ?push_handler ~error_handler () in
     let respd = create_and_add_stream t ~error_handler:response_error_handler in
     assert (Stream_identifier.(t.current_stream_id === 1l));
     assert (Stream_identifier.(respd.id === 1l));
@@ -1450,8 +1453,26 @@ let next_read_operation t =
 
 let read t bs ~off ~len = Reader.read_with_more t.reader bs ~off ~len Incomplete
 
+let unexpected_eof t =
+  Scheduler.iter
+    ~f:(fun (Stream { descriptor; _ }) ->
+      match descriptor.state with
+      | Idle | Reserved _ | Closed _ -> ()
+      | Active _ ->
+        Respd.report_error
+          descriptor
+          (`Malformed_response "unexpected eof")
+          ProtocolError)
+    t.streams;
+  Queue.iter (fun f -> f (Error `EOF)) t.pending_pings;
+  report_connection_error t ProtocolError
+
+(* report_connection_error t ~reason:"unexpected eof" ProtocolError *)
+
 let read_eof t bs ~off ~len =
-  Reader.read_with_more t.reader bs ~off ~len Complete
+  let bytes_read = Reader.read_with_more t.reader bs ~off ~len Complete in
+  unexpected_eof t;
+  bytes_read
 
 (* XXX(anmonteiro): this function is here to please the Gluten `RUNTIME`
  * interface.

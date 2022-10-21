@@ -814,6 +814,7 @@ module Client_connection : sig
     :  ?config:Config.t
     -> ?push_handler:(Request.t -> (response_handler, unit) result)
     -> error_handler:error_handler
+    -> unit
     -> t
   (** [create ?config ?push_handler ~error_handler] creates a connection that
       can be used to interact with servers over the HTTP/2 protocol.
@@ -866,7 +867,12 @@ module Client_connection : sig
       {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for more
       details. *)
 
-  val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
+  val ping
+    :  t
+    -> ?payload:Bigstringaf.t
+    -> ?off:int
+    -> ((unit, [ `EOF ]) result -> unit)
+    -> unit
   (** [ping connection ?payload ?off f] sends an HTTP/2 PING frame and registers
       [f] to be called when the server has sent an acknowledgement for it. A
       custom [payload] (and offset into that payload) for the PING frame may

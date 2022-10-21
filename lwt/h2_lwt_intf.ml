@@ -73,7 +73,12 @@ module type Client = sig
     -> response_handler:Client_connection.response_handler
     -> Body.Writer.t
 
-  val ping : t -> ?payload:Bigstringaf.t -> ?off:int -> (unit -> unit) -> unit
+  val ping
+    :  ?payload:Bigstringaf.t
+    -> ?off:int
+    -> t
+    -> (unit, [ `EOF ]) result Lwt.t
+
   val shutdown : t -> unit Lwt.t
   val is_closed : t -> bool
 end

@@ -79,7 +79,12 @@ module Client = struct
     { runtime; connection }
 
   let request t = H2.Client_connection.request t.connection
-  let ping t = H2.Client_connection.ping t.connection
+
+  let ping ?payload ?off t =
+    let p, u = Eio.Promise.create () in
+    H2.Client_connection.ping ?payload ?off t.connection (Eio.Promise.resolve u);
+    p
+
   let shutdown t = Gluten_eio.Client.shutdown t.runtime
   let is_closed t = Gluten_eio.Client.is_closed t.runtime
 end

@@ -68,39 +68,31 @@ module Client_connection_tests = struct
   let read_operation = Alcotest.of_pp Read_operation.pp_hum
   let write_operation = Alcotest.of_pp Write_operation.pp_hum
 
+  let ready_to_read t =
+    Alcotest.check
+      read_operation
+      "Reader wants to read"
+      `Read
+      (next_read_operation t)
+
   let reader_closed ?(msg = "Reader closed") t =
     Alcotest.(check read_operation) msg `Close (next_read_operation t)
 
   let default_error_handler _ = assert false
 
   let test_initial_reader_state () =
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
+    let t = create ~error_handler:default_error_handler () in
     Alcotest.(check read_operation)
       "A new reader wants input"
       `Read
       (next_read_operation t)
 
   let test_reader_is_closed_after_eof () =
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
+    let t = create ~error_handler:default_error_handler () in
     let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
     Alcotest.(check int) "read_eof with no input returns 0" 0 c;
     reader_closed ~msg:"Shutting down a reader closes it" t;
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
+    let t = create ~error_handler:default_error_handler () in
     let c = read t Bigstringaf.empty ~off:0 ~len:0 in
     Alcotest.(check int) "read with no input returns 0" 0 c;
     let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
@@ -234,6 +226,7 @@ module Client_connection_tests = struct
         ?config:None
         ?push_handler:None
         ~error_handler:default_error_handler
+        ()
     in
     handle_preface t
 
@@ -244,7 +237,7 @@ module Client_connection_tests = struct
       ?(error_handler = default_error_handler)
       ()
     =
-    let t = create ?config ?push_handler ~error_handler in
+    let t = create ?config ?push_handler ~error_handler () in
     handle_preface ?settings t;
     t
 
@@ -261,7 +254,7 @@ module Client_connection_tests = struct
       | _ ->
         Alcotest.fail "Expected error handler to be called with protocol error"
     in
-    let t = create ?config:None ?push_handler:None ~error_handler in
+    let t = create ~error_handler () in
     let _, lenv = flush_pending_writes t in
     report_write_result t (`Ok lenv);
     let headers, _ = header_and_continuation_frames in
@@ -288,7 +281,7 @@ module Client_connection_tests = struct
       | _ ->
         Alcotest.fail "Expected error handler to be called with protocol error"
     in
-    let t = create ?config:None ?push_handler:None ~error_handler in
+    let t = create ~error_handler () in
     let _, lenv = flush_pending_writes t in
     report_write_result t (`Ok lenv);
     let goaway_frame =
