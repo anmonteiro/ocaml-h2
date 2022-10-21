@@ -37,7 +37,6 @@ open Stream
 
 type error =
   [ `Bad_request
-  | `Internal_server_error
   | `Exn of exn
   ]
 
@@ -83,7 +82,7 @@ type active_stream =
 and state =
   (active_state, active_stream, request_info * active_stream) Stream.state
 
-and t = (state, [ `Ok | error ], error_handler) Stream.stream
+and t = (state, error, error_handler) Stream.stream
 
 let create_active_request request request_body =
   { request; request_body; request_body_bytes = Int64.zero }
@@ -218,18 +217,18 @@ let unsafe_respond_with_data t response data =
   | Closed _ -> assert false
 
 let respond_with_string t response str =
-  if fst t.error_code <> `Ok
-  then
+  match t.error_code with
+  | No_error -> unsafe_respond_with_data t response (`String str)
+  | _ ->
     failwith
-      "h2.Reqd.respond_with_string: invalid state, currently handling error";
-  unsafe_respond_with_data t response (`String str)
+      "h2.Reqd.respond_with_string: invalid state, currently handling error"
 
 let respond_with_bigstring t response bstr =
-  if fst t.error_code <> `Ok
-  then
+  match t.error_code with
+  | No_error -> unsafe_respond_with_data t response (`Bigstring bstr)
+  | _ ->
     failwith
-      "h2.Reqd.respond_with_bigstring: invalid state, currently handling error";
-  unsafe_respond_with_data t response (`Bigstring bstr)
+      "h2.Reqd.respond_with_bigstring: invalid state, currently handling error"
 
 let send_streaming_response ~flush_headers_immediately t s response =
   let wait_for_first_flush = not flush_headers_immediately in
@@ -272,11 +271,12 @@ let unsafe_respond_with_streaming t ~flush_headers_immediately response =
   | Closed _ -> assert false
 
 let respond_with_streaming t ?(flush_headers_immediately = false) response =
-  if fst t.error_code <> `Ok
-  then
+  match t.error_code with
+  | No_error ->
+    unsafe_respond_with_streaming ~flush_headers_immediately t response
+  | _ ->
     failwith
-      "h2.Reqd.respond_with_streaming: invalid state, currently handling error";
-  unsafe_respond_with_streaming ~flush_headers_immediately t response
+      "h2.Reqd.respond_with_streaming: invalid state, currently handling error"
 
 let start_push_stream t s request =
   match s.create_push_stream t.id with
@@ -323,68 +323,44 @@ let unsafe_push t request =
   | Reserved _ | Closed _ -> assert false
 
 let push t request =
-  if fst t.error_code <> `Ok
-  then failwith "h2.Reqd.push: invalid state, currently handling error";
-  if Stream_identifier.is_pushed t.id
-  then
-    (* From RFC7540§6.6:
-     *   PUSH_PROMISE frames MUST only be sent on a peer-initiated stream that
-     *   is in either the "open" or "half-closed (remote)" state. *)
-    Error `Stream_cant_push
-  else unsafe_push t request
-
-let close_stream t =
   match t.error_code with
-  | _, Some error_code -> reset_stream t error_code
-  | _, None ->
-    (match t.state with
-    | Active (Open (FullHeaders | ActiveMessage _), _) ->
-      (* From RFC7540§8.1:
-       *   A server can send a complete response prior to the client sending an
-       *   entire request if the response does not depend on any portion of the
-       *   request that has not been sent and received. When this is true, a
-       *   server MAY request that the client abort transmission of a request
-       *   without error by sending a RST_STREAM with an error code of NO_ERROR
-       *   after sending a complete response (i.e., a frame with the END_STREAM
-       *   flag). *)
-      reset_stream t Error_code.NoError
-    | Active (HalfClosed _, _) ->
-      Writer.flush t.writer (fun () -> Stream.finish_stream t Finished)
-    | _ -> assert false)
+  | No_error ->
+    if Stream_identifier.is_pushed t.id
+    then
+      (* From RFC7540§6.6:
+       *   PUSH_PROMISE frames MUST only be sent on a peer-initiated stream that
+       *   is in either the "open" or "half-closed (remote)" state. *)
+      Error `Stream_cant_push
+    else unsafe_push t request
+  | _ -> failwith "h2.Reqd.push: invalid state, currently handling error"
 
-let _report_error ?request t s exn error_code =
-  match s.response_state, fst t.error_code with
-  | Waiting, `Ok ->
-    t.error_code <- (exn :> [ `Ok | error ]), Some error_code;
+let _report_error ?request (t : t) s (error : error) error_code =
+  match s.response_state, t.error_code with
+  | Waiting, No_error ->
+    t.error_code <- error_to_code error error_code;
     let status =
-      match (exn :> [ error | Status.standard ]) with
+      match (error :> [ error | Status.standard ]) with
       | `Exn _ -> `Internal_server_error
       | #Status.standard as status -> status
     in
-    t.error_handler ?request exn (fun headers ->
+    t.error_handler ?request error (fun headers ->
         let response = Response.create ~headers status in
         unsafe_respond_with_streaming ~flush_headers_immediately:true t response)
-  | Waiting, `Exn _ ->
+  | Streaming { response_body; _ }, No_error ->
+    Body.Writer.close response_body;
+    t.error_code <- error_to_code error error_code;
+    reset_stream t error_code
+  | (Waiting | Fixed _ | Streaming _), Exn _ ->
     (* XXX(seliopou): Decide what to do in this unlikely case. There is an
      * outstanding call to the [error_handler], but an intervening exception
      * has been reported as well. *)
     failwith "h2.Reqd.report_exn: NYI"
-  | Streaming { response_body; _ }, `Ok ->
-    Body.Writer.close response_body;
-    t.error_code <- (exn :> [ `Ok | error ]), Some error_code;
-    reset_stream t error_code
-  | Streaming { response_body; _ }, `Exn _ ->
-    Body.Writer.close response_body;
-    t.error_code <- fst t.error_code, Some error_code;
-    reset_stream t error_code;
-    Writer.close_and_drain t.writer
-  | (Fixed _ | Complete _ | Streaming _ | Waiting), _ ->
-    (* XXX(seliopou): Once additional logging support is added, log the error
-     * in case it is not spurious. *)
+  | Fixed _, No_error ->
     (* Still need to send an RST_STREAM frame. Set t.error_code with
-     * `error_code` and `flush_response_body` below will take care of it. *)
-    t.error_code <- fst t.error_code, Some error_code;
-    reset_stream t error_code
+     * `error_code` and `flush_response_body` below will reset the stream after
+     * flushing any remaining body bytes. *)
+    t.error_code <- error_to_code error error_code
+  | (Waiting | Streaming _ | Fixed _ | Complete _), _ -> ()
 
 let report_error t exn error_code =
   match t.state with
@@ -410,10 +386,8 @@ let try_with t f : (unit, exn) Result.result =
     report_exn t exn;
     Error exn
 
+let error_code = Stream.error_code
 (* Private API, not exposed to the user through h2.mli *)
-
-let error_code t =
-  match fst t.error_code with #error as error -> Some error | `Ok -> None
 
 let requires_output t =
   match t.state with
@@ -449,6 +423,24 @@ let write_buffer_data writer ~off ~len frame_info buffer =
   match buffer with
   | `String str -> Writer.write_data writer ~off ~len frame_info str
   | `Bigstring bstr -> Writer.schedule_data writer ~off ~len frame_info bstr
+
+let close_stream t =
+  match t.state, t.error_code with
+  | Active _, Exn _ -> reset_stream t InternalError
+  | Active _, Other { code; _ } -> reset_stream t code
+  | Active (Open (FullHeaders | ActiveMessage _), _), No_error ->
+    (* From RFC7540§8.1:
+     *   A server can send a complete response prior to the client sending an
+     *   entire request if the response does not depend on any portion of the
+     *   request that has not been sent and received. When this is true, a
+     *   server MAY request that the client abort transmission of a request
+     *   without error by sending a RST_STREAM with an error code of NO_ERROR
+     *   after sending a complete response (i.e., a frame with the END_STREAM
+     *   flag). *)
+    reset_stream t Error_code.NoError
+  | Active (HalfClosed _, _), _ ->
+    Writer.flush t.writer (fun () -> Stream.finish_stream t Finished)
+  | _ -> assert false
 
 let flush_response_body t ~max_bytes =
   match t.state with

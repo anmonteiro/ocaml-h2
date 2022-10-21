@@ -96,11 +96,19 @@ type ('active_state, 'active, 'reserved) state =
   | Closed of closed
   constraint 'active_state = (_, _) active_state
 
-type ('state, 'error_code, 'error_handler) stream =
+type 'a error_status =
+  | No_error
+  | Exn of exn
+  | Other of
+      { error : 'a
+      ; code : Error_code.t
+      }
+
+type ('state, 'error, 'error_handler) stream =
   { id : Stream_identifier.t
   ; writer : Serialize.Writer.t
   ; error_handler : 'error_handler
-  ; mutable error_code : 'error_code * Error_code.t option
+  ; mutable error_code : 'error error_status
   ; mutable state : 'state
         (* The largest frame payload we're allowed to write. *)
   ; mutable max_frame_size : int
@@ -117,7 +125,7 @@ let create id ~max_frame_size writer error_handler on_close_stream =
     (* From RFC7540§5.1:
      *   idle: All streams start in the "idle" state. *)
   ; state = Idle
-  ; error_code = `Ok, None
+  ; error_code = No_error
   ; max_frame_size
   ; on_close_stream
   }
@@ -131,6 +139,17 @@ let finish_stream t reason =
   let closed = { reason; ttl = initial_ttl } in
   t.on_close_stream ~active closed;
   t.state <- Closed closed
+
+let error_code t =
+  match t.error_code with
+  | Exn exn -> Some (`Exn exn)
+  | Other { error; _ } -> Some error
+  | No_error -> None
+
+let error_to_code error error_code =
+  match error with
+  | `Exn exn -> Exn exn
+  | other -> Other { error = other; code = error_code }
 
 let reset_stream t error_code =
   let frame_info = Writer.make_frame_info t.id in

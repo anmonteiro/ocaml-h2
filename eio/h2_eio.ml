@@ -31,8 +31,6 @@
  *---------------------------------------------------------------------------*)
 
 module Server = struct
-  module Server_runtime = Gluten_eio.Server
-
   let create_connection_handler
       ?(config = H2.Config.default)
       ~request_handler
@@ -46,7 +44,7 @@ module Server = struct
         ~error_handler:(error_handler client_addr)
         (request_handler client_addr)
     in
-    Server_runtime.create_connection_handler
+    Gluten_eio.Server.create_connection_handler
       ~read_buffer_size:config.read_buffer_size
       ~protocol:(module H2.Server_connection)
       connection
@@ -55,11 +53,9 @@ module Server = struct
 end
 
 module Client = struct
-  module Client_runtime = Gluten_eio.Client
-
   type t =
     { connection : H2.Client_connection.t
-    ; runtime : Client_runtime.t
+    ; runtime : Gluten_eio.Client.t
     }
 
   let create_connection
@@ -73,7 +69,7 @@ module Client = struct
       H2.Client_connection.create ~config ?push_handler ~error_handler
     in
     let runtime =
-      Client_runtime.create
+      Gluten_eio.Client.create
         ~read_buffer_size:config.read_buffer_size
         ~sw
         ~protocol:(module H2.Client_connection)
@@ -84,6 +80,6 @@ module Client = struct
 
   let request t = H2.Client_connection.request t.connection
   let ping t = H2.Client_connection.ping t.connection
-  let shutdown t = Client_runtime.shutdown t.runtime
-  let is_closed t = Client_runtime.is_closed t.runtime
+  let shutdown t = Gluten_eio.Client.shutdown t.runtime
+  let is_closed t = Gluten_eio.Client.is_closed t.runtime
 end

@@ -1273,6 +1273,34 @@ module Server_connection_tests = struct
         "Expected state machine to issue a write operation after seeing \
          headers."
 
+  let test_reset_stream () =
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let request_handler reqd =
+      Reqd.respond_with_string
+        reqd
+        (Response.create `Internal_server_error)
+        "An error occurred";
+      Reqd.report_exn reqd Not_found
+    in
+    let t = create_and_handle_preface ~error_handler request_handler in
+    read_request ~body:"request body" t request;
+    match next_write_operation t with
+    | `Write iovecs ->
+      let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
+      Alcotest.(check (list int))
+        "???"
+        (List.map
+           Frame.FrameType.serialize
+           Frame.FrameType.[ Headers; Data; RSTStream ])
+        (* Not entirely sure what frames should be received here. *)
+        (List.map
+           (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+             Frame.FrameType.serialize frame_type)
+           frames);
+      report_write_result t (`Ok (IOVec.lengthv iovecs));
+      writer_yields t
+    | _ -> assert false
+
   (* TODO: test graceful shutdown, allowing lower numbered streams to
      complete. *)
   let suite =
@@ -1332,6 +1360,7 @@ module Server_connection_tests = struct
       , `Quick
       , test_flow_control_can_send_empty_data_frame )
     ; "trailers", `Quick, test_trailers
+    ; "reset stream before all DATA frames were sent", `Quick, test_reset_stream
     ]
 end
 
