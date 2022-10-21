@@ -72,7 +72,7 @@ type state =
   , active_request Stream.remote_state )
   Stream.state
 
-type t = (state, [ `Ok | error ], error_handler) Stream.stream
+type t = (state, error, error_handler) Stream.stream
 
 let create_active_response response response_body =
   ActiveMessage
@@ -128,9 +128,9 @@ let close_stream t =
   | _ -> ()
 
 (* returns whether we should send an RST_STREAM frame or not. *)
-let _report_error t ?response_body error error_code =
-  match fst t.error_code with
-  | `Ok ->
+let _report_error (t : t) ?response_body (error : error) error_code =
+  match t.error_code with
+  | No_error ->
     (match response_body with
     | Some response_body ->
       Body.Reader.close response_body;
@@ -138,15 +138,14 @@ let _report_error t ?response_body error error_code =
          it. *)
       Body.Reader.execute_read response_body
     | None -> ());
-    t.error_code <- (error :> [ `Ok | error ]), Some error_code;
+    t.error_code <- error_to_code error error_code;
     t.error_handler error;
     true
-  | `Exn _ | `Protocol_error _ | `Invalid_response_body_length _
-  | `Malformed_response _ ->
+  | Exn _ | Other _ ->
     (* XXX: Is this even possible? *)
     failwith "h2.Reqd.report_exn: NYI"
 
-let report_error t error error_code =
+let report_error (t : t) error error_code =
   match t.state with
   | Active
       ( ( Open (ActiveMessage { response_body; _ })
@@ -165,9 +164,6 @@ let report_error t error error_code =
   | Idle | Closed _ ->
     (* Not allowed to send RST_STREAM frames in these states *)
     ignore (_report_error t error error_code)
-
-let error_code t =
-  match fst t.error_code with #error as error -> Some error | `Ok -> None
 
 let requires_output t =
   match t.state with
