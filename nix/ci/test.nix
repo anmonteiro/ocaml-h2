@@ -20,7 +20,6 @@ let
   pkgs = import "${src}" {
     extraOverlays = [
       (self: super: {
-        h2spec = super.callPackage ../h2spec.nix { };
         ocamlPackages = super.ocaml-ng."ocamlPackages_${ocamlVersion}";
       })
     ];
