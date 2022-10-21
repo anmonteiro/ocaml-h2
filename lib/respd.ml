@@ -138,7 +138,7 @@ let _report_error (t : t) ?response_body (error : error) error_code =
   | Exn _ | Other _ ->
     (* Already handling error.
      * TODO(anmonteiro): Log a message when we add Logs support *)
-    false
+    ()
 
 let report_error (t : t) error error_code =
   match t.state with
