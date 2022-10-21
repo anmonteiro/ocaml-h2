@@ -485,7 +485,6 @@ let flush_response_body t ~max_bytes =
           stream.response_state <- Complete response;
           0
         | [] ->
-          Format.eprintf "write more@.";
           (* From RFC7540§6.9.1:
            *   Frames with zero length with the END_STREAM flag set (that is,
            *   an empty DATA frame) MAY be sent if there is no available space

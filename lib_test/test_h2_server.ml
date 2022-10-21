@@ -1292,7 +1292,6 @@ module Server_connection_tests = struct
         (List.map
            Frame.FrameType.serialize
            Frame.FrameType.[ Headers; RSTStream ])
-        (* Not entirely sure what frames should be received here. *)
         (List.map
            (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
              Frame.FrameType.serialize frame_type)
@@ -1311,7 +1310,6 @@ module Server_connection_tests = struct
       Alcotest.(check bool) "request was malformed" true (error = `Bad_request);
       let body = handle Headers.empty in
       Body.Writer.write_string body "hi";
-      Format.eprintf "wrote@.";
       Body.Writer.close body
     in
 
@@ -1323,7 +1321,6 @@ module Server_connection_tests = struct
       Alcotest.(check (list int))
         "Doesn't send RST_STREAM frames if the error is `Bad_request"
         (List.map Frame.FrameType.serialize Frame.FrameType.[ Headers; Data ])
-        (* Not entirely sure what frames should be received here. *)
         (List.map
            (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
              Frame.FrameType.serialize frame_type)
