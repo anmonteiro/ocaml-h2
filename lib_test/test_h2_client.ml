@@ -725,7 +725,7 @@ module Client_connection_tests = struct
     let t = create_and_handle_preface () in
     let ping_handler1_called = ref false in
     let ping_handler2_called = ref false in
-    let ping_handler ref () = ref := true in
+    let ping_handler ref _ = ref := true in
     ping t (ping_handler ping_handler1_called);
     ping t (ping_handler ping_handler2_called);
     let writer = Writer.create 256 in

@@ -66,7 +66,7 @@ module Client = struct
       socket
     =
     let connection =
-      H2.Client_connection.create ~config ?push_handler ~error_handler
+      H2.Client_connection.create ~config ?push_handler ~error_handler ()
     in
     let runtime =
       Gluten_eio.Client.create

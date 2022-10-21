@@ -1,6 +1,6 @@
 (executable
  (name eio_get)
- (libraries h2 h2-eio))
+ (libraries h2 h2-eio eio-ssl))
 
 (alias
  (name examples)

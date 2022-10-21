@@ -1465,9 +1465,7 @@ let unexpected_eof t =
           ProtocolError)
     t.streams;
   Queue.iter (fun f -> f (Error `EOF)) t.pending_pings;
-  report_connection_error t ProtocolError
-
-(* report_connection_error t ~reason:"unexpected eof" ProtocolError *)
+  report_connection_error t ~reason:"unexpected eof" ProtocolError
 
 let read_eof t bs ~off ~len =
   let bytes_read = Reader.read_with_more t.reader bs ~off ~len Complete in

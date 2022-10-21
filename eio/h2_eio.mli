@@ -65,7 +65,12 @@ module Client : sig
     -> response_handler:H2.Client_connection.response_handler
     -> H2.Body.Writer.t
 
-  val ping : ?payload:Bigstringaf.t -> ?off:int -> t -> unit Eio.Promise.t
+  val ping
+    :  ?payload:Bigstringaf.t
+    -> ?off:int
+    -> t
+    -> (unit, [ `EOF ]) result Eio.Promise.t
+
   val shutdown : t -> unit
   val is_closed : t -> bool
 end
