@@ -15,6 +15,9 @@ Unreleased
 - h2: Add `~request_method` argument to `H2.Method.body_length`
   ([#190](https://github.com/anmonteiro/ocaml-h2/pull/190))
   ([@jonathanjameswatson](https://github.com/jonathanjameswatson))
+- h2: Don't send any frames on a stream after an `RST_STREAM` frame
+  ([#187](https://github.com/anmonteiro/ocaml-h2/pull/187),
+  [#194](https://github.com/anmonteiro/ocaml-h2/pull/194))
 
 0.9.0 2022-08-14
 ---------------
