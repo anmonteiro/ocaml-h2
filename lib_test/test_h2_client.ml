@@ -1403,6 +1403,57 @@ module Client_connection_tests = struct
            Frame.FrameType.serialize frame_type)
          frames)
 
+  let test_request_body_rst_stream_no_double_error () =
+    let t = create_and_handle_preface () in
+    let request =
+      Request.create
+        ~scheme:"http"
+        ~headers:(Headers.of_list [ "content-length", "5" ])
+        `GET
+        "/"
+    in
+    let handler_called = ref false in
+    let response_handler _response _response_body = handler_called := true in
+    let error_handler_called = ref false in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~flush_headers_immediately:true
+        ~error_handler:(fun _ -> error_handler_called := true)
+        ~response_handler
+    in
+    flush_request t;
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    read_response
+      t
+      hpack_encoder
+      ~flags:Flags.(default_flags |> set_end_header)
+      (Response.create `OK ~headers:(Headers.of_list [ "content-length", "6" ]));
+    read_response_body t "foo";
+    let rst_stream =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = RSTStream
+          }
+      ; frame_payload = Frame.RSTStream Error_code.ProtocolError
+      }
+    in
+    read_frames t [ rst_stream ];
+    (* Read DATA frame after an RST_STREAM, not allowed by the protocol. We
+     * shouldn't crash if we're already handling the RST_STREAM error. *)
+    read_response_body t "foo";
+    Alcotest.(check bool) "Response handler called" true !handler_called;
+    Alcotest.(check bool)
+      "error handler called called"
+      true
+      !error_handler_called;
+    (* Send the rest of the request body. *)
+    Body.Writer.write_string request_body "hello";
+    Body.Writer.close request_body
+
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
@@ -1455,6 +1506,9 @@ module Client_connection_tests = struct
       , `Quick
       , test_dont_flush_headers_immediately )
     ; "headers blocks don't share buffers", `Quick, test_header_buffer_sharing
+    ; ( "dont fail if already handling error"
+      , `Quick
+      , test_request_body_rst_stream_no_double_error )
     ]
 end
 

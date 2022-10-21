@@ -142,8 +142,9 @@ let _report_error (t : t) ?response_body (error : error) error_code =
     t.error_handler error;
     true
   | Exn _ | Other _ ->
-    (* XXX: Is this even possible? *)
-    failwith "h2.Reqd.report_exn: NYI"
+    (* Already handling error.
+     * TODO(anmonteiro): Log a message when we add Logs support *)
+    false
 
 let report_error (t : t) error error_code =
   match t.state with
