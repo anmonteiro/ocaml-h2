@@ -70,8 +70,6 @@ type t =
   ; mutable did_send_go_away : bool
   ; mutable unacked_settings : int
   ; pending_pings : ((unit, [ `EOF ]) result -> unit) Queue.t
-        (* TODO(anmonteiro): What to do with pending pings if connection
-           closes? *)
   ; error_handler : error -> unit
   ; push_handler : Request.t -> (response_handler, unit) result
         (* From RFC7540§4.3:
