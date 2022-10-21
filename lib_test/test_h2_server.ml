@@ -1331,35 +1331,6 @@ module Server_connection_tests = struct
       report_write_result t (`Ok (IOVec.lengthv iovecs))
     | _ -> assert false
 
-  let test_reset_stream_streaming_response_zero_length_frame () =
-    let request = Request.create ~scheme:"https" `CONNECT "/" in
-    let error_handler ?request:_ error handle =
-      Alcotest.(check bool) "request was malformed" true (error = `Bad_request);
-      let body = handle Headers.empty in
-      Body.Writer.write_string body "";
-      Format.eprintf "wrote@.";
-      Body.Writer.close body
-    in
-
-    let t = create_and_handle_preface ~error_handler default_request_handler in
-    read_request ~body:"request body" t request;
-    match next_write_operation t with
-    | `Write iovecs ->
-      let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
-      Alcotest.(check (list int))
-        "Doesn't send DATA frames after RST_STREAM frames"
-        (List.map
-           Frame.FrameType.serialize
-           Frame.FrameType.[ Headers; RSTStream ])
-        (* Not entirely sure what frames should be received here. *)
-        (List.map
-           (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
-             Frame.FrameType.serialize frame_type)
-           frames);
-      report_write_result t (`Ok (IOVec.lengthv iovecs));
-      writer_yields t
-    | _ -> assert false
-
   (* TODO: test graceful shutdown, allowing lower numbered streams to
      complete. *)
   let suite =
@@ -1423,10 +1394,6 @@ module Server_connection_tests = struct
     ; ( "reset stream before all DATA frames were sent (streaming response)"
       , `Quick
       , test_reset_stream_streaming_response )
-    ; ( "reset stream before all DATA frames were sent (streaming response, \
-         0-length frame)"
-      , `Quick
-      , test_reset_stream_streaming_response_zero_length_frame )
     ]
 end
 
