@@ -474,6 +474,7 @@ module IOVec : module type of Httpaf.IOVec
 module Reqd : sig
   type error =
     [ `Bad_request
+    | `Internal_server_error
     | `Exn of exn
     ]
 
@@ -688,6 +689,7 @@ module Server_connection : sig
 
   type error =
     [ `Bad_request
+    | `Internal_server_error
     | `Exn of exn
     ]
 

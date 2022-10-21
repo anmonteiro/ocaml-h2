@@ -49,6 +49,7 @@ type request_handler = Reqd.t -> unit
 
 type error =
   [ `Bad_request
+  | `Internal_server_error
   | `Exn of exn
   ]
 

@@ -37,6 +37,7 @@ open Stream
 
 type error =
   [ `Bad_request
+  | `Internal_server_error
   | `Exn of exn
   ]
 
