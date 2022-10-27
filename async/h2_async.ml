@@ -121,7 +121,7 @@ module Client = struct
       socket
     =
     let connection =
-      Client_connection.create ~config ?push_handler ~error_handler
+      Client_connection.create ~config ?push_handler ~error_handler ()
     in
     Client_runtime.create
       ~read_buffer_size:config.read_buffer_size
@@ -153,7 +153,7 @@ module Client = struct
         socket
       =
       let connection =
-        Client_connection.create ~config ?push_handler ~error_handler
+        Client_connection.create ~config ?push_handler ~error_handler ()
       in
       Client_runtime.create
         ~read_buffer_size:config.read_buffer_size
@@ -196,7 +196,7 @@ module Client = struct
         socket
       =
       let connection =
-        Client_connection.create ~config ?push_handler ~error_handler
+        Client_connection.create ~config ?push_handler ~error_handler ()
       in
       Client_runtime.create
         ~read_buffer_size:config.read_buffer_size

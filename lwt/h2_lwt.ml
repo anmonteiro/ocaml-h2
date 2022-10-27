@@ -75,7 +75,7 @@ module Client (Client_runtime : Gluten_lwt.Client) = struct
       socket
     =
     let connection =
-      H2.Client_connection.create ~config ?push_handler ~error_handler
+      H2.Client_connection.create ~config ?push_handler ~error_handler ()
     in
     Client_runtime.create
       ~read_buffer_size:config.read_buffer_size
@@ -85,7 +85,12 @@ module Client (Client_runtime : Gluten_lwt.Client) = struct
     >|= fun runtime -> { runtime; connection }
 
   let request t = H2.Client_connection.request t.connection
-  let ping t = H2.Client_connection.ping t.connection
+
+  let ping ?payload ?off { connection; _ } =
+    let t, u = Lwt.task () in
+    H2.Client_connection.ping ?payload ?off connection (Lwt.wakeup_later u);
+    t
+
   let shutdown t = Client_runtime.shutdown t.runtime
   let is_closed t = Client_runtime.is_closed t.runtime
 end

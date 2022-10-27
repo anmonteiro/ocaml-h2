@@ -2,7 +2,6 @@
 
 let
   inherit (pkgs) lib stdenv ocamlPackages;
-  inherit (lib) filterGitSource;
 in
 
 with ocamlPackages;

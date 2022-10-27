@@ -127,24 +127,18 @@ let close_stream t =
     ()
   | _ -> ()
 
-(* returns whether we should send an RST_STREAM frame or not. *)
 let _report_error (t : t) ?response_body (error : error) error_code =
   match t.error_code with
   | No_error ->
     (match response_body with
-    | Some response_body ->
-      Body.Reader.close response_body;
-      (* do we even need to execute this read? `close_reader` already does
-         it. *)
-      Body.Reader.execute_read response_body
+    | Some response_body -> Body.Reader.close response_body
     | None -> ());
     t.error_code <- error_to_code error error_code;
-    t.error_handler error;
-    true
+    t.error_handler error
   | Exn _ | Other _ ->
     (* Already handling error.
      * TODO(anmonteiro): Log a message when we add Logs support *)
-    false
+    ()
 
 let report_error (t : t) error error_code =
   match t.state with
@@ -153,11 +147,12 @@ let report_error (t : t) error error_code =
         | HalfClosed (ActiveMessage { response_body; _ }) )
       , s ) ->
     Body.Writer.close s.request_body;
-    if _report_error t ~response_body error error_code
-    then reset_stream t error_code
+    _report_error t ~response_body error error_code;
+    reset_stream t error_code
   | Reserved (ActiveMessage s) | Active (_, s) ->
     Body.Writer.close s.request_body;
-    if _report_error t error error_code then reset_stream t error_code
+    _report_error t error error_code;
+    reset_stream t error_code
   | Reserved _ ->
     (* Streams in the reserved state don't yet have a stream-level error
      * handler registered with them *)

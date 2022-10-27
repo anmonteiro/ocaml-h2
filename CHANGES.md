@@ -18,6 +18,10 @@ Unreleased
 - h2: Don't send any frames on a stream after an `RST_STREAM` frame
   ([#187](https://github.com/anmonteiro/ocaml-h2/pull/187),
   [#194](https://github.com/anmonteiro/ocaml-h2/pull/194))
+- h2: call error handler on the client if the remote peer closes the
+  commmunication channel
+  ([#177](https://github.com/anmonteiro/ocaml-h2/pull/177),
+  [#196](https://github.com/anmonteiro/ocaml-h2/pull/194))
 
 0.9.0 2022-08-14
 ---------------

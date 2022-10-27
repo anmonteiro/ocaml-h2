@@ -148,8 +148,8 @@ let report_error t = function
         Writer.write_rst_stream t.writer frame_info error);
     wakeup_writer t
 
-let report_connection_error t ?(additional_debug_data = "") error =
-  report_error t (ConnectionError (error, additional_debug_data))
+let report_connection_error t ?(reason = "") error =
+  report_error t (ConnectionError (error, reason))
 
 let report_stream_error t stream_id error =
   report_error t (StreamError (stream_id, error))
@@ -162,8 +162,8 @@ let set_error_and_handle ?request t stream error error_code =
 let report_exn t exn =
   if not (is_closed t)
   then
-    let additional_debug_data = Printexc.to_string exn in
-    report_connection_error t ~additional_debug_data Error_code.InternalError
+    let reason = Printexc.to_string exn in
+    report_connection_error t ~reason Error_code.InternalError
 
 let on_close_stream t id ~active closed =
   if active
@@ -397,10 +397,7 @@ let handle_headers_block
     | Done (_, Error _) | Partial _ ->
       report_connection_error t Error_code.CompressionError
     | Fail (_, _, message) ->
-      report_connection_error
-        t
-        ~additional_debug_data:message
-        Error_code.CompressionError)
+      report_connection_error t ~reason:message Error_code.CompressionError)
   else partial_headers.parse_state <- parse_state'
 
 let handle_trailer_headers = handle_headers_block ~is_trailers:true
@@ -882,7 +879,7 @@ let apply_settings_list t settings =
           | exception Local ->
             report_connection_error
               t
-              ~additional_debug_data:
+              ~reason:
                 (Format.sprintf
                    "Window size for stream would exceed %ld"
                    Settings.WindowSize.max_window_size)
@@ -924,11 +921,10 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
     t.unacked_settings <- t.unacked_settings - 1;
     if t.unacked_settings < 0
     then
-      (* The server is ACKing a SETTINGS frame that we didn't send *)
-      let additional_debug_data =
-        "Received SETTINGS with ACK but no ACK was pending"
-      in
-      report_connection_error t ~additional_debug_data Error_code.ProtocolError)
+      report_connection_error
+        t
+        ~reason:"Received unexpected SETTINGS frame with acknowledgement"
+        Error_code.ProtocolError)
   else
     match Settings.check_settings_list settings with
     | Ok () ->
@@ -1005,7 +1001,7 @@ let add_window_increment
   then
     report_connection_error
       t
-      ~additional_debug_data:
+      ~reason:
         (Printf.sprintf
            "Window size for stream would exceed %ld"
            Settings.WindowSize.max_window_size)
@@ -1182,7 +1178,7 @@ let create_generic ~h2c ~config ~error_handler request_handler =
          *   PROTOCOL_ERROR. *)
         report_connection_error
           t
-          ~additional_debug_data:
+          ~reason:
             "HEADERS or PUSH_PROMISE without the END_HEADERS flag set must be \
              followed by a CONTINUATION frame for the same stream"
           Error_code.ProtocolError
@@ -1201,7 +1197,7 @@ let create_generic ~h2c ~config ~error_handler request_handler =
            *   PROTOCOL_ERROR. *)
           report_connection_error
             t
-            ~additional_debug_data:"Client cannot push"
+            ~reason:"Client cannot push"
             Error_code.ProtocolError
         | Ping data -> process_ping_frame t frame data
         | GoAway (last_stream_id, error, debug_data) ->

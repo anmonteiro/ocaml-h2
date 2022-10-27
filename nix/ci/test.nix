@@ -31,10 +31,9 @@ let
   h2Pkgs = import ./.. { inherit pkgs nix-filter; };
   h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
   srcs = lib.mapAttrsFlatten (n: v: v.src) h2Drvs ++ [
-    (lib.filterGitSource {
-      src = ../..;
-      dirs = [ "spec" ];
-      files = [ ".ocamlformat" ];
+    (with nix-filter; filter {
+      root = ../..;
+      include = [ "spec" ".ocamlformat" ];
     })
   ];
 in

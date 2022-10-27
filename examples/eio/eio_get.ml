@@ -1,5 +1,5 @@
 open H2
-module Client = H2_eio.Client.SSL
+module Client = H2_eio.Client
 
 let response_handler ~on_eof response response_body =
   Format.eprintf "Response: %a@." Response.pp_hum response;
@@ -45,19 +45,30 @@ let () =
     | None -> failwith "No hostname provided"
     | Some host -> host
   in
-  Eio_main.run (fun _env ->
+  Eio_main.run (fun env ->
+      let network = Eio.Stdenv.net env in
       Eio.Switch.run (fun sw ->
-          let fd = Unix.socket ~cloexec:true Unix.PF_INET Unix.SOCK_STREAM 0 in
           let addrs =
-            Eio_unix.run_in_systhread (fun () ->
-                Unix.getaddrinfo
-                  host
-                  (string_of_int !port)
-                  [ Unix.(AI_FAMILY PF_INET) ])
+            let addrs =
+              Eio_unix.run_in_systhread (fun () ->
+                  Unix.getaddrinfo
+                    host
+                    (string_of_int !port)
+                    [ Unix.(AI_FAMILY PF_INET) ])
+            in
+            List.filter_map
+              (fun (addr : Unix.addr_info) ->
+                match addr.ai_addr with
+                | Unix.ADDR_UNIX _ -> None
+                | ADDR_INET (addr, port) -> Some (addr, port))
+              addrs
           in
-          Eio_unix.run_in_systhread (fun () ->
-              Unix.connect fd (List.hd addrs).ai_addr);
-          let socket = Eio_unix.FD.as_socket ~sw ~close_unix:true fd in
+          let addr =
+            let inet, port = List.hd addrs in
+            `Tcp (Eio_unix.Ipaddr.of_unix inet, port)
+          in
+          let socket = Eio.Net.connect ~sw network addr in
+
           let request =
             Request.create
               `GET
@@ -70,15 +81,18 @@ let () =
           Ssl.disable_protocols ctx [ Ssl.SSLv23 ];
           Ssl.honor_cipher_order ctx;
           Ssl.set_context_alpn_protos ctx [ "h2" ];
-          let s = Eio_ssl.embed_uninitialized_socket socket ctx in
-          let ssl_sock = Eio_ssl.ssl_socket_of_uninitialized_socket s in
+          let ssl_ctx = Eio_ssl.Context.create ~ctx socket in
+          let ssl_sock = Eio_ssl.Context.ssl_socket ssl_ctx in
           Ssl.set_client_SNI_hostname ssl_sock host;
           Ssl.set_hostflags ssl_sock [ No_partial_wildcards ];
           Ssl.set_host ssl_sock host;
-          let ssl_sock = Eio_ssl.ssl_perform_handshake s in
+          let ssl_sock = Eio_ssl.connect ssl_ctx in
 
           let connection =
-            Client.create_connection ~sw ~error_handler ssl_sock
+            Client.create_connection
+              ~sw
+              ~error_handler
+              (ssl_sock :> Eio.Flow.two_way)
           in
           let response_handler =
             response_handler ~on_eof:(fun () ->
