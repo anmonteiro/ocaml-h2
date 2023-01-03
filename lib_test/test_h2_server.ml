@@ -15,8 +15,7 @@ module Server_connection_tests = struct
     let pp_hum fmt t =
       let str =
         match t with
-        | `Read ->
-          "Read"
+        | `Read -> "Read"
         | `Error (Error.ConnectionError (e, msg)) ->
           Format.sprintf "ConnectionError: %ld %S" (Error_code.serialize e) msg
         | `Error (Error.StreamError (stream_id, e)) ->
@@ -24,8 +23,7 @@ module Server_connection_tests = struct
             "StreamError on %ld: %ld"
             stream_id
             (Error_code.serialize e)
-        | `Close ->
-          "Close"
+        | `Close -> "Close"
       in
       Format.pp_print_string fmt str
   end
@@ -57,21 +55,16 @@ module Server_connection_tests = struct
       match t with
       | `Write iovecs ->
         Format.fprintf fmt "Write %S" (iovecs_to_string iovecs |> hex_of_string)
-      | `Yield ->
-        Format.pp_print_string fmt "Yield"
-      | `Close len ->
-        Format.fprintf fmt "Close %i" len
+      | `Yield -> Format.pp_print_string fmt "Yield"
+      | `Close len -> Format.fprintf fmt "Close %i" len
 
     let to_write_as_string t =
       match t with
-      | `Write iovecs ->
-        Some (iovecs_to_string iovecs)
-      | `Close _ | `Yield ->
-        None
+      | `Write iovecs -> Some (iovecs_to_string iovecs)
+      | `Close _ | `Yield -> None
   end
 
   let read_operation = Alcotest.of_pp Read_operation.pp_hum
-
   let write_operation = Alcotest.of_pp Write_operation.pp_hum
 
   let default_request_handler reqd =
@@ -146,10 +139,9 @@ module Server_connection_tests = struct
     let frame_info =
       Writer.make_frame_info
         ~flags:
-          (if has_body then
-             Flags.default_flags
-          else
-            Flags.(default_flags |> set_end_stream))
+          (if has_body
+          then Flags.default_flags
+          else Flags.(default_flags |> set_end_stream))
         1l
     in
     Serialize.Writer.write_request_headers
@@ -170,10 +162,9 @@ module Server_connection_tests = struct
     let frame_info =
       Writer.make_frame_info
         ~flags:
-          (if has_body then
-             Flags.default_flags
-          else
-            Flags.(default_flags |> set_end_stream))
+          (if has_body
+          then Flags.default_flags
+          else Flags.(default_flags |> set_end_stream))
         1l
     in
     Serialize.Writer.write_response_headers
@@ -182,8 +173,7 @@ module Server_connection_tests = struct
       frame_info
       response;
     (match body with
-    | None ->
-      ()
+    | None -> ()
     | Some body ->
       Serialize.Writer.write_data
         writer
@@ -230,21 +220,21 @@ module Server_connection_tests = struct
   let error_handler ?request:_ error handle =
     let message =
       match error with
-      | `Exn exn ->
-        Printexc.to_string exn
+      | `Exn exn -> Printexc.to_string exn
       | (#Status.client_error | #Status.server_error) as error ->
         Status.to_string error
     in
     let body = handle Headers.empty in
-    Body.write_string body message;
-    Body.close_writer body
+    Body.Writer.write_string body message;
+    Body.Writer.close body
 
   let test_reading_malformed_frame ?(is_failure = false) wire () =
     let t = create_and_handle_preface ~error_handler default_request_handler in
     let len = String.length wire in
     let bs = Bigstringaf.of_string ~off:0 ~len wire in
     let c = read_eof t bs ~off:0 ~len in
-    if is_failure then (
+    if is_failure
+    then (
       Alcotest.(check int)
         "read_eof with bad input (triggers a parse error) reads the header"
         10
@@ -255,8 +245,7 @@ module Server_connection_tests = struct
           "bad input triggers an `Error` in the parser state"
           ()
           ()
-      | _ ->
-        Alcotest.fail "expected parser to be in an error state")
+      | _ -> Alcotest.fail "expected parser to be in an error state")
     else (
       Alcotest.(check int) "read_eof with invalid reads the whole frame" len c;
       Alcotest.check
@@ -570,8 +559,7 @@ module Server_connection_tests = struct
         "Window Size value roundtrips in a signed fashion"
         (Int32.shift_left (-1l) 31)
         v
-    | _ ->
-      Alcotest.fail "Expected frame to parse successfully."
+    | _ -> Alcotest.fail "Expected frame to parse successfully."
 
   let test_open_existing_stream () =
     let t = create_and_handle_preface ~error_handler default_request_handler in
@@ -702,10 +690,8 @@ module Server_connection_tests = struct
     let request = Request.create `GET ~scheme:"http" "/main.css" in
     let pushed_reqd =
       match Reqd.push reqd request with
-      | Ok reqd ->
-        reqd
-      | Error _ ->
-        Alcotest.fail "Expected `push` to succeed"
+      | Ok reqd -> reqd
+      | Error _ -> Alcotest.fail "Expected `push` to succeed"
     in
     let response = Response.create `OK in
     (* Send the response for / *)
@@ -811,8 +797,8 @@ module Server_connection_tests = struct
       error_handler_called := true;
       Alcotest.(check bool) "request was malformed" true (error = `Bad_request);
       let body = handle Headers.empty in
-      Body.write_string body "";
-      Body.close_writer body
+      Body.Writer.write_string body "";
+      Body.Writer.close body
     in
     let t = create_and_handle_preface ~error_handler default_request_handler in
     let request =
@@ -836,8 +822,8 @@ module Server_connection_tests = struct
       error_handler_called := true;
       Alcotest.(check bool) "request was malformed" true (error = `Bad_request);
       let body = handle Headers.empty in
-      Body.write_string body "";
-      Body.close_writer body
+      Body.Writer.write_string body "";
+      Body.Writer.close body
     in
     let t = create_and_handle_preface ~error_handler default_request_handler in
     (* CONNECT is malformed if it doesn't include the `:authority`
@@ -884,17 +870,16 @@ module Server_connection_tests = struct
 
   let streaming_handler ?(flush = false) response writes reqd =
     let request_body = Reqd.request_body reqd in
-    Body.close_reader request_body;
+    Body.Reader.close request_body;
     let body =
       Reqd.respond_with_streaming ~flush_headers_immediately:flush reqd response
     in
     let rec write writes =
       match writes with
-      | [] ->
-        Body.close_writer body
+      | [] -> Body.Writer.close body
       | w :: ws ->
-        Body.write_string body w;
-        Body.flush body (fun () -> write ws)
+        Body.Writer.write_string body w;
+        Body.Writer.flush body (fun () -> write ws)
     in
     write writes
 
@@ -959,8 +944,7 @@ module Server_connection_tests = struct
         Alcotest.fail
           "Expected state machine to issue a write operation after seeing \
            headers.")
-    | Error msg ->
-      Alcotest.fail msg
+    | Error msg -> Alcotest.fail msg
 
   let test_nonzero_content_length_no_data_frames () =
     let request =
@@ -1033,7 +1017,7 @@ module Server_connection_tests = struct
     in
     let request_handler reqd =
       let request_body = Reqd.request_body reqd in
-      Body.schedule_read
+      Body.Reader.schedule_read
         request_body
         ~on_eof:ignore
         ~on_read:(fun _bs ~off:_ ~len:_ ->
@@ -1041,10 +1025,10 @@ module Server_connection_tests = struct
           Alcotest.(check bool)
             "Response body isn't closed (yet) when reading"
             false
-            (Body.is_closed request_body);
-          Body.schedule_read
+            (Body.Reader.is_closed request_body);
+          Body.Reader.schedule_read
             ~on_read:(fun _ ~off:_ ~len:_ ->
-              Body.schedule_read
+              Body.Reader.schedule_read
                 ~on_read:(fun _ ~off:_ ~len:_ -> ())
                 ~on_eof:(fun () ->
                   body_eof_called := true;
@@ -1091,12 +1075,45 @@ module Server_connection_tests = struct
       true
       !body_eof_called
 
+  let test_rst_stream_frames () =
+    let t = create_and_handle_preface default_request_handler in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    read_request ~body:"request body" t request;
+    let data_frame =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = Data
+          }
+      ; frame_payload = Frame.Data (Bigstringaf.of_string ~off:0 ~len:3 "foo")
+      }
+    in
+    let rst_stream =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = RSTStream
+          }
+      ; frame_payload = Frame.RSTStream Error_code.ProtocolError
+      }
+    in
+    read_frames t [ data_frame; rst_stream; rst_stream ];
+    let window_update_and_response_frames =
+      next_write_operation t |> Write_operation.to_write_as_string |> Option.get
+    in
+    report_write_result
+      t
+      (`Ok (String.length window_update_and_response_frames));
+    writer_yields t
+
   let test_flow_control () =
     let body_read_called = ref false in
     let request = Request.create ~scheme:"http" `GET "/" in
     let request_handler reqd =
       let request_body = Reqd.request_body reqd in
-      Body.schedule_read
+      Body.Reader.schedule_read
         request_body
         ~on_eof:ignore
         ~on_read:(fun _bs ~off:_ ~len:_ -> body_read_called := true)
@@ -1129,16 +1146,16 @@ module Server_connection_tests = struct
       report_write_result t (`Ok (IOVec.lengthv iovecs));
       Alcotest.(check bool) "Response handler called" true !body_read_called;
       writer_yields t
-    | _ ->
-      assert false
+    | _ -> assert false
 
   let test_flow_control_can_send_empty_data_frame () =
     let request = Request.create ~scheme:"http" `GET "/" in
     let request_handler reqd =
       let response = Response.create `OK in
       let response_body = Reqd.respond_with_streaming reqd response in
-      Body.write_string response_body "hello";
-      Body.flush response_body (fun () -> Body.close_writer response_body)
+      Body.Writer.write_string response_body "hello";
+      Body.Writer.flush response_body (fun () ->
+          Body.Writer.close response_body)
     in
     let t =
       create_and_handle_preface
@@ -1181,19 +1198,17 @@ module Server_connection_tests = struct
              frames);
         report_write_result t (`Ok (IOVec.lengthv iovecs));
         writer_yields t
-      | _ ->
-        assert false)
-    | _ ->
-      assert false
+      | _ -> assert false)
+    | _ -> assert false
 
   let trailers_request_handler reqd =
     let response = Response.create `OK in
     (* Send the response for / *)
     let response_body = Reqd.respond_with_streaming reqd response in
-    Body.write_string response_body "somedata";
-    Body.flush response_body (fun () ->
+    Body.Writer.write_string response_body "somedata";
+    Body.Writer.flush response_body (fun () ->
         Reqd.schedule_trailers reqd Headers.(add empty "foo" "bar");
-        Body.close_writer response_body)
+        Body.Writer.close response_body)
 
   let test_trailers () =
     let t = create ~error_handler trailers_request_handler in
@@ -1258,6 +1273,61 @@ module Server_connection_tests = struct
         "Expected state machine to issue a write operation after seeing \
          headers."
 
+  let test_reset_stream () =
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let request_handler reqd =
+      Reqd.respond_with_string
+        reqd
+        (Response.create `Internal_server_error)
+        "An error occurred";
+      Reqd.report_exn reqd Not_found
+    in
+    let t = create_and_handle_preface ~error_handler request_handler in
+    read_request ~body:"request body" t request;
+    match next_write_operation t with
+    | `Write iovecs ->
+      let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
+      Alcotest.(check (list int))
+        "Doesn't send DATA frames after RST_STREAM frames"
+        (List.map
+           Frame.FrameType.serialize
+           Frame.FrameType.[ Headers; RSTStream ])
+        (List.map
+           (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+             Frame.FrameType.serialize frame_type)
+           frames);
+      report_write_result t (`Ok (IOVec.lengthv iovecs));
+      writer_yields t
+    | _ -> assert false
+
+  let test_reset_stream_streaming_response () =
+    (* CONNECT is malformed if it doesn't include the `:authority`
+     * pseudo-header. Additionally, the `:scheme` and `:path` pseudo-headers
+     * must be omitted, but we take care of that when serializing. See
+     * RFC7540§8.3. *)
+    let request = Request.create ~scheme:"https" `CONNECT "/" in
+    let error_handler ?request:_ error handle =
+      Alcotest.(check bool) "request was malformed" true (error = `Bad_request);
+      let body = handle Headers.empty in
+      Body.Writer.write_string body "hi";
+      Body.Writer.close body
+    in
+
+    let t = create_and_handle_preface ~error_handler default_request_handler in
+    read_request ~body:"request body" t request;
+    match next_write_operation t with
+    | `Write iovecs ->
+      let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
+      Alcotest.(check (list int))
+        "Doesn't send RST_STREAM frames if the error is `Bad_request"
+        (List.map Frame.FrameType.serialize Frame.FrameType.[ Headers; Data ])
+        (List.map
+           (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+             Frame.FrameType.serialize frame_type)
+           frames);
+      report_write_result t (`Ok (IOVec.lengthv iovecs))
+    | _ -> assert false
+
   (* TODO: test graceful shutdown, allowing lower numbered streams to
      complete. *)
   let suite =
@@ -1311,11 +1381,16 @@ module Server_connection_tests = struct
     ; ( "reading the request body as it arrives"
       , `Quick
       , test_reading_request_body )
+    ; "accepting multiple RST_STREAM frames", `Quick, test_rst_stream_frames
     ; "flow control", `Quick, test_flow_control
     ; ( "flow control -- can send empty data frame"
       , `Quick
       , test_flow_control_can_send_empty_data_frame )
     ; "trailers", `Quick, test_trailers
+    ; "reset stream before all DATA frames were sent", `Quick, test_reset_stream
+    ; ( "reset stream before all DATA frames were sent (streaming response)"
+      , `Quick
+      , test_reset_stream_streaming_response )
     ]
 end
 

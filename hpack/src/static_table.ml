@@ -34,107 +34,56 @@
 
 module TokenIndices = struct
   let authority = 0
-
   let _method = 1
-
   let path = 3
-
   let scheme = 5
-
   let status = 7
-
   let accept_charset = 14
-
   let accept_encoding = 15
-
   let accept_language = 16
-
   let accept_ranges = 17
-
   let accept = 18
-
   let access_control_allow_origin = 19
-
   let age = 20
-
   let allow = 21
-
   let authorization = 22
-
   let cache_control = 23
-
   let content_disposition = 24
-
   let content_encoding = 25
-
   let content_language = 26
-
   let content_length = 27
-
   let content_location = 28
-
   let content_range = 29
-
   let content_type = 30
-
   let cookie = 31
-
   let date = 32
-
   let etag = 33
-
   let expect = 34
-
   let expires = 35
-
   let from = 36
-
   let host = 37
-
   let if_match = 38
-
   let if_modified_since = 39
-
   let if_none_match = 40
-
   let if_range = 41
-
   let if_unmodified_since = 42
-
   let last_modified = 43
-
   let link = 44
-
   let location = 45
-
   let max_forwards = 46
-
   let proxy_authenticate = 47
-
   let proxy_authorization = 48
-
   let range = 49
-
   let referer = 50
-
   let refresh = 51
-
   let retry_after = 52
-
   let server = 53
-
   let set_cookie = 54
-
   let strict_transport_security = 55
-
   let transfer_encoding = 56
-
   let user_agent = 57
-
   let vary = 58
-
   let via = 59
-
   let www_authenticate = 60
 end
 
@@ -208,171 +157,103 @@ let lookup_token_index name =
   match String.length name with
   | 3 ->
     (match name.[0] with
-    | 'a' when name = "age" ->
-      20
-    | 'v' when name = "via" ->
-      59
-    | _ ->
-      -1)
+    | 'a' when name = "age" -> 20
+    | 'v' when name = "via" -> 59
+    | _ -> -1)
   | 4 ->
     (match name.[0] with
-    | 'd' when name = "date" ->
-      32
-    | 'e' when name = "etag" ->
-      33
-    | 'f' when name = "from" ->
-      36
-    | 'h' when name = "host" ->
-      37
-    | 'l' when name = "link" ->
-      44
-    | 'v' when name = "vary" ->
-      58
-    | _ ->
-      -1)
+    | 'd' when name = "date" -> 32
+    | 'e' when name = "etag" -> 33
+    | 'f' when name = "from" -> 36
+    | 'h' when name = "host" -> 37
+    | 'l' when name = "link" -> 44
+    | 'v' when name = "vary" -> 58
+    | _ -> -1)
   | 5 ->
     (match name.[0] with
-    | ':' when name = ":path" ->
-      3
-    | 'a' when name = "allow" ->
-      21
-    | 'r' when name = "range" ->
-      49
-    | _ ->
-      -1)
+    | ':' when name = ":path" -> 3
+    | 'a' when name = "allow" -> 21
+    | 'r' when name = "range" -> 49
+    | _ -> -1)
   | 6 ->
     (match name.[0] with
-    | 'a' when name = "accept" ->
-      18
-    | 'c' when name = "cookie" ->
-      31
-    | 'e' when name = "expect" ->
-      34
-    | 's' when name = "server" ->
-      53
-    | _ ->
-      -1)
+    | 'a' when name = "accept" -> 18
+    | 'c' when name = "cookie" -> 31
+    | 'e' when name = "expect" -> 34
+    | 's' when name = "server" -> 53
+    | _ -> -1)
   | 7 ->
     (match name.[3] with
-    | 't' when name = ":method" ->
-      1
-    | 'h' when name = ":scheme" ->
-      5
-    | 'a' when name = ":status" ->
-      7
-    | 'i' when name = "expires" ->
-      35
-    | 'e' when name = "referer" ->
-      50
-    | 'r' when name = "refresh" ->
-      51
-    | _ ->
-      -1)
+    | 't' when name = ":method" -> 1
+    | 'h' when name = ":scheme" -> 5
+    | 'a' when name = ":status" -> 7
+    | 'i' when name = "expires" -> 35
+    | 'e' when name = "referer" -> 50
+    | 'r' when name = "refresh" -> 51
+    | _ -> -1)
   | 8 ->
     (match name.[3] with
-    | 'm' when name = "if-match" ->
-      38
-    | 'r' when name = "if-range" ->
-      41
-    | 'a' when name = "location" ->
-      45
-    | _ ->
-      -1)
+    | 'm' when name = "if-match" -> 38
+    | 'r' when name = "if-range" -> 41
+    | 'a' when name = "location" -> 45
+    | _ -> -1)
   | 10 ->
     (match name.[0] with
-    | ':' when name = ":authority" ->
-      0
-    | 's' when name = "set-cookie" ->
-      54
-    | 'u' when name = "user-agent" ->
-      57
-    | _ ->
-      -1)
-  | 11 ->
-    (match name.[0] with 'r' when name = "retry-after" -> 52 | _ -> -1)
+    | ':' when name = ":authority" -> 0
+    | 's' when name = "set-cookie" -> 54
+    | 'u' when name = "user-agent" -> 57
+    | _ -> -1)
+  | 11 -> (match name.[0] with 'r' when name = "retry-after" -> 52 | _ -> -1)
   | 12 ->
     (match name.[0] with
-    | 'c' when name = "content-type" ->
-      30
-    | 'm' when name = "max-forwards" ->
-      46
-    | _ ->
-      -1)
+    | 'c' when name = "content-type" -> 30
+    | 'm' when name = "max-forwards" -> 46
+    | _ -> -1)
   | 13 ->
     (match name.[6] with
-    | '-' when name = "accept-ranges" ->
-      17
-    | 'i' when name = "authorization" ->
-      22
-    | 'c' when name = "cache-control" ->
-      23
-    | 't' when name = "content-range" ->
-      29
-    | 'e' when name = "if-none-match" ->
-      40
-    | 'o' when name = "last-modified" ->
-      43
-    | _ ->
-      -1)
+    | '-' when name = "accept-ranges" -> 17
+    | 'i' when name = "authorization" -> 22
+    | 'c' when name = "cache-control" -> 23
+    | 't' when name = "content-range" -> 29
+    | 'e' when name = "if-none-match" -> 40
+    | 'o' when name = "last-modified" -> 43
+    | _ -> -1)
   | 14 ->
     (match name.[0] with
-    | 'a' when name = "accept-charset" ->
-      14
-    | 'c' when name = "content-length" ->
-      27
-    | _ ->
-      -1)
+    | 'a' when name = "accept-charset" -> 14
+    | 'c' when name = "content-length" -> 27
+    | _ -> -1)
   | 15 ->
     (match name.[7] with
-    | 'e' when name = "accept-encoding" ->
-      15
-    | 'l' when name = "accept-language" ->
-      16
-    | _ ->
-      -1)
+    | 'e' when name = "accept-encoding" -> 15
+    | 'l' when name = "accept-language" -> 16
+    | _ -> -1)
   | 16 ->
     (match name.[11] with
-    | 'o' when name = "content-encoding" ->
-      25
-    | 'g' when name = "content-language" ->
-      26
-    | 'a' when name = "content-location" ->
-      28
-    | 'i' when name = "www-authenticate" ->
-      60
-    | _ ->
-      -1)
+    | 'o' when name = "content-encoding" -> 25
+    | 'g' when name = "content-language" -> 26
+    | 'a' when name = "content-location" -> 28
+    | 'i' when name = "www-authenticate" -> 60
+    | _ -> -1)
   | 17 ->
     (match name.[0] with
-    | 'i' when name = "if-modified-since" ->
-      39
-    | 't' when name = "transfer-encoding" ->
-      56
-    | _ ->
-      -1)
+    | 'i' when name = "if-modified-since" -> 39
+    | 't' when name = "transfer-encoding" -> 56
+    | _ -> -1)
   | 18 ->
     (match name.[0] with 'p' when name = "proxy-authenticate" -> 47 | _ -> -1)
   | 19 ->
     (match name.[0] with
-    | 'c' when name = "content-disposition" ->
-      24
-    | 'i' when name = "if-unmodified-since" ->
-      42
-    | 'p' when name = "proxy-authorization" ->
-      48
-    | _ ->
-      -1)
+    | 'c' when name = "content-disposition" -> 24
+    | 'i' when name = "if-unmodified-since" -> 42
+    | 'p' when name = "proxy-authorization" -> 48
+    | _ -> -1)
   | 25 ->
     (match name.[0] with
-    | 's' when name = "strict-transport-security" ->
-      55
-    | _ ->
-      -1)
+    | 's' when name = "strict-transport-security" -> 55
+    | _ -> -1)
   | 27 ->
     (match name.[0] with
-    | 'a' when name = "access-control-allow-origin" ->
-      19
-    | _ ->
-      -1)
-  | _ ->
-    -1
+    | 'a' when name = "access-control-allow-origin" -> 19
+    | _ -> -1)
+  | _ -> -1

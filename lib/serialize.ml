@@ -57,7 +57,8 @@ let write_frame_header t frame_header =
 
 let write_frame_with_padding t info frame_type length writer =
   let header, writer =
-    if Bigstringaf.length info.padding = 0 then
+    if Bigstringaf.length info.padding = 0
+    then
       let header =
         { Frame.payload_length = length
         ; flags = info.flags
@@ -99,10 +100,9 @@ let schedule_data_frame t info ?off ?len bstr =
 
 let write_priority t { Priority.exclusive; stream_dependency; weight } =
   let stream_dependency_id =
-    if exclusive then
-      Priority.set_exclusive stream_dependency
-    else
-      stream_dependency
+    if exclusive
+    then Priority.set_exclusive stream_dependency
+    else stream_dependency
   in
   BE.write_uint32 t stream_dependency_id;
   (* From RFC7540§6.3:
@@ -116,11 +116,10 @@ let write_priority t { Priority.exclusive; stream_dependency; weight } =
 let bounded_schedule_iovecs t ~len iovecs =
   let rec loop t remaining iovecs =
     match remaining, iovecs with
-    | 0, _ | _, [] ->
-      ()
+    | 0, _ | _, [] -> ()
     | remaining, { IOVec.buffer; off; len } :: xs ->
-      if remaining < len then
-        schedule_bigstring t ~off ~len:remaining buffer
+      if remaining < len
+      then schedule_bigstring t ~off ~len:remaining buffer
       else (
         schedule_bigstring t ~off ~len buffer;
         loop t (remaining - len) xs)
@@ -129,7 +128,8 @@ let bounded_schedule_iovecs t ~len iovecs =
 
 let write_headers_frame t info ~priority ?len iovecs =
   let len = match len with Some len -> len | None -> IOVec.lengthv iovecs in
-  if priority == Priority.default_priority then
+  if priority == Priority.default_priority
+  then
     (* See RFC7540§6.3:
      *   Just the Header Block Fragment length if no priority. *)
     let writer t = bounded_schedule_iovecs t ~len iovecs in
@@ -311,19 +311,13 @@ module Writer = struct
           (* The number of bytes that were not written due to the output stream
            * being closed before all buffered output could be written. Useful
            * for detecting error cases. *)
-    ; headers_block_buffer : Bigstringaf.t
     ; mutable wakeup : Optional_thunk.t
     }
 
   let create buffer_size =
     let buffer = Bigstringaf.create buffer_size in
     let encoder = Faraday.of_bigstring buffer in
-    { buffer
-    ; encoder
-    ; drained_bytes = 0
-    ; headers_block_buffer = Bigstringaf.create 0x1000
-    ; wakeup = Optional_thunk.none
-    }
+    { buffer; encoder; drained_bytes = 0; wakeup = Optional_thunk.none }
 
   let faraday t = t.encoder
 
@@ -345,9 +339,11 @@ module Writer = struct
 
   let chunk_data_frames ?(off = 0) ~f frame_info total_length =
     let { max_frame_payload; _ } = frame_info in
-    if max_frame_payload < total_length then
+    if max_frame_payload < total_length
+    then
       let rec loop ~off remaining =
-        if max_frame_payload < remaining then (
+        if max_frame_payload < remaining
+        then (
           (* Note: If we're splitting data into several frames, only the last
            * one should contain the END_STREAM flag, so unset it here if it's
            * set. *)
@@ -356,15 +352,14 @@ module Writer = struct
           in
           f ~off ~len:max_frame_payload frame_info;
           loop ~off:(off + max_frame_payload) (remaining - max_frame_payload))
-        else
-          f ~off ~len:remaining frame_info
+        else f ~off ~len:remaining frame_info
       in
       loop ~off total_length
-    else
-      f ~off ~len:total_length frame_info
+    else f ~off ~len:total_length frame_info
 
   let write_data t frame_info ?off ?len str =
-    if not (is_closed t.encoder) then
+    if not (is_closed t.encoder)
+    then
       let total_length =
         match len with Some len -> len | None -> String.length str
       in
@@ -376,7 +371,8 @@ module Writer = struct
           write_data_frame t.encoder frame_info ~off ~len str)
 
   let schedule_data t frame_info ?off ?len bstr =
-    if not (is_closed t.encoder) then
+    if not (is_closed t.encoder)
+    then
       let total_length =
         match len with Some len -> len | None -> Bigstringaf.length bstr
       in
@@ -399,27 +395,26 @@ module Writer = struct
     =
     let block_size = Faraday.pending_bytes faraday in
     let total_length =
-      if has_priority then
+      if has_priority
+      then
         (* See RFC7540§6.2: Exclusive Bit & Stream Dependency (4 octets) +
            Weight (1 octet) + Header Block Fragment length. *)
         block_size + 5
-      else
-        block_size
+      else block_size
     in
     let { max_frame_payload; _ } = frame_info in
-    if max_frame_payload < total_length then (
+    if max_frame_payload < total_length
+    then (
       let headers_block_len =
-        if has_priority then
-          max_frame_payload - 5
-        else
-          max_frame_payload
+        if has_priority then max_frame_payload - 5 else max_frame_payload
       in
       ignore
         (Faraday.serialize faraday (fun iovecs ->
              write_frame t.encoder frame_info ~len:headers_block_len iovecs;
              `Ok headers_block_len));
       let rec loop remaining =
-        if max_frame_payload < remaining then (
+        if max_frame_payload < remaining
+        then (
           (* Note: Don't reuse flags from frame info as CONTINUATION frames
            * only define END_HEADERS.
            *
@@ -469,7 +464,7 @@ module Writer = struct
 
   let write_request_like_frame t hpack_encoder ~write_frame frame_info request =
     let { Request.meth; target; scheme; headers } = request in
-    let faraday = Faraday.of_bigstring t.headers_block_buffer in
+    let faraday = Faraday.create 0x1000 in
     Hpack.Encoder.encode_header
       hpack_encoder
       faraday
@@ -477,7 +472,8 @@ module Writer = struct
       ; value = Httpaf.Method.to_string meth
       ; sensitive = false
       };
-    if meth <> `CONNECT then (
+    if meth <> `CONNECT
+    then (
       (* From RFC7540§8.3:
        *   The :scheme and :path pseudo-header fields MUST be omitted. *)
       Hpack.Encoder.encode_header
@@ -492,19 +488,22 @@ module Writer = struct
     chunk_header_block_fragments t frame_info ~write_frame faraday
 
   let write_request_headers t hpack_encoder ~priority frame_info request =
-    if not (is_closed t.encoder) then
+    if not (is_closed t.encoder)
+    then
       let write_frame = write_headers_frame ~priority in
       write_request_like_frame t hpack_encoder ~write_frame frame_info request
 
   let write_push_promise t hpack_encoder frame_info ~promised_id request =
-    if not (is_closed t.encoder) then
+    if not (is_closed t.encoder)
+    then
       let write_frame = write_push_promise_frame ~promised_id in
       write_request_like_frame t hpack_encoder ~write_frame frame_info request
 
   let write_response_headers t hpack_encoder frame_info response =
-    if not (is_closed t.encoder) then (
+    if not (is_closed t.encoder)
+    then (
       let { Response.status; headers; _ } = response in
-      let faraday = Faraday.of_bigstring t.headers_block_buffer in
+      let faraday = Faraday.create 0x1000 in
       (* From RFC7540§8.1.2.4:
        *   For HTTP/2 responses, a single :status pseudo-header field is defined
        *   that carries the HTTP status code field (see [RFC7231], Section 6).
@@ -526,8 +525,9 @@ module Writer = struct
         faraday)
 
   let write_response_trailers t hpack_encoder frame_info trailers =
-    if not (is_closed t.encoder) then (
-      let faraday = Faraday.of_bigstring t.headers_block_buffer in
+    if not (is_closed t.encoder)
+    then (
+      let faraday = Faraday.create 0x1000 in
       (* From RFC7540§8.1:
        *  optionally, one HEADERS frame, followed by zero or more
        *  CONTINUATION frames containing the trailer-part, if present (see
@@ -541,15 +541,16 @@ module Writer = struct
         faraday)
 
   let write_rst_stream t frame_info e =
-    if not (is_closed t.encoder) then
-      write_rst_stream_frame t.encoder frame_info e
+    if not (is_closed t.encoder)
+    then write_rst_stream_frame t.encoder frame_info e
 
   let write_window_update t frame_info n =
-    if not (is_closed t.encoder) then
-      write_window_update_frame t.encoder frame_info n
+    if not (is_closed t.encoder)
+    then write_window_update_frame t.encoder frame_info n
 
   let schedule_iovecs t ~len frame_info iovecs =
-    if not (is_closed t.encoder) then
+    if not (is_closed t.encoder)
+    then
       let writer t ~len ~iovecs = bounded_schedule_iovecs t ~len iovecs in
       chunk_data_frames frame_info len ~f:(fun ~off ~len frame_info ->
           write_frame_with_padding
@@ -560,28 +561,28 @@ module Writer = struct
             (writer ~iovecs:(IOVec.shiftv iovecs off) ~len))
 
   let write_priority t frame_info priority =
-    if not (is_closed t.encoder) then
-      write_priority_frame t.encoder frame_info priority
+    if not (is_closed t.encoder)
+    then write_priority_frame t.encoder frame_info priority
 
   let write_settings t frame_info settings =
-    if not (is_closed t.encoder) then
-      write_settings_frame t.encoder frame_info settings
+    if not (is_closed t.encoder)
+    then write_settings_frame t.encoder frame_info settings
 
   let write_ping t frame_info ?off payload =
-    if not (is_closed t.encoder) then
-      write_ping_frame t.encoder frame_info ?off payload
+    if not (is_closed t.encoder)
+    then write_ping_frame t.encoder frame_info ?off payload
 
   let write_go_away t frame_info ~debug_data ~last_stream_id error =
-    if not (is_closed t.encoder) then
+    if not (is_closed t.encoder)
+    then
       write_go_away_frame t.encoder frame_info last_stream_id error debug_data
 
   let on_wakeup_writer t k =
-    if Faraday.is_closed t.encoder then
-      failwith "on_wakeup_writer on closed conn"
-    else if Optional_thunk.is_some t.wakeup then
-      failwith "on_wakeup: only one callback can be registered at a time"
-    else
-      t.wakeup <- Optional_thunk.some k
+    if Faraday.is_closed t.encoder
+    then failwith "on_wakeup_writer on closed conn"
+    else if Optional_thunk.is_some t.wakeup
+    then failwith "on_wakeup: only one callback can be registered at a time"
+    else t.wakeup <- Optional_thunk.some k
 
   let wakeup t =
     let f = t.wakeup in
@@ -590,8 +591,12 @@ module Writer = struct
 
   let flush t f = flush t.encoder f
 
-  let yield t = Faraday.yield t.encoder
+  let unyield t =
+    (* Faraday doesn't have a function to take the serializer out of a yield
+       state. In the meantime, `flush` does it. *)
+    flush t (fun () -> ())
 
+  let yield t = Faraday.yield t.encoder
   let close t = Faraday.close t.encoder
 
   let close_and_drain t =
@@ -600,22 +605,16 @@ module Writer = struct
     t.drained_bytes <- t.drained_bytes + drained
 
   let is_closed t = Faraday.is_closed t.encoder
-
   let drained_bytes t = t.drained_bytes
 
   let report_result t result =
     match result with
-    | `Closed ->
-      close_and_drain t
-    | `Ok len ->
-      shift t.encoder len
+    | `Closed -> close_and_drain t
+    | `Ok len -> shift t.encoder len
 
   let next t =
     match Faraday.operation t.encoder with
-    | `Close ->
-      `Close (drained_bytes t)
-    | `Yield ->
-      `Yield
-    | `Writev iovecs ->
-      `Write iovecs
+    | `Close -> `Close (drained_bytes t)
+    | `Yield -> `Yield
+    | `Writev iovecs -> `Write iovecs
 end

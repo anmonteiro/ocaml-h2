@@ -5,35 +5,28 @@ let parse_file file =
   let json = Yojson.Basic.from_file file in
   let description =
     match Json.(json |> member "description" |> to_string_option) with
-    | Some x ->
-      x
-    | None ->
-      file
+    | Some x -> x
+    | None -> file
   in
   let cases =
     List.map
       (fun case ->
         let header_table_size =
           match Json.(case |> member "header_table_size" |> to_int_option) with
-          | Some size ->
-            size
-          | None ->
-            4096
+          | Some size -> size
+          | None -> 4096
         in
         let wire =
           match Json.(case |> member "wire" |> to_string_option) with
-          | Some hex ->
-            Hex.to_string (`Hex hex)
-          | None ->
-            ""
+          | Some hex -> Hex.to_string (`Hex hex)
+          | None -> ""
         in
         let headers =
           List.map
             (function
               | `Assoc [ (name, `String value) ] ->
                 { Hpack.name; value; sensitive = false }
-              | _ ->
-                assert false)
+              | _ -> assert false)
             Json.(case |> member "headers" |> to_list)
         in
         header_table_size, wire, headers)
@@ -42,7 +35,6 @@ let parse_file file =
   description, cases
 
 let h x = Hex.to_string (`Hex x)
-
 let hex_of_string s = s |> Hex.of_string |> Hex.show
 
 let encode_headers encoder headers =
@@ -113,16 +105,13 @@ let headers_list_pp =
 let decode_headers decoder size wire =
   let parser = Angstrom.Buffered.parse (Decoder.decode_headers decoder) in
   match Decoder.set_capacity decoder size with
-  | Error _ ->
-    assert false
+  | Error _ -> assert false
   | Ok () ->
     let state = Angstrom.Buffered.feed parser (`String wire) in
     let state' = Angstrom.Buffered.feed state `Eof in
     (match Angstrom.Buffered.state_to_option state' with
-    | Some (Ok headers) ->
-      List.rev headers
-    | Some _ | None ->
-      assert false)
+    | Some (Ok headers) -> List.rev headers
+    | Some _ | None -> assert false)
 
 let decode cases =
   let encoder = Encoder.create 4096 in
@@ -195,14 +184,10 @@ let decode cases =
 
 let rec take_n acc i ys =
   match i, ys with
-  | 0, _ ->
-    acc
-  | _, [] ->
-    acc
-  | _, x :: xs when i > 0 ->
-    take_n (x :: acc) (i - 1) xs
-  | _ ->
-    acc
+  | 0, _ -> acc
+  | _, [] -> acc
+  | _, x :: xs when i > 0 -> take_n (x :: acc) (i - 1) xs
+  | _ -> acc
 
 let gen_suites fixtures =
   let gen_suite filename =
@@ -288,6 +273,26 @@ let test_evicting_table_size_0_followup () =
     hs
     decoded_headers
 
+let test_end_of_table () =
+  let hs =
+    [ { name = ":method"; value = "GET"; sensitive = false }
+    ; { name = "www-authenticate"; value = "Basic"; sensitive = false }
+    ]
+  in
+  let encoder = Encoder.create 60 in
+  let encoded_headers = encode_headers encoder hs in
+  Alcotest.(check bool)
+    "Encodes to non-zero hex"
+    true
+    (String.length encoded_headers > 0);
+  let decoder = Decoder.create 60 in
+  let decoded_headers = decode_headers decoder 60 encoded_headers in
+  List.iter2
+    (fun h1 h2 ->
+      Alcotest.(check header_testable "Decoded headers are roundtripped" h1 h2))
+    hs
+    decoded_headers
+
 let () =
   let fixtures_dir = "hpack-test-case" in
   let raw_data_dir = Filename.concat fixtures_dir "raw-data" in
@@ -298,8 +303,7 @@ let () =
     |> List.sort (fun (file, _) (file2, _) -> compare file file2)
   in
   (try Unix.mkdir (Filename.concat fixtures_dir "ocaml-hpack") 0o755 with
-  | Unix.Unix_error (Unix.EEXIST, _, _) ->
-    ());
+  | Unix.Unix_error (Unix.EEXIST, _, _) -> ());
   encode_raw_data fixtures_dir raw_data;
   (* Now, test decoding what we just encoded + roundtripping *)
   let fixtures = read_fixtures fixtures_dir in
@@ -313,5 +317,8 @@ let () =
        ; ( "Evictions from the dynamic table with 0 capacity (followup test)"
          , `Quick
          , test_evicting_table_size_0_followup )
+       ; ( "Encoding the header from the end of the static table"
+         , `Quick
+         , test_end_of_table )
        ] )
     :: suites)

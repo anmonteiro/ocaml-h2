@@ -2,7 +2,6 @@ open H2__
 
 module Option = struct
   let get = function Some x -> x | None -> failwith "Option.get: None"
-
   let map f = function Some x -> Some (f x) | None -> None
 end
 
@@ -19,7 +18,6 @@ let bs_to_string bs =
   Bigstringaf.substring ~off ~len bs
 
 let bs_of_string s = Bigstringaf.of_string ~off:0 ~len:(String.length s) s
-
 let string_of_hex s = Hex.to_string (`Hex s)
 
 let hex_of_string s =
@@ -34,33 +32,26 @@ let write_frame ?padding t { Frame.frame_header; frame_payload } =
   let { Frame.flags; stream_id; _ } = frame_header in
   let info = Writer.make_frame_info ~flags ?padding stream_id in
   match frame_payload with
-  | Data body ->
-    Writer.schedule_data t info body
+  | Data body -> Writer.schedule_data t info body
   | Headers (priority, headers_block) ->
     (* Block already HPACK-encoded. *)
     write_headers_frame t.encoder info ~priority (make_iovecs headers_block)
-  | Priority p ->
-    Writer.write_priority t info p
-  | RSTStream e ->
-    Writer.write_rst_stream t info e
-  | Settings settings ->
-    Writer.write_settings t info settings
+  | Priority p -> Writer.write_priority t info p
+  | RSTStream e -> Writer.write_rst_stream t info e
+  | Settings settings -> Writer.write_settings t info settings
   | PushPromise (promised_id, header_block) ->
     write_push_promise_frame
       t.encoder
       info
       ~promised_id
       (make_iovecs header_block)
-  | Ping payload ->
-    Writer.write_ping t info payload
+  | Ping payload -> Writer.write_ping t info payload
   | GoAway (last_stream_id, error, debug_data) ->
     Writer.write_go_away t info ~debug_data ~last_stream_id error
-  | WindowUpdate window_size ->
-    Writer.write_window_update t info window_size
+  | WindowUpdate window_size -> Writer.write_window_update t info window_size
   | Continuation header_block ->
     write_continuation_frame t.encoder info (make_iovecs header_block)
-  | Unknown (code, payload) ->
-    write_unknown_frame t.encoder ~code info payload
+  | Unknown (code, payload) -> write_unknown_frame t.encoder ~code info payload
 
 let serialize_frame ?padding frame =
   let open Serialize in
@@ -79,6 +70,14 @@ let encode_headers hpack_encoder headers =
   let f = Faraday.create 0x1000 in
   Serialize.Writer.encode_headers hpack_encoder f headers;
   Faraday.serialize_to_bigstring f
+
+let decode_headers decoder bigstring =
+  let parser = Angstrom.Buffered.parse (Hpack.Decoder.decode_headers decoder) in
+  let state = Angstrom.Buffered.feed parser (`Bigstring bigstring) in
+  let state' = Angstrom.Buffered.feed state `Eof in
+  match Angstrom.Buffered.state_to_option state' with
+  | Some (Ok headers) -> headers
+  | Some _ | None -> assert false
 
 let preface =
   let writer = Serialize.Writer.create 0x400 in
@@ -100,10 +99,8 @@ let parse_frames_bigstring wire =
   let open Parse in
   let frames = ref [] in
   let handler = function
-    | Ok frame ->
-      frames := frame :: !frames
-    | _ ->
-      Alcotest.fail "Expected frame to parse successfully."
+    | Ok frame -> frames := frame :: !frames
+    | _ -> Alcotest.fail "Expected frame to parse successfully."
   in
   let reader =
     Reader.server_frames

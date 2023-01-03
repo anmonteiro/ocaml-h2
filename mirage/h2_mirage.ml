@@ -31,9 +31,9 @@
  *---------------------------------------------------------------------------*)
 
 module Server (Flow : Mirage_flow.S) = struct
-  type socket = Flow.flow
-
   module Server_runtime = H2_lwt.Server (Gluten_mirage.Server (Flow))
+
+  type socket = Flow.flow
 
   let create_connection_handler ?config ~request_handler ~error_handler flow =
     let request_handler () = request_handler in
@@ -43,7 +43,7 @@ module Server (Flow : Mirage_flow.S) = struct
       ~request_handler
       ~error_handler
       ()
-      flow
+      (Gluten_mirage.Buffered_flow.create flow)
 end
 
 (* Almost like the `H2_lwt.Server` module type but we don't need the client
@@ -61,4 +61,15 @@ end
 
 module type Client = H2_lwt.Client
 
-module Client (Flow : Mirage_flow.S) = H2_lwt.Client (Gluten_mirage.Client (Flow))
+module Client (Flow : Mirage_flow.S) = struct
+  include H2_lwt.Client (Gluten_mirage.Client (Flow))
+
+  type socket = Flow.flow
+
+  let create_connection ?config ?push_handler ~error_handler flow =
+    create_connection
+      ?config
+      ?push_handler
+      ~error_handler
+      (Gluten_mirage.Buffered_flow.create flow)
+end

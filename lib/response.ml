@@ -42,15 +42,16 @@ type t =
  *   is included in an HTTP/1.1 status line. *)
 let create ?(headers = Headers.empty) status = { status; headers }
 
-let body_length { headers; _ } = Message.body_length headers
+let body_length ~request_method { headers; _ } =
+  match request_method with
+  | `HEAD -> `Fixed 0L
+  | #Httpaf.Method.standard -> Message.body_length headers
 
 let pp_hum fmt { status; headers } =
   let reason =
     match status with
-    | #Status.standard as status ->
-      Status.default_reason_phrase status
-    | `Code _ ->
-      "Non-standard status code"
+    | #Status.standard as status -> Status.default_reason_phrase status
+    | `Code _ -> "Non-standard status code"
   in
   Format.fprintf
     fmt

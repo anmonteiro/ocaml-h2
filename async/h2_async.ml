@@ -36,6 +36,8 @@ open Async
 open H2
 
 module Server = struct
+  type 'a socket = ([ `Active ], ([< Socket.Address.t ] as 'a)) Socket.t
+
   let create_connection_handler
       ?(config = H2.Config.default)
       ~request_handler
@@ -78,7 +80,11 @@ module Server = struct
         socket
 
     let create_connection_handler_with_default
-        ~certfile ~keyfile ?config ~request_handler ~error_handler
+        ~certfile
+        ~keyfile
+        ?config
+        ~request_handler
+        ~error_handler
       =
       let make_ssl_server =
         Gluten_async.Server.SSL.create_default
@@ -100,20 +106,22 @@ end
 module Client = struct
   module Client_runtime = Gluten_async.Client
 
-  type socket = Client_runtime.socket
+  type 'a socket = 'a Client_runtime.socket
+  type 'a runtime = 'a Client_runtime.t
 
-  type runtime = Client_runtime.t
-
-  type t =
+  type 'a t =
     { connection : Client_connection.t
-    ; runtime : runtime
+    ; runtime : 'a runtime
     }
 
   let create_connection
-      ?(config = Config.default) ?push_handler ~error_handler socket
+      ?(config = Config.default)
+      ?push_handler
+      ~error_handler
+      socket
     =
     let connection =
-      Client_connection.create ~config ?push_handler ~error_handler
+      Client_connection.create ~config ?push_handler ~error_handler ()
     in
     Client_runtime.create
       ~read_buffer_size:config.read_buffer_size
@@ -123,30 +131,29 @@ module Client = struct
     >>| fun runtime -> { runtime; connection }
 
   let request t = Client_connection.request t.connection
-
   let ping t = Client_connection.ping t.connection
-
   let shutdown t = Client_runtime.shutdown t.runtime
-
   let is_closed t = Client_runtime.is_closed t.runtime
 
   module SSL = struct
     module Client_runtime = Gluten_async.Client.SSL
 
-    type socket = Client_runtime.socket
+    type 'a socket = 'a Client_runtime.socket
+    type 'a runtime = 'a Client_runtime.t
 
-    type runtime = Client_runtime.t
-
-    type t =
+    type 'a t =
       { connection : Client_connection.t
-      ; runtime : runtime
+      ; runtime : 'a runtime
       }
 
     let create_connection
-        ?(config = Config.default) ?push_handler ~error_handler socket
+        ?(config = Config.default)
+        ?push_handler
+        ~error_handler
+        socket
       =
       let connection =
-        Client_connection.create ~config ?push_handler ~error_handler
+        Client_connection.create ~config ?push_handler ~error_handler ()
       in
       Client_runtime.create
         ~read_buffer_size:config.read_buffer_size
@@ -156,18 +163,65 @@ module Client = struct
       >>| fun runtime -> { runtime; connection }
 
     let create_connection_with_default
-        ?(config = Config.default) ?push_handler ~error_handler socket
+        ?(config = Config.default)
+        ?push_handler
+        ~error_handler
+        socket
       =
       Client_runtime.create_default ~alpn_protocols:[ "http/1.1" ] socket
       >>= fun ssl_client ->
       create_connection ~config ?push_handler ~error_handler ssl_client
 
     let request t = Client_connection.request t.connection
-
     let ping t = Client_connection.ping t.connection
-
     let shutdown t = Client_runtime.shutdown t.runtime
+    let is_closed t = Client_runtime.is_closed t.runtime
+  end
 
+  module TLS = struct
+    module Client_runtime = Gluten_async.Client.TLS
+
+    type 'a socket = 'a Client_runtime.socket
+    type 'a runtime = 'a Client_runtime.t
+
+    type 'a t =
+      { connection : Client_connection.t
+      ; runtime : 'a runtime
+      }
+
+    let create_connection
+        ?(config = Config.default)
+        ?push_handler
+        ~error_handler
+        socket
+      =
+      let connection =
+        Client_connection.create ~config ?push_handler ~error_handler ()
+      in
+      Client_runtime.create
+        ~read_buffer_size:config.read_buffer_size
+        ~protocol:(module Client_connection)
+        connection
+        socket
+      >>| fun runtime -> { runtime; connection }
+
+    let create_connection_with_default
+        ?(config = Config.default)
+        ?push_handler
+        ~error_handler
+        socket
+        where_to_connect
+      =
+      Client_runtime.create_default
+        ~alpn_protocols:[ "http/1.1" ]
+        socket
+        where_to_connect
+      >>= fun tls_client ->
+      create_connection ~config ?push_handler ~error_handler tls_client
+
+    let request t = Client_connection.request t.connection
+    let ping t = Client_connection.ping t.connection
+    let shutdown t = Client_runtime.shutdown t.runtime
     let is_closed t = Client_runtime.is_closed t.runtime
   end
 end

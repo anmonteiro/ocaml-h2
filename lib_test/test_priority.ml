@@ -27,7 +27,6 @@ let node =
     with type t = Scheduler.PriorityTreeNode.parent)
 
 let default_error_handler ?request:_ _err _handle = ()
-
 let new_p w = { Priority.exclusive = false; stream_dependency = 0l; weight = w }
 
 let test_reqd stream_id =
@@ -40,12 +39,11 @@ let test_reqd stream_id =
 
 let repeat (Scheduler.PriorityTreeNode.Connection root) queue num =
   let rec loop q n acc =
-    if n = 0 then
-      acc
+    if n = 0
+    then acc
     else
       match Scheduler.PriorityQueue.pop q with
-      | None ->
-        failwith "invalid queue"
+      | None -> failwith "invalid queue"
       | Some ((k, (Scheduler.Stream p as p_node)), q') ->
         (* simulate writing 100 bytes *)
         root.t_last <- p.t;

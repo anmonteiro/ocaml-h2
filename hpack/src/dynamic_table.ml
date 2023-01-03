@@ -58,7 +58,6 @@ type t =
  *   The size of an entry is the sum of its name's length in octets (as defined
  *   in Section 5.2), its value's length in octets, and 32. *)
 let default_entry = "", "", 32
-
 let default_evict = Sys.opaque_identity (fun _ -> ())
 
 let create ?(on_evict = default_evict) max_size =
@@ -93,17 +92,13 @@ let evict_one ({ capacity; entries; on_evict; _ } as table) =
   entries.(i) <- default_entry;
   table.size <- table.size - entry_size;
   (* Don't bother calling if the eviction callback is not meaningful. *)
-  if on_evict != default_evict then
-    on_evict (name, value)
+  if on_evict != default_evict then on_evict (name, value)
 
 let increase_capacity table =
   let new_capacity = 2 * table.capacity in
   let new_entries =
     Array.init new_capacity (fun i ->
-        if i < table.length then
-          _get table i
-        else
-          default_entry)
+        if i < table.length then _get table i else default_entry)
   in
   table.entries <- new_entries;
   table.offset <- 0;
@@ -122,9 +117,9 @@ let add ({ max_size; _ } as table) (name, value) =
   (* From RFC7541§4.4:
    *   If the size of the new entry is less than or equal to the maximum size,
    *   that entry is added to the table. *)
-  if table.size + entry_size <= max_size then (
-    if table.length = table.capacity then
-      increase_capacity table;
+  if table.size + entry_size <= max_size
+  then (
+    if table.length = table.capacity then increase_capacity table;
     table.length <- table.length + 1;
     table.size <- table.size + entry_size;
     let new_offset = (table.offset + table.capacity - 1) mod table.capacity in

@@ -4,7 +4,7 @@ let response_handler notify_response_received response response_body =
   match Response.(response.status) with
   | `OK ->
     let rec read_response () =
-      Body.schedule_read
+      Body.Reader.schedule_read
         response_body
         ~on_eof:(fun () -> Lwt.wakeup_later notify_response_received ())
         ~on_read:(fun response_fragment ~off ~len ->
@@ -23,7 +23,13 @@ let response_handler notify_response_received response response_body =
     Format.fprintf Format.err_formatter "%a\n%!" Response.pp_hum response;
     exit 1
 
-let error_handler _ = assert false
+let error_handler = function
+  | `Invalid_response_body_length _resp ->
+    Printf.printf "invalid response body length\n%!"
+  | `Exn _exn -> Printf.printf "exception!\n%!"
+  | `Malformed_response s -> Printf.printf "malformed response: %s\n%!" s
+  | `Protocol_error (code, s) ->
+    Printf.printf "protocol error: %s, %s\n%!" (H2.Error_code.to_string code) s
 
 open Lwt.Infix
 
@@ -67,6 +73,6 @@ let () =
           ~error_handler
           ~response_handler
       in
-      Body.write_string request_body text_to_send;
-      Body.close_writer request_body;
+      Body.Writer.write_string request_body text_to_send;
+      Body.Writer.close request_body;
       response_received )

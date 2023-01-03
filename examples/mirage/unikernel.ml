@@ -31,8 +31,8 @@ module Dispatch (C : Mirage_console.S) (Http2 : HTTP2) = struct
   let serve c dispatch =
     let error_handler ?request:_ _error mk_response =
       let response_body = mk_response Headers.empty in
-      Body.write_string response_body "Error handled";
-      Body.flush response_body (fun () -> Body.close_writer response_body)
+      Body.Writer.write_string response_body "Error handled";
+      Body.Writer.flush response_body (fun () -> Body.Writer.close response_body)
     in
     Http2.create_connection_handler
       ?config:None

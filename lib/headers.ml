@@ -33,7 +33,6 @@
  *---------------------------------------------------------------------------*)
 
 type name = string
-
 type value = string
 
 type header = Hpack.header =
@@ -50,18 +49,14 @@ let of_rev_list hs =
   List.map (fun (name, value) -> { name; value; sensitive = false }) hs
 
 let of_list t = of_rev_list (List.rev t)
-
 let to_rev_list t = List.map (fun { name; value; _ } -> name, value) t
-
 let to_list t = List.rev (to_rev_list t)
-
 let to_hpack_list t = List.rev t
 
 exception Local
 
 module CI = struct
   let char_is_upper c = c >= 0x41 && c <= 0x5a
-
   let lower c = if char_is_upper c then c + 32 else c
 
   let equal x y =
@@ -72,44 +67,31 @@ module CI = struct
       for i = 0 to len - 1 do
         let c1 = Char.code (String.unsafe_get x i) in
         let c2 = Char.code (String.unsafe_get y i) in
-        if c1 = c2 then
-          ()
-        else if lower c1 <> lower c2 then
-          raise Local
+        if c1 = c2 then () else if lower c1 <> lower c2 then raise Local
       done
     with
-    | () ->
-      true
-    | exception Local ->
-      false
+    | () -> true
+    | exception Local -> false
 
   let is_lowercase x =
     let len = String.length x in
     match
       for i = 0 to len - 1 do
         let c1 = Char.code (String.unsafe_get x i) in
-        if char_is_upper c1 then
-          raise Local
-        else
-          ()
+        if char_is_upper c1 then raise Local else ()
       done
     with
-    | () ->
-      true
-    | exception Local ->
-      false
+    | () -> true
+    | exception Local -> false
 end
 
 let rec mem t name =
   match t with
-  | { name = name'; _ } :: t' ->
-    CI.equal name name' || mem t' name
-  | _ ->
-    false
+  | { name = name'; _ } :: t' -> CI.equal name name' || mem t' name
+  | _ -> false
 
 (* TODO: do we need to keep a list of never indexed fields? *)
 let add t ?(sensitive = false) name value = { name; value; sensitive } :: t
-
 let add_list t ls = of_rev_list ls @ t (* XXX(seliopou): do better here *)
 
 let add_multi =
@@ -117,53 +99,39 @@ let add_multi =
     match lss with [] -> t | (n, vs) :: lss' -> loop_inner t n vs lss'
   and loop_inner t n vs lss =
     match vs with
-    | [] ->
-      loop_outer t lss
+    | [] -> loop_outer t lss
     | v :: vs' ->
       loop_inner ({ name = n; value = v; sensitive = false } :: t) n vs' lss
   in
   loop_outer
 
 let add_unless_exists t ?(sensitive = false) name value =
-  if mem t name then
-    t
-  else
-    { name; value; sensitive } :: t
+  if mem t name then t else { name; value; sensitive } :: t
 
 let replace t ?(sensitive = false) name value =
   let rec loop t n nv seen =
     match t with
-    | [] ->
-      if not seen then raise Local else []
+    | [] -> if not seen then raise Local else []
     | ({ name = n'; _ } as nv') :: t ->
-      if CI.equal n n' then
-        if seen then
-          loop t n nv true
-        else
-          nv :: loop t n nv true
-      else
-        nv' :: loop t n nv seen
+      if CI.equal n n'
+      then if seen then loop t n nv true else nv :: loop t n nv true
+      else nv' :: loop t n nv seen
   in
   try loop t name { name; value; sensitive } false with Local -> t
 
 let remove t name =
   let rec loop s n seen =
     match s with
-    | [] ->
-      if not seen then raise Local else []
+    | [] -> if not seen then raise Local else []
     | ({ name = n'; _ } as nv') :: s' ->
-      if CI.equal n n' then
-        loop s' n true
-      else
-        nv' :: loop s' n seen
+      if CI.equal n n' then loop s' n true else nv' :: loop s' n seen
   in
   try loop t name false with Local -> t
 
 let get t name =
   let rec loop t n =
     match t with
-    | [] ->
-      None
+    | [] -> None
     | { name = n'; value; _ } :: t' ->
       if CI.equal n n' then Some value else loop t' n
   in
@@ -172,27 +140,20 @@ let get t name =
 let get_exn t name =
   let rec loop t =
     match t with
-    | [] ->
-      failwith (Printf.sprintf "Headers.get_exn: %S not found" name)
-    | { name = n; value; _ } :: t' ->
-      if CI.equal name n then value else loop t'
+    | [] -> raise Not_found
+    | { name = n; value; _ } :: t' -> if CI.equal name n then value else loop t'
   in
   loop t
 
 let get_pseudo t name = get t (":" ^ name)
-
 let get_pseudo_exn t name = get_exn t (":" ^ name)
 
 let get_multi t name =
   let rec loop t acc =
     match t with
-    | [] ->
-      acc
+    | [] -> acc
     | { name = n; value; _ } :: t' ->
-      if CI.equal name n then
-        loop t' (value :: acc)
-      else
-        loop t' acc
+      if CI.equal name n then loop t' (value :: acc) else loop t' acc
   in
   loop t []
 
@@ -200,7 +161,6 @@ let get_multi_pseudo t name = get_multi t (":" ^ name)
 
 module Pseudo = struct
   let reserved_request = [ ":method"; ":scheme"; ":authority"; ":path" ]
-
   let reserved_response = [ ":status" ]
 
   (* 0x3A is the char code for `:` *)
@@ -238,8 +198,7 @@ let valid_headers ?(is_request = true) t =
         ~f:(fun name _ ->
           let is_pseudo = Pseudo.is_pseudo name in
           let pseudo_did_end = !pseudo_ended in
-          if (not is_pseudo) && not pseudo_did_end then
-            pseudo_ended := true;
+          if (not is_pseudo) && not pseudo_did_end then pseudo_ended := true;
           (* From RFC7540§8.1.2:
            *   [...] header field names MUST be converted to lowercase
            *   prior to their encoding in HTTP/2. A request or response
@@ -257,10 +216,9 @@ let valid_headers ?(is_request = true) t =
              && not
                   (List.mem
                      name
-                     (if is_request then
-                        Pseudo.reserved_request
-                     else
-                       Pseudo.reserved_response)))
+                     (if is_request
+                     then Pseudo.reserved_request
+                     else Pseudo.reserved_response)))
           || (* From RFC7540§8.1.2.1:
               *   All pseudo-header fields MUST appear in the header block
               *   before regular header fields. Any request or response that
@@ -273,7 +231,6 @@ let valid_headers ?(is_request = true) t =
     not invalid
 
 let valid_request_headers t = valid_headers t
-
 let valid_response_headers t = valid_headers ~is_request:false t
 
 let method_path_and_scheme_or_malformed t =
@@ -306,19 +263,11 @@ let method_path_and_scheme_or_malformed t =
      *
      *   A CONNECT request that does not conform to these restrictions is
      *   malformed (Section 8.1.2.6). *)
-    if mem t ":authority" then
-      `Valid (meth, "", "")
-    else
-      `Malformed
-  | [ "CONNECT" ], _, _ ->
-    `Malformed
+    if mem t ":authority" then `Valid (meth, "", "") else `Malformed
+  | [ "CONNECT" ], _, _ -> `Malformed
   | [ meth ], [ scheme ], [ path ] ->
-    if valid_request_headers t then
-      `Valid (meth, path, scheme)
-    else
-      `Malformed
-  | _ ->
-    `Malformed
+    if valid_request_headers t then `Valid (meth, path, scheme) else `Malformed
+  | _ -> `Malformed
 
 let trailers_valid t =
   let invalid =
@@ -352,10 +301,8 @@ let is_valid_h2c_connection connection =
     ( List.find_opt (fun x -> CI.equal x "upgrade") values
     , List.find_opt (fun x -> CI.equal x "http2-settings") values )
   with
-  | Some _, Some _ ->
-    true
-  | _ ->
-    false
+  | Some _, Some _ -> true
+  | _ -> false
 
 let of_http1 { Httpaf.Request.headers; meth; target; _ } =
   let module Headers = Httpaf.Headers in
@@ -367,7 +314,8 @@ let of_http1 { Httpaf.Request.headers; meth; target; _ } =
     let headers =
       Headers.fold
         ~f:(fun name value acc ->
-          if CI.equal name "host" || CI.equal name "connection" then
+          if CI.equal name "host" || CI.equal name "connection"
+          then
             (* From RFC7540§8.1.2.2:
              *   HTTP/2 does not use the Connection header field to indicate
              *   connection-specific header fields; in this protocol,
@@ -382,10 +330,7 @@ let of_http1 { Httpaf.Request.headers; meth; target; _ } =
               (* From RFC7540§8.1.2:
                *   header field names MUST be converted to lowercase prior to
                *   their encoding in HTTP/2. *)
-              if CI.is_lowercase name then
-                name
-              else
-                String.lowercase_ascii name
+              if CI.is_lowercase name then name else String.lowercase_ascii name
             in
             (name, value) :: acc)
         ~init:
@@ -397,8 +342,7 @@ let of_http1 { Httpaf.Request.headers; meth; target; _ } =
         headers
     in
     Ok (of_rev_list headers)
-  | None ->
-    Error "Missing `Host` header field"
+  | None -> Error "Missing `Host` header field"
 
 let to_string t =
   let b = Buffer.create 128 in

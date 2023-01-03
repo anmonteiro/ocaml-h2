@@ -16,8 +16,7 @@ module Client_connection_tests = struct
     let pp_hum fmt t =
       let str =
         match t with
-        | `Read ->
-          "Read"
+        | `Read -> "Read"
         | `Error (Error.ConnectionError (e, msg)) ->
           Format.sprintf "ConnectionError: %ld %S" (Error_code.serialize e) msg
         | `Error (Error.StreamError (stream_id, e)) ->
@@ -25,8 +24,7 @@ module Client_connection_tests = struct
             "StreamError on %ld: %ld"
             stream_id
             (Error_code.serialize e)
-        | `Close ->
-          "Close"
+        | `Close -> "Close"
       in
       Format.pp_print_string fmt str
   end
@@ -58,22 +56,24 @@ module Client_connection_tests = struct
       match t with
       | `Write iovecs ->
         Format.fprintf fmt "Write %S" (iovecs_to_string iovecs |> hex_of_string)
-      | `Yield ->
-        Format.pp_print_string fmt "Yield"
-      | `Close len ->
-        Format.fprintf fmt "Close %i" len
+      | `Yield -> Format.pp_print_string fmt "Yield"
+      | `Close len -> Format.fprintf fmt "Close %i" len
 
     let to_write_as_string t =
       match t with
-      | `Write iovecs ->
-        Some (iovecs_to_string iovecs)
-      | `Close _ | `Yield ->
-        None
+      | `Write iovecs -> Some (iovecs_to_string iovecs)
+      | `Close _ | `Yield -> None
   end
 
   let read_operation = Alcotest.of_pp Read_operation.pp_hum
-
   let write_operation = Alcotest.of_pp Write_operation.pp_hum
+
+  let ready_to_read t =
+    Alcotest.check
+      read_operation
+      "Reader wants to read"
+      `Read
+      (next_read_operation t)
 
   let reader_closed ?(msg = "Reader closed") t =
     Alcotest.(check read_operation) msg `Close (next_read_operation t)
@@ -81,33 +81,18 @@ module Client_connection_tests = struct
   let default_error_handler _ = assert false
 
   let test_initial_reader_state () =
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
+    let t = create ~error_handler:default_error_handler () in
     Alcotest.(check read_operation)
       "A new reader wants input"
       `Read
       (next_read_operation t)
 
   let test_reader_is_closed_after_eof () =
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
+    let t = create ~error_handler:default_error_handler () in
     let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
     Alcotest.(check int) "read_eof with no input returns 0" 0 c;
     reader_closed ~msg:"Shutting down a reader closes it" t;
-    let t =
-      create
-        ?config:None
-        ?push_handler:None
-        ~error_handler:default_error_handler
-    in
+    let t = create ~error_handler:default_error_handler () in
     let c = read t Bigstringaf.empty ~off:0 ~len:0 in
     Alcotest.(check int) "read with no input returns 0" 0 c;
     let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
@@ -148,7 +133,10 @@ module Client_connection_tests = struct
       read_headers
 
   let read_response_body
-      t ?(stream_id = 1l) ?(flags = Flags.(default_flags |> set_end_stream)) s
+      t
+      ?(stream_id = 1l)
+      ?(flags = Flags.(default_flags |> set_end_stream))
+      s
     =
     let writer = Writer.create 4096 in
     let frame_info = Writer.make_frame_info ~flags stream_id in
@@ -238,6 +226,7 @@ module Client_connection_tests = struct
         ?config:None
         ?push_handler:None
         ~error_handler:default_error_handler
+        ()
     in
     handle_preface t
 
@@ -248,7 +237,7 @@ module Client_connection_tests = struct
       ?(error_handler = default_error_handler)
       ()
     =
-    let t = create ?config ?push_handler ~error_handler in
+    let t = create ?config ?push_handler ~error_handler () in
     handle_preface ?settings t;
     t
 
@@ -265,7 +254,7 @@ module Client_connection_tests = struct
       | _ ->
         Alcotest.fail "Expected error handler to be called with protocol error"
     in
-    let t = create ?config:None ?push_handler:None ~error_handler in
+    let t = create ~error_handler () in
     let _, lenv = flush_pending_writes t in
     report_write_result t (`Ok lenv);
     let headers, _ = header_and_continuation_frames in
@@ -292,7 +281,7 @@ module Client_connection_tests = struct
       | _ ->
         Alcotest.fail "Expected error handler to be called with protocol error"
     in
-    let t = create ?config:None ?push_handler:None ~error_handler in
+    let t = create ~error_handler () in
     let _, lenv = flush_pending_writes t in
     report_write_result t (`Ok lenv);
     let goaway_frame =
@@ -325,11 +314,12 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -359,18 +349,18 @@ module Client_connection_tests = struct
           "Stream error handler gets an invalid response body length"
           true
           true
-      | _ ->
-        Alcotest.fail "Expected stream error handler to pass"
+      | _ -> Alcotest.fail "Expected stream error handler to pass"
     in
     let request_body =
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:stream_level_error_handler
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -404,11 +394,12 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -428,11 +419,12 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler:second_response_handler
     in
     flush_request t;
-    Body.close_writer second_request_body;
+    Body.Writer.close second_request_body;
     let _, _ = flush_pending_writes t in
     let headers, continuation = header_and_continuation_frames in
     read_frames t [ headers; continuation ];
@@ -463,11 +455,12 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -511,11 +504,12 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -587,11 +581,12 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -653,8 +648,7 @@ module Client_connection_tests = struct
       match error with
       | `Protocol_error _ ->
         Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
-      | _ ->
-        Alcotest.fail "Expected stream error handler to pass"
+      | _ -> Alcotest.fail "Expected stream error handler to pass"
     in
     let response_handler _response _response_body = () in
     let _request_body =
@@ -690,6 +684,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
@@ -699,7 +694,7 @@ module Client_connection_tests = struct
       "Stream is in the open state"
       true
       (Stream.is_open stream);
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -730,7 +725,7 @@ module Client_connection_tests = struct
     let t = create_and_handle_preface () in
     let ping_handler1_called = ref false in
     let ping_handler2_called = ref false in
-    let ping_handler ref () = ref := true in
+    let ping_handler ref _ = ref := true in
     ping t (ping_handler ping_handler1_called);
     ping t (ping_handler ping_handler2_called);
     let writer = Writer.create 256 in
@@ -770,18 +765,18 @@ module Client_connection_tests = struct
       match error with
       | `Protocol_error _ ->
         Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
-      | _ ->
-        Alcotest.fail "Expected stream error handler to pass"
+      | _ -> Alcotest.fail "Expected stream error handler to pass"
     in
     let request_body =
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:stream_level_error_handler
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -809,6 +804,107 @@ module Client_connection_tests = struct
       "Stream level error handler called"
       true
       !error_handler_called;
+    (* Don't loop *)
+    Alcotest.(check write_operation)
+      "Writer yields, i.e. don't send an RST_STREAM frame in response to one"
+      `Yield
+      (next_write_operation t)
+
+  let test_error_handler_double_rst_stream () =
+    let t = create_and_handle_preface () in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let response_handler _response _response_body = () in
+    let error_handler_called = ref false in
+    let stream_level_error_handler error =
+      error_handler_called := true;
+      match error with
+      | `Protocol_error _ ->
+        Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
+      | _ -> Alcotest.fail "Expected stream error handler to pass"
+    in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~flush_headers_immediately:true
+        ~error_handler:stream_level_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    Body.Writer.close request_body;
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
+    let frame = List.hd frames in
+    Alcotest.(check int)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      (Frame.FrameType.serialize Data)
+      Frame.(frame.frame_header.frame_type |> FrameType.serialize);
+    Alcotest.(check bool)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      true
+      (Flags.test_end_stream frame.frame_header.flags);
+    report_write_result t (`Ok lenv);
+    let rst_stream =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = RSTStream
+          }
+      ; frame_payload = Frame.RSTStream Error_code.ProtocolError
+      }
+    in
+    read_frames t [ rst_stream; rst_stream ];
+    Alcotest.(check bool)
+      "Stream level error handler called"
+      true
+      !error_handler_called;
+    (* Don't loop *)
+    Alcotest.(check write_operation)
+      "Writer yields, i.e. don't send an RST_STREAM frame in response to one"
+      `Yield
+      (next_write_operation t)
+
+  let test_error_handler_double_rst_stream_no_error () =
+    let t = create_and_handle_preface () in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let response_handler _response _response_body = () in
+    let stream_level_error_handler _error =
+      Alcotest.fail "didn't expect error handler to be called"
+    in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~flush_headers_immediately:true
+        ~error_handler:stream_level_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    Body.Writer.close request_body;
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
+    let frame = List.hd frames in
+    Alcotest.(check int)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      (Frame.FrameType.serialize Data)
+      Frame.(frame.frame_header.frame_type |> FrameType.serialize);
+    Alcotest.(check bool)
+      "Next write operation is an empty DATA frame with the END_STREAM flag set"
+      true
+      (Flags.test_end_stream frame.frame_header.flags);
+    report_write_result t (`Ok lenv);
+    let rst_stream =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = RSTStream
+          }
+      ; frame_payload = Frame.RSTStream Error_code.NoError
+      }
+    in
+    read_frames t [ rst_stream; rst_stream ];
     (* Don't loop *)
     Alcotest.(check write_operation)
       "Writer yields, i.e. don't send an RST_STREAM frame in response to one"
@@ -850,8 +946,7 @@ module Client_connection_tests = struct
         "Response handler called"
         true
         !response_handler_called
-    | Error msg ->
-      Alcotest.fail msg
+    | Error msg -> Alcotest.fail msg
 
   let test_nonzero_content_length_no_data_frames () =
     let t = create_and_handle_preface () in
@@ -862,11 +957,12 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let _, lenv = flush_pending_writes t in
     report_write_result t (`Ok lenv);
     let hpack_encoder = Hpack.Encoder.create 4096 in
@@ -886,11 +982,12 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let _, lenv = flush_pending_writes t in
     write_eof t;
     writer_closed t ~unread:lenv
@@ -905,13 +1002,14 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:(fun _ ->
           error_handler_called := true;
           Alcotest.fail "Didn't expect error handler to be called.")
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     let frame = List.hd frames in
@@ -961,6 +1059,7 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:(fun _ ->
           error_handler_called := true;
           Alcotest.fail "Didn't expect error handler to be called.")
@@ -988,8 +1087,8 @@ module Client_connection_tests = struct
     Alcotest.(check bool) "Response handler called" true !handler_called;
     Alcotest.(check bool) "error handler not called" false !error_handler_called;
     (* Send the rest of the request body. *)
-    Body.write_string request_body "hello";
-    Body.close_writer request_body;
+    Body.Writer.write_string request_body "hello";
+    Body.Writer.close request_body;
     writer_yielded t
 
   let test_connection_shutdown () =
@@ -1008,13 +1107,14 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:(fun _ ->
           error_handler_called := true;
           Alcotest.fail "Didn't expect error handler to be called.")
         ~response_handler
     in
     flush_request t;
-    Body.close_writer body;
+    Body.Writer.close body;
     let _frames, lenv = flush_pending_writes t in
     Alcotest.(check int) "Writer issues a zero-payload DATA frame" 9 lenv;
     report_write_result t (`Ok lenv);
@@ -1049,7 +1149,7 @@ module Client_connection_tests = struct
     let body_read_called = ref false in
     let body_eof_called = ref false in
     let response_handler _response response_body =
-      Body.schedule_read
+      Body.Reader.schedule_read
         response_body
         ~on_eof:ignore
         ~on_read:(fun _bs ~off:_ ~len:_ ->
@@ -1057,10 +1157,10 @@ module Client_connection_tests = struct
           Alcotest.(check bool)
             "Response body isn't closed (yet) when reading"
             false
-            (Body.is_closed response_body);
-          Body.schedule_read
+            (Body.Reader.is_closed response_body);
+          Body.Reader.schedule_read
             ~on_read:(fun _ ~off:_ ~len:_ ->
-              Body.schedule_read
+              Body.Reader.schedule_read
                 ~on_read:(fun _ ~off:_ ~len:_ -> ())
                 ~on_eof:(fun () -> body_eof_called := true)
                 response_body)
@@ -1071,11 +1171,12 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     let _, lenv = flush_pending_writes t in
     report_write_result t (`Ok lenv);
     writer_yielded t;
@@ -1101,7 +1202,7 @@ module Client_connection_tests = struct
     let request = Request.create ~scheme:"http" `GET "/" in
     let body_read_called = ref false in
     let response_handler _response response_body =
-      Body.schedule_read
+      Body.Reader.schedule_read
         response_body
         ~on_eof:ignore
         ~on_read:(fun _bs ~off:_ ~len:_ -> body_read_called := true)
@@ -1110,11 +1211,12 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
     flush_request t;
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     flush_request t;
     let hpack_encoder = Hpack.Encoder.create 4096 in
     read_response
@@ -1146,13 +1248,14 @@ module Client_connection_tests = struct
       Client_connection.request
         t
         request
+        ~flush_headers_immediately:true
         ~error_handler:default_error_handler
         ~response_handler
     in
     flush_request t;
-    Body.write_string request_body "hello";
+    Body.Writer.write_string request_body "hello";
     flush_request t;
-    Body.flush request_body (fun () -> Body.close_writer request_body);
+    Body.Writer.flush request_body (fun () -> Body.Writer.close request_body);
     let frames, _lenv = flush_pending_writes t in
     Alcotest.(check (list int))
       "Writes empty DATA frame"
@@ -1161,6 +1264,188 @@ module Client_connection_tests = struct
          (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
            Frame.FrameType.serialize frame_type)
          frames)
+
+  let test_dont_flush_headers_immediately () =
+    let t =
+      create_and_handle_preface ~settings:Settings.[ InitialWindowSize 5l ] ()
+    in
+    let request =
+      Request.create
+        ~scheme:"http"
+        `GET
+        "/"
+        ~headers:Headers.(of_list [ "content-length", "5" ])
+    in
+    let response_handler _response _response_body = () in
+    let request_body =
+      Client_connection.request
+        ~flush_headers_immediately:false
+        t
+        request
+        ~error_handler:default_error_handler
+        ~response_handler
+    in
+    (* Writer yields when `~flush_headers_immediately` is false *)
+    writer_yielded t;
+    (* Write to the body *)
+    Body.Writer.write_string request_body "Hello";
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check (list int))
+      "Batches headers and data frames together"
+      (List.map Frame.FrameType.serialize Frame.FrameType.[ Headers; Data ])
+      (List.map
+         (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+           Frame.FrameType.serialize frame_type)
+         frames);
+    report_write_result t (`Ok lenv);
+    Body.Writer.close request_body;
+    let frames, _lenv = flush_pending_writes t in
+    Alcotest.(check (list int))
+      "Writes empty DATA frame"
+      (List.map Frame.FrameType.serialize Frame.FrameType.[ Data ])
+      (List.map
+         (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+           Frame.FrameType.serialize frame_type)
+         frames)
+
+  let test_header_buffer_sharing () =
+    let t = create_and_handle_preface () in
+    let request1 =
+      Request.create
+        ~scheme:"http"
+        `GET
+        "/"
+        ~headers:
+          Headers.(
+            of_list
+              [ "headerA", "valueA"; "headerB", "valueB"; "headerC", "valueC" ])
+    in
+    let request2 =
+      Request.create
+        ~scheme:"http"
+        `GET
+        "/"
+        ~headers:
+          Headers.(
+            of_list
+              [ "headerD", "valueD"; "headerE", "valueE"; "headerF", "valueF" ])
+    in
+    let response_handler _response _response_body = assert false in
+    let do_request req =
+      Client_connection.request
+        ~flush_headers_immediately:false
+        t
+        req
+        ~error_handler:default_error_handler
+        ~response_handler
+    in
+    let req1_body = do_request request1 in
+    let req2_body = do_request request2 in
+    (* Writer yields when `~flush_headers_immediately` is false *)
+    writer_yielded t;
+    (* Write to the body *)
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check (list int))
+      "Batches both header frames together"
+      (List.map Frame.FrameType.serialize Frame.FrameType.[ Headers; Headers ])
+      (List.map
+         (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+           Frame.FrameType.serialize frame_type)
+         frames);
+
+    let[@ocaml.warning "-8"] [ headers1; headers2 ] = frames in
+    (match headers1.frame_payload, headers2.frame_payload with
+    | Headers (_, block1), Headers (_, block2) ->
+      let headers1 = decode_headers t.hpack_decoder block1 in
+      let headers2 = decode_headers t.hpack_decoder block2 in
+      let headers_testable = Alcotest.of_pp Headers.pp_hum in
+      Alcotest.(check headers_testable)
+        "Headers block 1 matches"
+        (Headers.of_list
+           [ ":method", "GET"
+           ; ":path", "/"
+           ; ":scheme", "http"
+           ; "headerA", "valueA"
+           ; "headerB", "valueB"
+           ; "headerC", "valueC"
+           ])
+        headers1;
+
+      Alcotest.(check headers_testable)
+        "Headers block 2 matches"
+        (Headers.of_list
+           [ ":method", "GET"
+           ; ":path", "/"
+           ; ":scheme", "http"
+           ; "headerD", "valueD"
+           ; "headerE", "valueE"
+           ; "headerF", "valueF"
+           ])
+        headers2
+    | _ -> Alcotest.fail "expected both frame payloads to be header blocks");
+
+    Body.Writer.close req1_body;
+    Body.Writer.close req2_body;
+    report_write_result t (`Ok lenv);
+    let frames, _lenv = flush_pending_writes t in
+    Alcotest.(check (list int))
+      "Writes empty DATA frame"
+      (List.map Frame.FrameType.serialize Frame.FrameType.[ Data ])
+      (List.map
+         (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+           Frame.FrameType.serialize frame_type)
+         frames)
+
+  let test_request_body_rst_stream_no_double_error () =
+    let t = create_and_handle_preface () in
+    let request =
+      Request.create
+        ~scheme:"http"
+        ~headers:(Headers.of_list [ "content-length", "5" ])
+        `GET
+        "/"
+    in
+    let handler_called = ref false in
+    let response_handler _response _response_body = handler_called := true in
+    let error_handler_called = ref false in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~flush_headers_immediately:true
+        ~error_handler:(fun _ -> error_handler_called := true)
+        ~response_handler
+    in
+    flush_request t;
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    read_response
+      t
+      hpack_encoder
+      ~flags:Flags.(default_flags |> set_end_header)
+      (Response.create `OK ~headers:(Headers.of_list [ "content-length", "6" ]));
+    read_response_body t "foo";
+    let rst_stream =
+      { Frame.frame_header =
+          { payload_length = 0
+          ; stream_id = 1l
+          ; flags = Flags.default_flags
+          ; frame_type = RSTStream
+          }
+      ; frame_payload = Frame.RSTStream Error_code.ProtocolError
+      }
+    in
+    read_frames t [ rst_stream ];
+    (* Read DATA frame after an RST_STREAM, not allowed by the protocol. We
+     * shouldn't crash if we're already handling the RST_STREAM error. *)
+    read_response_body t "foo";
+    Alcotest.(check bool) "Response handler called" true !handler_called;
+    Alcotest.(check bool)
+      "error handler called called"
+      true
+      !error_handler_called;
+    (* Send the rest of the request body. *)
+    Body.Writer.write_string request_body "hello";
+    Body.Writer.close request_body
 
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
@@ -1185,6 +1470,12 @@ module Client_connection_tests = struct
     ; ( "stream level error handler called on RST_STREAM frames"
       , `Quick
       , test_error_handler_rst_stream )
+    ; ( "stream level error handler called on two RST_STREAM frames"
+      , `Quick
+      , test_error_handler_double_rst_stream )
+    ; ( "two RST_STREAM frames no error code"
+      , `Quick
+      , test_error_handler_double_rst_stream_no_error )
     ; "starting an h2c connection", `Quick, test_h2c
     ; ( "non-zero `content-length` and no DATA frames"
       , `Quick
@@ -1204,6 +1495,13 @@ module Client_connection_tests = struct
     ; ( "flow control -- can send empty data frame"
       , `Quick
       , test_flow_control_can_send_empty_data_frame )
+    ; ( "don't flush headers immediately"
+      , `Quick
+      , test_dont_flush_headers_immediately )
+    ; "headers blocks don't share buffers", `Quick, test_header_buffer_sharing
+    ; ( "dont fail if already handling error"
+      , `Quick
+      , test_request_body_rst_stream_no_double_error )
     ]
 end
 

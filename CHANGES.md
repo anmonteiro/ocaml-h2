@@ -1,10 +1,55 @@
 Unreleased
 -----------
 
+- hpack: fix a case where hpack would raise an array out of bounds exception
+  ([#183](https://github.com/anmonteiro/ocaml-h2/pull/183))
+  ([@jonathanjameswatson](https://github.com/jonathanjameswatson))
+- h2: (client) handle multiple RST_STREAM frames
+  ([#184](https://github.com/anmonteiro/ocaml-h2/pull/184))
+  ([@jonathanjameswatson](https://github.com/jonathanjameswatson))
+- h2: (client) Fix a race condition with `~flush_headers_immediately:false` and
+  empty request bodies
+  ([#186](https://github.com/anmonteiro/ocaml-h2/pull/186))
+- h2: Make `H2.Reqd.error_code` part of the public interface
+  ([#188](https://github.com/anmonteiro/ocaml-h2/pull/188))
+- h2: Add `~request_method` argument to `H2.Method.body_length`
+  ([#190](https://github.com/anmonteiro/ocaml-h2/pull/190))
+  ([@jonathanjameswatson](https://github.com/jonathanjameswatson))
+- h2: Don't send any frames on a stream after an `RST_STREAM` frame
+  ([#187](https://github.com/anmonteiro/ocaml-h2/pull/187),
+  [#194](https://github.com/anmonteiro/ocaml-h2/pull/194))
+- h2: call error handler on the client if the remote peer closes the
+  commmunication channel
+  ([#177](https://github.com/anmonteiro/ocaml-h2/pull/177),
+  [#196](https://github.com/anmonteiro/ocaml-h2/pull/194))
+
+0.9.0 2022-08-14
+---------------
+
 - h2: Fix tests on 32-bit platforms
   ([#152](https://github.com/anmonteiro/ocaml-h2/pull/152))
 - h2-mirage: adapt to Conduit v4 and remove `H2_mirage.Server_with_conduit`
   ([#154](https://github.com/anmonteiro/ocaml-h2/pull/154))
+- h2: fix memory leaks related to trailer headers in the server and client
+  implementations ([#159](https://github.com/anmonteiro/ocaml-h2/pull/159)
+  (thanks [@quernd](https://github.com/quernd)!),
+  [#160](https://github.com/anmonteiro/ocaml-h2/pull/160))
+- h2: allow configuring `flush_headers_immediately` on the client and default
+  to `false`. This means that h2 will wait for the first request body bytes to
+  be scheduled and batch `HEADERS` and `DATA` frames when sending requests
+  ([#163](https://github.com/anmonteiro/ocaml-h2/pull/163),
+  [#164](https://github.com/anmonteiro/ocaml-h2/pull/164))
+- h2: Split `Body.t` into `Body.Writer.t` and `Body.Reader.t`
+  ([#165](https://github.com/anmonteiro/ocaml-h2/pull/165))
+- h2: OCaml 5.00 compatibility -- add `seeded_hash` to `scheduler.ml`
+  ([#168](https://github.com/anmonteiro/ocaml-h2/pull/168))
+- h2: Use a tail-recursive version of `Angstrom.skip_many`. Fixes a memory leak
+  in long-running connections e.g. gRPC
+  ([#172](https://github.com/anmonteiro/ocaml-h2/pull/172))
+- h2-async: Add an OCaml-TLS client to `h2-async`
+  ([#174](https://github.com/anmonteiro/ocaml-h2/pull/174))
+- h2: Fix a bug that caused different requests to share the same headers buffer
+  under concurrency ([#182](https://github.com/anmonteiro/ocaml-h2/pull/182))
 
 0.8.0 2021-04-11
 ---------------

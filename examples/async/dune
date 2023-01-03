@@ -1,6 +1,6 @@
 (executables
- (libraries h2 h2-async async core)
- (names async_https_echo_post))
+ (libraries h2 h2-async async core core_unix.command_unix)
+ (names async_ssl_https_echo_server_post async_tls_https_echo_client_post))
 
 (alias
  (name examples)

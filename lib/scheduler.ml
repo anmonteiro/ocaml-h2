@@ -35,8 +35,11 @@ module StreamsTbl = struct
     type t = Stream_identifier.t
 
     let equal = Stream_identifier.( === )
-
     let hash i k = Hashtbl.seeded_hash i k
+
+    (* Required for OCaml >= 5.0.0, but causes errors for older compilers
+       because it is an unused value declaration. *)
+    let[@warning "-32"] seeded_hash = hash
   end)
 
   let[@inline] find_opt h key = try Some (find h key) with Not_found -> None
@@ -46,24 +49,18 @@ module type StreamDescriptor = sig
   type t
 
   val id : t -> Stream_identifier.t
-
   val requires_output : t -> bool
-
   val flush_write_body : t -> max_bytes:int -> int
-
   val finish_stream : t -> Stream.closed_reason -> unit
-
   val is_idle : t -> bool
 end
 
 module Make (Streamd : StreamDescriptor) = struct
   module rec PriorityTreeNode : sig
     type root = Root
-
     type nonroot = NonRoot
 
     type stream = nonroot node
-
     and parent = Parent : _ node -> parent
 
     and _ node =
@@ -144,14 +141,15 @@ module Make (Streamd : StreamDescriptor) = struct
       }
 
   let create
-      ~parent ~initial_send_window_size ~initial_recv_window_size descriptor
+      ~parent
+      ~initial_send_window_size
+      ~initial_recv_window_size
+      descriptor
     =
     let t_last =
       match parent with
-      | Parent (Connection root) ->
-        root.t_last
-      | Parent (Stream stream) ->
-        stream.t_last
+      | Parent (Connection root) -> root.t_last
+      | Parent (Stream stream) -> stream.t_last
     in
     Stream
       { descriptor
@@ -184,16 +182,12 @@ module Make (Streamd : StreamDescriptor) = struct
       stream.children <- PriorityQueue.remove id stream.children
 
   let children : type a. a node -> PriorityQueue.t = function
-    | Stream { children; _ } ->
-      children
-    | Connection { children; _ } ->
-      children
+    | Stream { children; _ } -> children
+    | Connection { children; _ } -> children
 
   let stream_id : type a. a node -> int32 = function
-    | Connection _ ->
-      Stream_identifier.connection
-    | Stream { descriptor; _ } ->
-      Streamd.id descriptor
+    | Connection _ -> Stream_identifier.connection
+    | Stream { descriptor; _ } -> Streamd.id descriptor
 
   let set_parent stream_node ~exclusive new_parent =
     let (Stream ({ descriptor; _ } as stream)) = stream_node in
@@ -203,7 +197,8 @@ module Make (Streamd : StreamDescriptor) = struct
     stream.parent <- new_parent;
     let new_children =
       let new_children = children new_parent_node in
-      if exclusive then (
+      if exclusive
+      then (
         (* From RFC7540§5.3.3:
          *   Dependent streams move with their parent stream if the parent is
          *   reprioritized. Setting a dependency with the exclusive flag for a
@@ -222,24 +217,19 @@ module Make (Streamd : StreamDescriptor) = struct
          *   sole dependency of its parent stream, causing other dependencies
          *   to become dependent on the exclusive stream. *)
         PriorityQueue.sg stream_id stream_node)
-      else
-        pq_add stream_id stream_node new_children
+      else pq_add stream_id stream_node new_children
     in
     match new_parent_node with
-    | Stream stream ->
-      stream.children <- new_children
-    | Connection root ->
-      root.children <- new_children
+    | Stream stream -> stream.children <- new_children
+    | Connection root -> root.children <- new_children
 
   let would_create_cycle ~new_parent (Stream { descriptor; _ }) =
     let rec inner : type a. a node -> bool = function
-      | Connection _ ->
-        false
+      | Connection _ -> false
       | Stream { parent = Parent parent; _ }
         when Stream_identifier.(stream_id parent === Streamd.id descriptor) ->
         true
-      | Stream { parent = Parent parent; _ } ->
-        inner parent
+      | Stream { parent = Parent parent; _ } -> inner parent
     in
     let (Parent parent_node) = new_parent in
     inner parent_node
@@ -248,14 +238,12 @@ module Make (Streamd : StreamDescriptor) = struct
     let (Stream stream) = stream_node in
     let new_parent, new_priority =
       if Stream_identifier.is_connection priority.Priority.stream_dependency
-      then
-        Parent t, priority
+      then Parent t, priority
       else
         match
           StreamsTbl.find_opt root.all_streams priority.stream_dependency
         with
-        | Some parent_stream ->
-          Parent parent_stream, priority
+        | Some parent_stream -> Parent parent_stream, priority
         | None ->
           (* From RFC7540§5.3.1:
            *   A dependency on a stream that is not currently in the tree —
@@ -264,20 +252,21 @@ module Make (Streamd : StreamDescriptor) = struct
           Parent t, Priority.default_priority
     in
     (* bail early if trying to set the same priority *)
-    if not (Priority.equal stream.priority new_priority) then (
+    if not (Priority.equal stream.priority new_priority)
+    then (
       let { Priority.stream_dependency; exclusive; _ } = new_priority in
       let (Parent current_parent_node) = stream.parent in
       let current_parent_id = stream_id current_parent_node in
       (* only need to set a different parent if the parent or exclusive status
        * changed *)
-      if
-        (not Stream_identifier.(stream_dependency === current_parent_id))
-        || exclusive <> stream.priority.exclusive
+      if (not Stream_identifier.(stream_dependency === current_parent_id))
+         || exclusive <> stream.priority.exclusive
       then (
         let (Parent new_parent_node) = new_parent in
         (match new_parent_node with
         | Stream new_parent_stream ->
-          if would_create_cycle ~new_parent stream_node then (
+          if would_create_cycle ~new_parent stream_node
+          then (
             (* From RFC7540§5.3.3:
              *   If a stream is made dependent on one of its own dependencies,
              *   the formerly dependent stream is first moved to be dependent
@@ -315,8 +304,8 @@ module Make (Streamd : StreamDescriptor) = struct
     let stream_id = Streamd.id descriptor in
     StreamsTbl.add root.all_streams stream_id stream;
     root.children <- pq_add stream_id stream root.children;
-    if priority != Priority.default_priority then
-      reprioritize_stream t ~priority stream;
+    if priority != Priority.default_priority
+    then reprioritize_stream t ~priority stream;
     stream
 
   let get_node (Connection root) stream_id =
@@ -324,10 +313,8 @@ module Make (Streamd : StreamDescriptor) = struct
 
   let find t stream_id =
     match get_node t stream_id with
-    | Some (Stream { descriptor; _ }) ->
-      Some descriptor
-    | None ->
-      None
+    | Some (Stream { descriptor; _ }) -> Some descriptor
+    | None -> None
 
   let iter (Connection { all_streams; _ }) ~f =
     StreamsTbl.iter (fun _id -> f) all_streams
@@ -347,8 +334,8 @@ module Make (Streamd : StreamDescriptor) = struct
      *   available in either of the flow-control windows advertised by the
      *   receiver. *)
     let allowed_bytes =
-      if allowed_to_transmit t stream_node then
-        min root.flow stream.flow
+      if allowed_to_transmit t stream_node
+      then min root.flow stream.flow
       else
         (* There might be a zero-length DATA frame (with the end stream flag
            set) waiting to be sent. *)
@@ -371,10 +358,8 @@ module Make (Streamd : StreamDescriptor) = struct
     let (Stream ({ parent = Parent parent; _ } as stream)) = stream in
     let tlast_p =
       match parent with
-      | Connection { t_last; _ } ->
-        t_last
-      | Stream { t_last; _ } ->
-        t_last
+      | Connection { t_last; _ } -> t_last
+      | Stream { t_last; _ } -> t_last
     in
     stream.t <- tlast_p + (n * 256 / stream.priority.weight)
 
@@ -383,7 +368,8 @@ module Make (Streamd : StreamDescriptor) = struct
 
   let implicitly_close_idle_stream descriptor max_seen_ids =
     let implicitly_close_stream descriptor =
-      if Streamd.is_idle descriptor then
+      if Streamd.is_idle descriptor
+      then
         (* From RFC7540§5.1.1:
          *   The first use of a new stream identifier implicitly closes all
          *   streams in the "idle" state that might have been initiated by
@@ -392,11 +378,12 @@ module Make (Streamd : StreamDescriptor) = struct
     in
     let max_client_stream_id, max_pushed_stream_id = max_seen_ids in
     let stream_id = Streamd.id descriptor in
-    if Stream_identifier.is_request stream_id then (
-      if stream_id < max_client_stream_id then
-        implicitly_close_stream descriptor)
-    else if stream_id < max_pushed_stream_id then
-      implicitly_close_stream descriptor
+    if Stream_identifier.is_request stream_id
+    then (
+      if stream_id < max_client_stream_id
+      then implicitly_close_stream descriptor)
+    else if stream_id < max_pushed_stream_id
+    then implicitly_close_stream descriptor
 
   (* Scheduling algorithm from https://goo.gl/3sSHXJ (based on nghttp2):
    *
@@ -422,7 +409,8 @@ module Make (Streamd : StreamDescriptor) = struct
         | Some ((id, (Stream i as i_node)), children') ->
           p.t_last <- i.t;
           let written, subtree_is_active = schedule i_node in
-          if subtree_is_active then (
+          if subtree_is_active
+          then (
             update_t i_node (PriorityQueue.size p.children);
             p.children <- PriorityQueue.add id i_node children')
           else (
@@ -435,7 +423,8 @@ module Make (Streamd : StreamDescriptor) = struct
           (* Queue is empty, see line 6 above. *)
           0, false)
       | Stream ({ descriptor; _ } as p) as p_node ->
-        if Streamd.requires_output descriptor then
+        if Streamd.requires_output descriptor
+        then
           (* In this branch, flow-control has no bearing on activity, otherwise
            * a flow-controlled stream would be considered inactive (because it
            * can't make progress at the moment) and removed from the priority
@@ -449,7 +438,8 @@ module Make (Streamd : StreamDescriptor) = struct
           | Some ((id, (Stream i as i_node)), children') ->
             p.t_last <- i.t;
             let written, subtree_is_active = schedule i_node in
-            if subtree_is_active then (
+            if subtree_is_active
+            then (
               update_t i_node (PriorityQueue.size p.children);
               p.children <- PriorityQueue.add id i_node children')
             else (
@@ -466,13 +456,13 @@ module Make (Streamd : StreamDescriptor) = struct
       List.fold_left
         (fun acc (id, closed) ->
           (* When a stream completes, i.e. doesn't require more output and
-           * enters the `Closed` state, we set a TTL value which represents
-           * the * number of writer yields that the stream has before it is
-           * removed * from the connection Hash Table. By doing this we avoid
-           * losing some * potentially useful information regarding the
-           * stream's state at the * cost of keeping it around for a little
-           * while longer. *)
-          if closed.Stream.ttl = 0 then (
+           * enters the `Closed` state, we set a TTL value which represents the
+           * number of writer yields that the stream has before it is removed
+           * from the connection Hash Table. By doing this we avoid losing some
+           * potentially useful information regarding the stream's state at the
+           * cost of keeping it around for a little while longer. *)
+          if closed.Stream.ttl = 0
+          then (
             StreamsTbl.remove root.all_streams id;
             acc)
           else (
@@ -523,8 +513,7 @@ module Make (Streamd : StreamDescriptor) = struct
     | Connection ({ inflow; _ } as root) ->
       (* no need to check, we verify that the peer is allowed to send. *)
       root.inflow <- Int32.sub inflow size
-    | Stream ({ inflow; _ } as stream) ->
-      stream.inflow <- Int32.sub inflow size
+    | Stream ({ inflow; _ } as stream) -> stream.inflow <- Int32.sub inflow size
 
   let pp_hum fmt t =
     let rec pp_hum_inner level fmt t =

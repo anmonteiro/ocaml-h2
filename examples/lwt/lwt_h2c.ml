@@ -17,14 +17,12 @@ module Http2 = struct
         let request_body = Reqd.request_body request_descriptor in
         let response_content_type =
           match Headers.get request.headers "content-type" with
-          | Some request_content_type ->
-            request_content_type
-          | None ->
-            "application/octet-stream"
+          | Some request_content_type -> request_content_type
+          | None -> "application/octet-stream"
         in
         let buf = Buffer.create 10 in
         let rec respond () =
-          Body.schedule_read
+          Body.Reader.schedule_read
             request_body
             ~on_eof:(fun () ->
               let response =
@@ -59,11 +57,13 @@ module Http2 = struct
       let response_body = start_response Headers.empty in
       (match error with
       | `Exn exn ->
-        Body.write_string response_body (Printexc.to_string exn);
-        Body.write_string response_body "\n"
+        Body.Writer.write_string response_body (Printexc.to_string exn);
+        Body.Writer.write_string response_body "\n"
       | #Status.standard as error ->
-        Body.write_string response_body (Status.default_reason_phrase error));
-      Body.close_writer response_body
+        Body.Writer.write_string
+          response_body
+          (Status.default_reason_phrase error));
+      Body.Writer.close response_body
     in
     fun http_request request_body ->
       H2.Server_connection.create_h2c
@@ -97,14 +97,13 @@ let connection_handler =
   let http_error_handler _client_address ?request:_ error handle =
     let message =
       match error with
-      | `Exn exn ->
-        Printexc.to_string exn
+      | `Exn exn -> Printexc.to_string exn
       | (#Status.client_error | #Status.server_error) as error ->
         Status.to_string error
     in
     let body = handle Headers.empty in
-    Body.write_string body message;
-    Body.close_writer body
+    Body.Writer.write_string body message;
+    Body.Writer.close body
   in
   let request_handler _addr (reqd : Httpaf.Reqd.t Gluten.reqd) =
     let { Gluten.reqd; upgrade } = reqd in

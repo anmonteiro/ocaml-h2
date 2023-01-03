@@ -62,9 +62,7 @@ let highest_priority =
  *)
 
 let test_exclusive n = test_bit_int32 n 31
-
 let set_exclusive n = set_bit_int32 n 31
-
 let clear_exclusive n = clear_bit_int32 n 31
 
 let equal p1 p2 =

@@ -35,6 +35,7 @@
 module AB = Angstrom.Buffered
 module Reader = Parse.Reader
 module Writer = Serialize.Writer
+module StreamsTbl = Scheduler.StreamsTbl
 
 module Scheduler = Scheduler.Make (struct
   include Stream
@@ -42,7 +43,6 @@ module Scheduler = Scheduler.Make (struct
   type t = Respd.t
 
   let flush_write_body = Respd.flush_request_body
-
   let requires_output = Respd.requires_output
 end)
 
@@ -53,11 +53,8 @@ module Queue = struct
 end
 
 type error = Respd.error
-
 type trailers_handler = Headers.t -> unit
-
-type response_handler = Response.t -> [ `read ] Body.t -> unit
-
+type response_handler = Response.t -> Body.Reader.t -> unit
 type error_handler = error -> unit
 
 type t =
@@ -72,7 +69,7 @@ type t =
   ; mutable receiving_headers_for_stream : Stream_identifier.t option
   ; mutable did_send_go_away : bool
   ; mutable unacked_settings : int
-  ; pending_pings : (unit -> unit) Queue.t
+  ; pending_pings : ((unit, [ `EOF ]) result -> unit) Queue.t
   ; error_handler : error -> unit
   ; push_handler : Request.t -> (response_handler, unit) result
         (* From RFC7540§4.3:
@@ -83,9 +80,7 @@ type t =
   }
 
 let default_push_handler = Sys.opaque_identity (fun _ -> Ok (fun _ _ -> ()))
-
 let is_closed t = Reader.is_closed t.reader && Writer.is_closed t.writer
-
 let shutdown_reader t = Reader.force_close t.reader
 
 let flush_request_body t =
@@ -103,14 +98,14 @@ let shutdown_rw t =
  * https://docs.google.com/presentation/d/1iG_U2bKTc9CnKr0jPTrNfmxyLufx_cK2nNh9VjrKH6s
  *)
 let was_closed_or_implicitly_closed t stream_id =
-  if Stream_identifier.is_request stream_id then
-    Stream_identifier.(stream_id <= t.current_stream_id)
-  else
-    Stream_identifier.(stream_id <= t.max_pushed_stream_id)
+  if Stream_identifier.is_request stream_id
+  then Stream_identifier.(stream_id <= t.current_stream_id)
+  else Stream_identifier.(stream_id <= t.max_pushed_stream_id)
 
 let report_error t = function
   | Error.ConnectionError (error, data) ->
-    if not t.did_send_go_away then (
+    if not t.did_send_go_away
+    then (
       (* From RFC7540§5.4.1:
        *   An endpoint that encounters a connection error SHOULD first send a
        *   GOAWAY frame (Section 6.8) with the stream identifier of the last
@@ -119,10 +114,9 @@ let report_error t = function
        *   terminating. After sending the GOAWAY frame for an error condition,
        *   the endpoint MUST close the TCP connection. *)
       let debug_data =
-        if String.length data = 0 then
-          Bigstringaf.empty
-        else
-          Bigstringaf.of_string ~off:0 ~len:(String.length data) data
+        if String.length data = 0
+        then Bigstringaf.empty
+        else Bigstringaf.of_string ~off:0 ~len:(String.length data) data
       in
       let frame_info = Writer.make_frame_info Stream_identifier.connection in
       (* TODO: Only write if not already shutdown. *)
@@ -131,25 +125,24 @@ let report_error t = function
         frame_info
         ~debug_data
         ~last_stream_id:
-          (if Stream_identifier.(t.current_stream_id === -1l) then
-             Stream_identifier.connection
-          else
-            t.current_stream_id)
+          (if Stream_identifier.(t.current_stream_id === -1l)
+          then Stream_identifier.connection
+          else t.current_stream_id)
         error;
-      if error <> Error_code.NoError then
-        t.error_handler (`Protocol_error (error, data));
+      t.did_send_go_away <- true;
+      if error <> Error_code.NoError
+      then t.error_handler (`Protocol_error (error, data));
       Writer.flush t.writer (fun () ->
           (* XXX: We need to allow lower numbered streams to complete before
            * shutting down. *)
           shutdown_rw t);
-      t.did_send_go_away <- true;
       Writer.wakeup t.writer)
   | StreamError (stream_id, error) ->
     (match Scheduler.find t.streams stream_id with
-    | Some respd ->
-      Respd.report_error respd (`Protocol_error (error, "")) error
+    | Some respd -> Respd.report_error respd (`Protocol_error (error, "")) error
     | None ->
-      if not (was_closed_or_implicitly_closed t stream_id) then
+      if not (was_closed_or_implicitly_closed t stream_id)
+      then
         (* Possible if the stream was going to enter the Idle state (first time
          * we saw e.g. a PRIORITY frame for it) but had e.g. a
          * FRAME_SIZE_ERROR. *)
@@ -157,8 +150,8 @@ let report_error t = function
         Writer.write_rst_stream t.writer frame_info error);
     Writer.wakeup t.writer
 
-let report_connection_error t ?(additional_debug_data = "") error =
-  report_error t (ConnectionError (error, additional_debug_data))
+let report_connection_error t ?(reason = "") error =
+  report_error t (ConnectionError (error, reason))
 
 let report_stream_error t stream_id error =
   report_error t (StreamError (stream_id, error))
@@ -175,9 +168,10 @@ let set_error_and_handle t stream error error_code =
   Writer.wakeup t.writer
 
 let report_exn t exn =
-  if not (is_closed t) then
-    let additional_debug_data = Printexc.to_string exn in
-    report_connection_error t ~additional_debug_data Error_code.InternalError
+  if not (is_closed t)
+  then
+    let reason = Printexc.to_string exn in
+    report_connection_error t ~reason Error_code.InternalError
 
 let send_window_update
     : type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
@@ -189,15 +183,16 @@ let send_window_update
     let frame_info = Writer.make_frame_info stream_id in
     Writer.write_window_update t.writer frame_info n
   in
-  if Int32.compare n 0l > 0 then (
+  if Int32.compare n 0l > 0
+  then (
     let max_window_size = Settings.WindowSize.max_window_size in
     let stream_id = Scheduler.stream_id stream in
     let rec loop n =
-      if n > max_window_size then (
+      if n > max_window_size
+      then (
         send_window_update_frame stream_id max_window_size;
         loop (Int32.sub n max_window_size))
-      else
-        send_window_update_frame stream_id n
+      else send_window_update_frame stream_id n
     in
     loop n;
     Writer.wakeup t.writer)
@@ -253,7 +248,7 @@ let handle_push_promise_headers t respd headers =
       | Ok response_handler ->
         (* From RFC7540§8.2:
          *   Promised requests [...] MUST NOT include a request body. *)
-        let request_body = Body.empty in
+        let request_body = Body.Writer.create_empty ~writer:t.writer in
         (* From RFC7540§5.1:
          *   reserved (remote): [...] Receiving a HEADERS frame causes the
          *   stream to transition to "half-closed (local)". *)
@@ -299,10 +294,10 @@ let handle_response_headers t stream ~end_stream active_request headers =
         ProtocolError
     | `Fixed _ | `Unknown ->
       let response_body =
-        if end_stream then
-          Body.empty
+        if end_stream
+        then Body.Reader.empty
         else
-          Body.create_reader
+          Body.Reader.create
             (Bigstringaf.create t.config.response_body_buffer_size)
             ~done_reading:(fun len ->
               let len = Int32.of_int len in
@@ -314,16 +309,16 @@ let handle_response_headers t stream ~end_stream active_request headers =
       in
       respd.state <-
         Active
-          ( (if Stream.is_open respd then
-               Open new_response_state
-            else
-              HalfClosed new_response_state)
+          ( (if Stream.is_open respd
+            then Open new_response_state
+            else HalfClosed new_response_state)
           , active_request );
       active_request.response_handler response response_body;
-      if end_stream then (
+      if end_stream
+      then (
         (* Deliver EOF to the response body, as the handler might be waiting
          * on it to act. *)
-        Body.close_reader response_body;
+        Body.Reader.close response_body;
         (* From RFC7540§5.1:
          *   [...] an endpoint receiving an END_STREAM flag causes the stream
          *   state to become "half-closed (remote)". *)
@@ -346,14 +341,14 @@ let handle_headers t ~end_stream stream headers =
    *   receives a HEADERS frame that causes its advertised concurrent stream
    *   limit to be exceeded MUST treat this as a stream error (Section 5.4.2)
    *   of type PROTOCOL_ERROR or REFUSED_STREAM. *)
-  if
-    Int32.(
-      compare
-        (of_int (t.current_server_streams + 1))
-        t.config.max_concurrent_streams)
-    > 0
+  if Int32.(
+       compare
+         (of_int (t.current_server_streams + 1))
+         t.config.max_concurrent_streams)
+     > 0
   then
-    if t.unacked_settings > 0 then
+    if t.unacked_settings > 0
+    then
       (* From RFC7540§8.1.4:
        *   The REFUSED_STREAM error code can be included in a RST_STREAM frame
        *   to indicate that the stream is being closed prior to any processing
@@ -363,8 +358,7 @@ let handle_headers t ~end_stream stream headers =
        * Note: if there are pending SETTINGS to acknowledge, assume there was a
        * race condition and let the client retry. *)
       report_stream_error t respd.Stream.id Error_code.RefusedStream
-    else
-      report_stream_error t respd.Stream.id Error_code.ProtocolError
+    else report_stream_error t respd.Stream.id Error_code.ProtocolError
   else (
     (* From RFC7540§5.1.2:
      *   Streams that are in the "open" state or in either of the "half-closed"
@@ -377,8 +371,7 @@ let handle_headers t ~end_stream stream headers =
       handle_push_promise_headers t respd headers
     | Active (active_state, active_request) ->
       (match active_state with
-      | Open _ ->
-        respd.state <- Active (Open FullHeaders, active_request)
+      | Open _ -> respd.state <- Active (Open FullHeaders, active_request)
       | HalfClosed _ ->
         respd.state <- Active (HalfClosed FullHeaders, active_request));
       handle_response_headers t stream ~end_stream active_request headers
@@ -387,7 +380,12 @@ let handle_headers t ~end_stream stream headers =
       assert false)
 
 let handle_headers_block
-    t ?(is_trailers = false) stream partial_headers flags headers_block
+    t
+    ?(is_trailers = false)
+    stream
+    partial_headers
+    flags
+    headers_block
   =
   let open AB in
   let (Scheduler.Stream { descriptor = respd; _ }) = stream in
@@ -399,19 +397,22 @@ let handle_headers_block
   let parse_state' =
     AB.feed partial_headers.Stream.parse_state (`Bigstring headers_block)
   in
-  if end_headers then (
+  if end_headers
+  then (
     t.receiving_headers_for_stream <- None;
     let parse_state' = AB.feed parse_state' `Eof in
     match parse_state' with
     | Done (_, Ok headers) ->
-      if not is_trailers then
+      if not is_trailers
+      then
         (* `handle_headers` will take care of transitioning the stream state *)
         let end_stream = partial_headers.end_stream in
         handle_headers t ~end_stream stream headers
-      else if Headers.trailers_valid headers then (
+      else if Headers.trailers_valid headers
+      then (
         Respd.deliver_trailer_headers respd headers;
         let response_body = Respd.response_body_exn respd in
-        Body.close_reader response_body)
+        Body.Reader.close response_body)
       else
         (* From RFC7540§8.1.2.1:
          *   Pseudo-header fields MUST NOT appear in trailers. Endpoints MUST
@@ -425,12 +426,8 @@ let handle_headers_block
     | Done (_, Error _) | Partial _ ->
       report_connection_error t Error_code.CompressionError
     | Fail (_, _, message) ->
-      report_connection_error
-        t
-        ~additional_debug_data:message
-        Error_code.CompressionError)
-  else
-    partial_headers.parse_state <- parse_state'
+      report_connection_error t ~reason:message Error_code.CompressionError)
+  else partial_headers.parse_state <- parse_state'
 
 let handle_trailer_headers = handle_headers_block ~is_trailers:true
 
@@ -438,8 +435,8 @@ let create_partial_headers t flags headers_block =
   let end_headers = Flags.test_end_header flags in
   let headers_block_length = Bigstringaf.length headers_block in
   let initial_buffer_size =
-    if end_headers then
-      headers_block_length
+    if end_headers
+    then headers_block_length
     else
       (* Conservative estimate that there's only going to be one CONTINUATION
        * frame. *)
@@ -453,26 +450,30 @@ let create_partial_headers t flags headers_block =
   }
 
 let handle_first_response_bytes
-    t stream active_request frame_header headers_block
+    t
+    stream
+    active_request
+    frame_header
+    headers_block
   =
   let (Scheduler.Stream { descriptor; _ }) = stream in
   let { Frame.flags; stream_id; _ } = frame_header in
   let partial_headers = create_partial_headers t flags headers_block in
   let remote_state = Stream.PartialHeaders partial_headers in
   descriptor.Stream.state <-
-    (if Stream.is_open descriptor then
-       Active (Open remote_state, active_request)
-    else
-      Active (HalfClosed remote_state, active_request));
-  if not (Flags.test_end_header flags) then
-    t.receiving_headers_for_stream <- Some stream_id;
+    (if Stream.is_open descriptor
+    then Active (Open remote_state, active_request)
+    else Active (HalfClosed remote_state, active_request));
+  if not (Flags.test_end_header flags)
+  then t.receiving_headers_for_stream <- Some stream_id;
   handle_headers_block t stream partial_headers flags headers_block
 
 let process_trailer_headers t stream active_response frame_header headers_block =
   let (Scheduler.Stream { descriptor = respd; _ }) = stream in
   let { Frame.stream_id; flags; _ } = frame_header in
   let end_stream = Flags.test_end_stream flags in
-  if not end_stream then
+  if not end_stream
+  then
     (* From RFC7540§8.1:
      *   A HEADERS frame (and associated CONTINUATION frames) can only appear
      *   at the start or end of a stream. An endpoint that receives a HEADERS
@@ -492,13 +493,13 @@ let process_trailer_headers t stream active_response frame_header headers_block 
       }
     in
     active_response.Respd.trailers_parser <- Some partial_headers;
-    if not Flags.(test_end_header flags) then
-      t.receiving_headers_for_stream <- Some stream_id;
+    if not Flags.(test_end_header flags)
+    then t.receiving_headers_for_stream <- Some stream_id;
     (* trailer headers: RFC7230§4.4 *)
     handle_trailer_headers t stream partial_headers flags headers_block
 
 let process_headers_frame t { Frame.frame_header; _ } headers_block =
-  let { Frame.stream_id; flags; _ } = frame_header in
+  let { Frame.stream_id; _ } = frame_header in
   match Scheduler.get_node t.streams stream_id with
   | None ->
     (* If we're receiving a response for a stream that's no longer in the
@@ -508,11 +509,9 @@ let process_headers_frame t { Frame.frame_header; _ } headers_block =
      * However, if the stream identifer is greater than the largest stream
      * identifier we have produced, they should know better. In this case,
      * send an RST_STREAM. *)
-    if
-      Stream_identifier.(
-        stream_id >= t.current_stream_id && is_request stream_id)
-    then
-      report_stream_error t stream_id Error_code.StreamClosed
+    if Stream_identifier.(
+         stream_id >= t.current_stream_id && is_request stream_id)
+    then report_stream_error t stream_id Error_code.StreamClosed
   | Some (Scheduler.Stream { descriptor; _ } as stream) ->
     (match descriptor.state with
     | Idle ->
@@ -545,8 +544,7 @@ let process_headers_frame t { Frame.frame_header; _ } headers_block =
         active_response
         frame_header
         headers_block;
-        if Flags.test_end_stream flags then Stream.finish_stream descriptor Finished
-        (* TODO: what if the END_STREAM flag is not set? *)
+      Stream.finish_stream descriptor Finished
     | Closed { reason = ResetByThem _; _ } ->
       (* From RFC7540§5.1:
        *   closed: [...] An endpoint that receives any frame other than
@@ -595,7 +593,8 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
        *   unless the receiver treats this as a connection error (Section 5.4.1).
        *   This is necessary even if the frame is in error. *)
       Scheduler.deduct_inflow t.streams payload_len32;
-      if not allowed_to_receive then (
+      if not allowed_to_receive
+      then (
         (* From RFC7540§6.9:
          *  A receiver MAY respond with a stream error (Section 5.4.2) or
          *  connection error (Section 5.4.1) of type FLOW_CONTROL_ERROR if it
@@ -632,12 +631,14 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
            * Note: we send these WINDOW_UPDATE frames once the body bytes
            * have been surfaced to the application. This is done in the
            * record field `done_reading` of `Body.t`. *)
-          let faraday = Body.unsafe_faraday response_body in
-          if not (Faraday.is_closed faraday) then (
+          let faraday = Body.Reader.unsafe_faraday response_body in
+          if not (Faraday.is_closed faraday)
+          then (
             Faraday.schedule_bigstring faraday bstr;
-            if end_stream then Body.close_reader response_body);
+            if end_stream then Body.Reader.close response_body);
           Respd.flush_response_body descriptor;
-          if end_stream && not (Respd.requires_output descriptor) then
+          if end_stream && not (Respd.requires_output descriptor)
+          then
             (* From RFC7540§6.1:
              *   When set, bit 0 indicates that this frame is the last that
              *   the endpoint will send for the identified stream. Setting
@@ -680,7 +681,8 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
        *   stream error (Section 5.4.2) of type STREAM_CLOSED. *)
       report_stream_error t stream_id Error_code.StreamClosed)
   | None ->
-    if not (was_closed_or_implicitly_closed t stream_id) then
+    if not (was_closed_or_implicitly_closed t stream_id)
+    then
       (* From RFC7540§5.1:
        *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
        *   a stream in this state MUST be treated as a connection error
@@ -688,7 +690,8 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
       report_connection_error t Error_code.ProtocolError
 
 let on_close_stream t id ~active closed =
-  if active then
+  if active
+  then
     (* From RFC7540§5.1.2:
      *   Streams that are in the "open" state or in either of the "half-closed"
      *   states count toward the maximum number of streams that an endpoint is
@@ -699,15 +702,15 @@ let on_close_stream t id ~active closed =
 let process_priority_frame t { Frame.frame_header; _ } priority =
   let { Frame.stream_id; _ } = frame_header in
   let { Priority.stream_dependency; _ } = priority in
-  if Stream_identifier.(stream_id === stream_dependency) then
+  if Stream_identifier.(stream_id === stream_dependency)
+  then
     (* From RFC7540§5.3.1:
      *   A stream cannot depend on itself. An endpoint MUST treat this as a
      *   stream error (Section 5.4.2) of type PROTOCOL_ERROR. *)
     report_stream_error t stream_id Error_code.ProtocolError
   else
     match Scheduler.get_node t.streams stream_id with
-    | Some stream ->
-      Scheduler.reprioritize_stream t.streams ~priority stream
+    | Some stream -> Scheduler.reprioritize_stream t.streams ~priority stream
     | None ->
       (* From RFC7540§5.3:
        *   A client can assign a priority for a new stream by including
@@ -741,7 +744,16 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *   received, the recipient MUST treat this as a connection error
        *   (Section 5.4.1) of type PROTOCOL_ERROR. *)
       report_connection_error t Error_code.ProtocolError
-    | Closed _, Error_code.NoError ->
+    | Active _, Error_code.NoError ->
+      (* If we're active (i.e. not done sending the request body), finish the
+       * stream, in order to mark it for cleanup.
+       *
+       * Note: we don't close the request body here because the client may be
+       * in the process of writing to it, and while we're not going to send
+       * those bytes to the output channel, we don't want to fail when writing
+       * either. *)
+      Stream.finish_stream respd (ResetByThem error_code)
+    | Closed _, _ ->
       (* From RFC7540§8.1:
        *   A server can send a complete response prior to the client sending an
        *   entire request if the response does not depend on any portion of the
@@ -753,18 +765,17 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
        *
        * If we're done sending the request there's nothing to do here, allow
        * the stream to finish successfully.
+       *
+       * From RFC7540§5.1:
+       *   Endpoints MUST ignore WINDOW_UPDATE or RST_STREAM frames received
+       *   in this state, though endpoints MAY choose to treat frames that
+       *   arrive a significant time after sending END_STREAM as a connection
+       *   error (Section 5.4.1) of type PROTOCOL_ERROR.
+       *
+       * We ignore further RST_STREAM frames.
        *)
       (* XXX(anmonteiro): When we add logging support, add something here. *)
       ()
-    | Active _, Error_code.NoError ->
-      (* If we're active (i.e. not done sending the request body), finish the
-       * stream, in order to mark it for cleanup.
-       *
-       * Note: we don't close the request body here because the client may be
-       * in the process of writing to it, and while we're not going to send
-       * those bytes to the output channel, we don't want to fail when writing
-       * either. *)
-      Stream.finish_stream respd (ResetByThem error_code)
     | _ ->
       (* From RFC7540§6.4:
        *   The RST_STREAM frame fully terminates the referenced stream and
@@ -794,7 +805,8 @@ let process_rst_stream_frame t { Frame.frame_header; _ } error_code =
     (* We might have removed the stream from the hash table. If its stream
      * id is smaller than or equal to the max client stream id we've generated,
      * then it must have been closed. *)
-    if not (was_closed_or_implicitly_closed t stream_id) then
+    if not (was_closed_or_implicitly_closed t stream_id)
+    then
       (* From RFC7540§6.4:
        *   RST_STREAM frames MUST NOT be sent for a stream in the "idle"
        *   state. If a RST_STREAM frame identifying an idle stream is
@@ -810,14 +822,16 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
   let { Frame.flags; _ } = frame_header in
   (* We already checked that an acked SETTINGS is empty. Don't need to do
    * anything else in that case *)
-  if Flags.(test_ack flags) then (
+  if Flags.(test_ack flags)
+  then (
     t.unacked_settings <- t.unacked_settings - 1;
-    if t.unacked_settings < 0 then
+    if t.unacked_settings < 0
+    then
       (* The server is ACKing a SETTINGS frame that we didn't send *)
-      let additional_debug_data =
-        "Received SETTINGS with ACK but no ACK was pending"
-      in
-      report_connection_error t ~additional_debug_data Error_code.ProtocolError)
+      report_connection_error
+        t
+        ~reason:"Received unexpected SETTINGS frame with acknowledgement"
+        Error_code.ProtocolError)
   else
     match Settings.check_settings_list ~is_client:true settings with
     | Ok () ->
@@ -841,8 +855,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
               (* We've already verified that this setting is either 0 or 1 in the
                * call to `Settings.check_settings_list` above. *)
               { acc with enable_push = x = 1 }
-            | MaxConcurrentStreams x ->
-              { acc with max_concurrent_streams = x }
+            | MaxConcurrentStreams x -> { acc with max_concurrent_streams = x }
             | InitialWindowSize new_val ->
               (* From RFC7540§6.9.2:
                *   In addition to changing the flow-control window for streams
@@ -869,16 +882,14 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
                       *   flow-control window to exceed the maximum size as a
                       *   connection error (Section 5.4.1) of type
                       *   FLOW_CONTROL_ERROR. *)
-                     if not (Scheduler.add_flow stream growth) then
-                       raise Local)
+                     if not (Scheduler.add_flow stream growth) then raise Local)
                    t.streams
                with
-              | () ->
-                ()
+              | () -> ()
               | exception Local ->
                 report_connection_error
                   t
-                  ~additional_debug_data:
+                  ~reason:
                     (Format.sprintf
                        "Window size for stream would exceed %ld"
                        Settings.WindowSize.max_window_size)
@@ -887,12 +898,11 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
             | MaxFrameSize x ->
               Scheduler.iter
                 ~f:(fun (Stream { descriptor; _ }) ->
-                  if Respd.requires_output descriptor then
-                    descriptor.max_frame_size <- x)
+                  if Respd.requires_output descriptor
+                  then descriptor.max_frame_size <- x)
                 t.streams;
               { acc with max_frame_size = x }
-            | MaxHeaderListSize x ->
-              { acc with max_header_list_size = Some x })
+            | MaxHeaderListSize x -> { acc with max_header_list_size = Some x })
           t.settings
           settings
       in
@@ -908,8 +918,7 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       Writer.write_settings t.writer frame_info [];
       t.unacked_settings <- t.unacked_settings + 1;
       Writer.wakeup t.writer
-    | Error error ->
-      report_error t error
+    | Error error -> report_error t error
 
 let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block =
   let { Frame.flags; stream_id; _ } = frame_header in
@@ -938,25 +947,31 @@ let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block 
   in
   let partial_headers = create_partial_headers t flags headers_block in
   respd.state <- Reserved (PartialHeaders partial_headers);
-  if not (Flags.test_end_header flags) then
-    t.receiving_headers_for_stream <- Some promised_stream_id;
+  if not (Flags.test_end_header flags)
+  then t.receiving_headers_for_stream <- Some promised_stream_id;
   handle_headers_block t stream partial_headers flags headers_block
 
 let process_push_promise_frame
-    t ({ Frame.frame_header; _ } as frame) promised_stream_id headers_block
+    t
+    ({ Frame.frame_header; _ } as frame)
+    promised_stream_id
+    headers_block
   =
   let { Frame.stream_id; _ } = frame_header in
   (* At this point, `promised_stream_id` has already been validated by the
    * parser *)
-  if not t.settings.enable_push then
+  if not t.settings.enable_push
+  then
     (* From RFC7540§6.6:
      *   PUSH_PROMISE MUST NOT be sent if the SETTINGS_ENABLE_PUSH setting of
      *   the peer endpoint is set to 0. An endpoint that has set this setting
      *   and has received acknowledgement MUST treat the receipt of a
      *   PUSH_PROMISE frame as a connection error (Section 5.4.1) of type
      *   PROTOCOL_ERROR. *)
-    let additional_debug_data = "Push is not enabled for the connection" in
-    report_connection_error t ~additional_debug_data Error_code.ProtocolError
+    report_connection_error
+      t
+      ~reason:"Push is disabled for this connection"
+      Error_code.ProtocolError
   else if not Stream_identifier.(promised_stream_id > t.max_pushed_stream_id)
   then
     (* From RFC7540§6.6:
@@ -965,17 +980,18 @@ let process_push_promise_frame
      *   (Section 5.4.1) of type PROTOCOL_ERROR. Note that an illegal stream
      *   identifier is an identifier for a stream that is not currently in the
      *   "idle" state. *)
-    let additional_debug_data =
-      "Illegal stream identifier promised by PUSH_PROMISE"
-    in
-    report_connection_error t ~additional_debug_data Error_code.ProtocolError
+    report_connection_error
+      t
+      ~reason:"Illegal stream identifier promised by PUSH_PROMISE"
+      Error_code.ProtocolError
   else
     let send_connection_error () =
-      let additional_debug_data =
-        "Received PUSH_PROMISE on a stream that is neither open nor \
-         half-closed (local)"
-      in
-      report_connection_error t ~additional_debug_data Error_code.ProtocolError
+      report_connection_error
+        t
+        ~reason:
+          "Received PUSH_PROMISE on a stream that is neither open nor \
+           half-closed (local)"
+        Error_code.ProtocolError
     in
     t.max_pushed_stream_id <- promised_stream_id;
     match Scheduler.find t.streams stream_id with
@@ -989,8 +1005,9 @@ let process_push_promise_frame
       (match respd.state with
       | Active ((Open _ | HalfClosed _), _) ->
         reserve_stream t frame promised_stream_id headers_block
-      | _ ->
-        send_connection_error ())
+      | _ -> send_connection_error ())
+
+let ok = Ok ()
 
 let process_ping_frame t { Frame.frame_header; _ } payload =
   let { Frame.flags; _ } = frame_header in
@@ -998,14 +1015,16 @@ let process_ping_frame t { Frame.frame_header; _ } payload =
    *   ACK (0x1): When set, bit 0 indicates that this PING frame is a PING
    *   response. [...] An endpoint MUST NOT respond to PING frames containing
    *   this flag. *)
-  if Flags.test_ack flags then
+  if Flags.test_ack flags
+  then
     match Queue.take_opt t.pending_pings with
-    | Some callback ->
-      callback ()
+    | Some callback -> callback ok
     | None ->
       (* server is ACKing a PING that we didn't send? *)
-      let additional_debug_data = "Unexpected PING acknowledgement" in
-      report_connection_error t ~additional_debug_data Error_code.ProtocolError
+      report_connection_error
+        t
+        ~reason:"Unexpected PING acknowledgement"
+        Error_code.ProtocolError
   else
     (* From RFC7540§6.7:
      *   Receivers of a PING frame that does not include an ACK flag MUST send
@@ -1046,26 +1065,26 @@ let add_window_increment
   let stream_id = Scheduler.stream_id stream in
   let new_flow =
     match stream with
-    | Connection { flow; _ } ->
-      flow
-    | Stream { flow; _ } ->
-      flow
+    | Connection { flow; _ } -> flow
+    | Stream { flow; _ } -> flow
   in
-  if did_add then (
-    if Int32.compare new_flow 0l > 0 then
+  if did_add
+  then (
+    if Int32.compare new_flow 0l > 0
+    then
       (* Don't bother waking up the writer if the new flow doesn't allow
        * the stream to write. *)
       Writer.wakeup t.writer)
-  else if Stream_identifier.is_connection stream_id then
+  else if Stream_identifier.is_connection stream_id
+  then
     report_connection_error
       t
-      ~additional_debug_data:
+      ~reason:
         (Printf.sprintf
            "Window size for stream would exceed %ld"
            Settings.WindowSize.max_window_size)
       Error_code.FlowControlError
-  else
-    report_stream_error t stream_id Error_code.FlowControlError
+  else report_stream_error t stream_id Error_code.FlowControlError
 
 let process_window_update_frame t { Frame.frame_header; _ } window_increment =
   let open Scheduler in
@@ -1075,8 +1094,8 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
    *   connection. In the former case, the frame's stream identifier indicates
    *   the affected stream; in the latter, the value "0" indicates that the
    *   entire connection is the subject of the frame. *)
-  if Stream_identifier.is_connection stream_id then
-    add_window_increment t t.streams window_increment
+  if Stream_identifier.is_connection stream_id
+  then add_window_increment t t.streams window_increment
   else
     match Scheduler.get_node t.streams stream_id with
     | Some (Stream { descriptor; _ } as stream_node) ->
@@ -1101,7 +1120,8 @@ let process_window_update_frame t { Frame.frame_header; _ } window_increment =
          *   error (Section 5.4.1) of type PROTOCOL_ERROR. *)
         ())
     | None ->
-      if not (was_closed_or_implicitly_closed t stream_id) then
+      if not (was_closed_or_implicitly_closed t stream_id)
+      then
         (* From RFC7540§5.1:
          *   idle: [...] Receiving any frame other than HEADERS or PRIORITY on
          *   a stream in this state MUST be treated as a connection error
@@ -1146,15 +1166,11 @@ let process_continuation_frame t { Frame.frame_header; _ } headers_block =
 (* From RFC7540§1:
  *   HTTP/2 [...] allows interleaving of request and response messages on the
  *   same connection and uses an efficient coding for HTTP header fields. *)
-let[@ocaml.warning "-16"] create
-    ?(config = Config.default) ?push_handler ~error_handler
-  =
+let create ?(config = Config.default) ?push_handler ~error_handler () =
   let push_handler =
     match push_handler with
-    | Some push_handler ->
-      push_handler
-    | None ->
-      default_push_handler
+    | Some push_handler -> push_handler
+    | None -> default_push_handler
   in
   let settings =
     { (Config.to_settings config) with
@@ -1172,8 +1188,7 @@ let[@ocaml.warning "-16"] create
   and frame_handler r =
     let t = Lazy.force t in
     match r with
-    | Error e ->
-      report_error t e
+    | Error e -> report_error t e
     | Ok ({ Frame.frame_payload; frame_header } as frame) ->
       (match t.receiving_headers_for_stream with
       | Some stream_id
@@ -1187,7 +1202,7 @@ let[@ocaml.warning "-16"] create
          *   PROTOCOL_ERROR. *)
         report_connection_error
           t
-          ~additional_debug_data:
+          ~reason:
             "HEADERS or PUSH_PROMISE without the END_HEADERS flag set must be \
              followed by a CONTINUATION frame for the same stream"
           Error_code.ProtocolError
@@ -1195,18 +1210,13 @@ let[@ocaml.warning "-16"] create
         (match frame_payload with
         | Headers (_priority, headers_block) ->
           process_headers_frame t frame headers_block
-        | Data bs ->
-          process_data_frame t frame bs
-        | Priority priority ->
-          process_priority_frame t frame priority
-        | RSTStream error_code ->
-          process_rst_stream_frame t frame error_code
-        | Settings settings ->
-          process_settings_frame t frame settings
+        | Data bs -> process_data_frame t frame bs
+        | Priority priority -> process_priority_frame t frame priority
+        | RSTStream error_code -> process_rst_stream_frame t frame error_code
+        | Settings settings -> process_settings_frame t frame settings
         | PushPromise (promised_stream_id, bs) ->
           process_push_promise_frame t frame promised_stream_id bs
-        | Ping data ->
-          process_ping_frame t frame data
+        | Ping data -> process_ping_frame t frame data
         | GoAway (last_stream_id, error, debug_data) ->
           process_goaway_frame t frame (last_stream_id, error, debug_data)
         | WindowUpdate window_size ->
@@ -1278,13 +1288,14 @@ let[@ocaml.warning "-16"] create
    * From RFC7540§6.9.2:
    *   The connection flow-control window can only be changed using
    *   WINDOW_UPDATE frames. *)
-  (if t.config.initial_window_size > Settings.default.initial_window_size then
-     let diff =
-       Int32.sub
-         t.config.initial_window_size
-         Settings.default.initial_window_size
-     in
-     send_window_update t t.streams diff);
+  (if t.config.initial_window_size > Settings.default.initial_window_size
+  then
+    let diff =
+      Int32.sub
+        t.config.initial_window_size
+        Settings.default.initial_window_size
+    in
+    send_window_update t t.streams diff);
   t
 
 let create_and_add_stream t ~error_handler =
@@ -1325,7 +1336,7 @@ let create_h2c
     (* From RFC7540§3.2:
      *   Upon receiving the 101 response, the client MUST send a connection
      *   preface (Section 3.5), which includes a SETTINGS frame. *)
-    let t = create ?config ?push_handler ~error_handler in
+    let t = create ?config ?push_handler ~error_handler () in
     let respd = create_and_add_stream t ~error_handler:response_error_handler in
     assert (Stream_identifier.(t.current_stream_id === 1l));
     assert (Stream_identifier.(respd.id === 1l));
@@ -1349,24 +1360,26 @@ let create_h2c
              *   entirety before the client can send HTTP/2 frames. This means
              *   that a large request can block the use of the connection until
              *   it is completely sent. *)
-          ; request_body = Body.empty
+          ; request_body = Body.Writer.create_empty ~writer:t.writer
           ; response_handler
           ; trailers_handler = ignore
           } );
     Writer.wakeup t.writer;
     Ok t
-  | Error msg ->
-    Error msg
+  | Error msg -> Error msg
 
 let request
-    t ?(trailers_handler = ignore) request ~error_handler ~response_handler
+    t
+    ?(flush_headers_immediately = false)
+    ?(trailers_handler = ignore)
+    request
+    ~error_handler
+    ~response_handler
   =
   let max_frame_size = t.settings.max_frame_size in
   let respd = create_and_add_stream t ~error_handler in
   let request_body =
-    Body.create_writer
-      (Bigstringaf.create max_frame_size)
-      ~ready_to_write:(fun () -> Writer.wakeup t.writer)
+    Body.Writer.create (Bigstringaf.create max_frame_size) ~writer:t.writer
   in
   let frame_info =
     Writer.make_frame_info
@@ -1382,11 +1395,11 @@ let request
       Priority.default_priority
     frame_info
     request;
-  Writer.flush t.writer (fun () ->
-      respd.state <-
-        Active
-          ( Open WaitingForPeer
-          , { request; request_body; response_handler; trailers_handler } ));
+  respd.state <-
+    Active
+      ( Open WaitingForPeer
+      , { request; request_body; response_handler; trailers_handler } );
+  if not flush_headers_immediately then Writer.yield t.writer;
   Writer.wakeup t.writer;
   (* Closing the request body puts the stream in the half-closed (local) state.
    * This is handled by {!Respd.flush_request_body}, which transitions the
@@ -1401,11 +1414,10 @@ let request
 let ping t ?payload ?(off = 0) callback =
   let payload =
     match payload with
-    | None ->
-      Serialize.default_ping_payload
+    | None -> Serialize.default_ping_payload
     | Some payload ->
-      if Bigstringaf.length payload - off < 8 then
-        failwith "PING payload must have at least 8 octets in length";
+      if Bigstringaf.length payload - off < 8
+      then failwith "PING payload must have at least 8 octets in length";
       payload
   in
   (* From RFC7540§6.7:
@@ -1422,8 +1434,7 @@ let ping t ?payload ?(off = 0) callback =
 let next_read_operation t =
   if Reader.is_closed t.reader then shutdown_reader t;
   match Reader.next t.reader with
-  | (`Read | `Close) as operation ->
-    operation
+  | (`Read | `Close) as operation -> operation
   | `Error e ->
     report_error t e;
     (match e with
@@ -1440,8 +1451,24 @@ let next_read_operation t =
 
 let read t bs ~off ~len = Reader.read_with_more t.reader bs ~off ~len Incomplete
 
+let unexpected_eof t =
+  Scheduler.iter
+    ~f:(fun (Stream { descriptor; _ }) ->
+      match descriptor.state with
+      | Idle | Reserved _ | Closed _ -> ()
+      | Active _ ->
+        Respd.report_error
+          descriptor
+          (`Malformed_response "unexpected eof")
+          ProtocolError)
+    t.streams;
+  Queue.iter (fun f -> f (Error `EOF)) t.pending_pings;
+  report_connection_error t ~reason:"unexpected eof" ProtocolError
+
 let read_eof t bs ~off ~len =
-  Reader.read_with_more t.reader bs ~off ~len Complete
+  let bytes_read = Reader.read_with_more t.reader bs ~off ~len Complete in
+  unexpected_eof t;
+  bytes_read
 
 (* XXX(anmonteiro): this function is here to please the Gluten `RUNTIME`
  * interface.
@@ -1456,5 +1483,4 @@ let next_write_operation t =
   Writer.next t.writer
 
 let yield_writer t k = Writer.on_wakeup_writer t.writer k
-
 let report_write_result t result = Writer.report_result t.writer result
