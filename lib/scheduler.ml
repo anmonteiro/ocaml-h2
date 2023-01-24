@@ -401,28 +401,31 @@ module Make (Streamd : StreamDescriptor) = struct
    * 12
    * 13 schedule(0)
    *)
+
   let flush t max_seen_ids =
+    let add_child : type a. a node -> int32 -> nonroot node -> unit =
+     fun p_node id i_node ->
+      match p_node with
+      | Connection p -> p.children <- PriorityQueue.add id i_node p.children
+      | Stream p -> p.children <- PriorityQueue.add id i_node p.children
+    in
+    let update_children : type a. a node -> PriorityQueue.t -> unit =
+     fun p_node queue ->
+      match p_node with
+      | Connection p -> p.children <- queue
+      | Stream p -> p.children <- queue
+    in
+    let update_t_last : type a. a node -> int -> unit =
+     fun p_node t_last ->
+      match p_node with
+      | Connection p -> p.t_last <- t_last
+      | Stream p -> p.t_last <- t_last
+    in
     let rec schedule : type a. a node -> int * bool = function
-      | Connection p ->
+      | Connection { children; _ } as p_node ->
         (* The root can never send data. *)
-        (match PriorityQueue.pop p.children with
-        | Some ((id, (Stream i as i_node)), children') ->
-          p.t_last <- i.t;
-          let written, subtree_is_active = schedule i_node in
-          if subtree_is_active
-          then (
-            update_t i_node (PriorityQueue.size p.children);
-            p.children <- PriorityQueue.add id i_node children')
-          else (
-            implicitly_close_idle_stream i.descriptor max_seen_ids;
-            (* XXX(anmonteiro): we may not want to remove from the tree right
-             * away. *)
-            p.children <- children');
-          written, subtree_is_active
-        | None ->
-          (* Queue is empty, see line 6 above. *)
-          0, false)
-      | Stream ({ descriptor; _ } as p) as p_node ->
+        traverse p_node children
+      | Stream { descriptor; children; _ } as p_node ->
         if Streamd.requires_output descriptor
         then
           (* In this branch, flow-control has no bearing on activity, otherwise
@@ -433,23 +436,38 @@ module Make (Streamd : StreamDescriptor) = struct
           (* We check for activity again, because the stream may have gone
            * inactive after the call to `write` above. *)
           written, Streamd.requires_output descriptor
-        else (
-          match PriorityQueue.pop p.children with
-          | Some ((id, (Stream i as i_node)), children') ->
-            p.t_last <- i.t;
-            let written, subtree_is_active = schedule i_node in
-            if subtree_is_active
-            then (
-              update_t i_node (PriorityQueue.size p.children);
-              p.children <- PriorityQueue.add id i_node children')
-            else (
-              implicitly_close_idle_stream i.descriptor max_seen_ids;
-              p.children <- children');
-            written, subtree_is_active
-          | None ->
-            (* Queue is empty, see line 6 above. *)
-            0, false)
+        else traverse p_node children
+    and traverse : type a. a node -> PriorityQueue.t -> int * bool =
+     fun p_node children ->
+      match PriorityQueue.pop children with
+      | Some ((id, (Stream i as i_node)), children') ->
+        let written, subtree_is_active = schedule i_node in
+        if not subtree_is_active
+        then (
+          implicitly_close_idle_stream i.descriptor max_seen_ids;
+          (* XXX(anmonteiro): we may not want to remove from the tree right *
+           * away. *)
+          update_children p_node children');
+        if written > 0
+           (* We need this check because the queue contains both streams that
+            * want to send data and streams that don't want to send data.
+            * Without this check, we might end up in a situation where a stream
+            * won't be flushed until a few write operations later. *)
+        then (
+          update_t_last p_node i.t;
+          update_t i_node written;
+          written, subtree_is_active)
+        else
+          (* Otherwise check if any of the remaining children wants to write *)
+          let written, subtree_is_active = traverse p_node children' in
+          (* ...and finally add the popped node back *)
+          add_child p_node id i_node;
+          written, subtree_is_active
+      | None ->
+        (* Queue is empty, see line 6 above. *)
+        0, false
     in
+
     let (Connection root) = t in
     ignore (schedule t);
     root.marked_for_removal <-
