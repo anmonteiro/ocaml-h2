@@ -38,7 +38,7 @@
 
 let content_length_of_string s =
   match Int64.of_string s with
-  | len when len >= 0L -> `Fixed len
+  | len when Int64.compare len 0L >= 0 -> `Fixed len
   | _ | exception _ -> `Error `Bad_request
 
 let body_length headers =
