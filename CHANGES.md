@@ -22,6 +22,10 @@ Unreleased
   commmunication channel
   ([#177](https://github.com/anmonteiro/ocaml-h2/pull/177),
   [#196](https://github.com/anmonteiro/ocaml-h2/pull/194))
+- h2: when reprioritizing a stream, respect its new priority (accounts for
+  inferred default priority when a dependent stream is not in the tree
+  ([RFC7540§5.3.1](https://www.rfc-editor.org/rfc/rfc7540.html#section-5.3.1)))
+  ([#200](https://github.com/anmonteiro/ocaml-h2/pull/200))
 
 0.9.0 2022-08-14
 ---------------
