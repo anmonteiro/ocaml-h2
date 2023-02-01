@@ -22,6 +22,8 @@ Unreleased
   commmunication channel
   ([#177](https://github.com/anmonteiro/ocaml-h2/pull/177),
   [#196](https://github.com/anmonteiro/ocaml-h2/pull/194))
+- h2: don't remove parent streams from the scheduler if they have children
+  ([#201](https://github.com/anmonteiro/ocaml-h2/pull/201))
 
 0.9.0 2022-08-14
 ---------------
