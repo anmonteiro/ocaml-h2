@@ -35,7 +35,6 @@
  * reference to the Respd *)
 
 module Writer = Serialize.Writer
-open Stream
 
 type error =
   [ `Malformed_response of string
@@ -64,7 +63,7 @@ type active_request =
   }
 
 type active_state =
-  (response_info, response_info remote_state) Stream.active_state
+  (response_info, response_info Stream.remote_state) Stream.active_state
 
 type state =
   ( active_state
@@ -72,17 +71,17 @@ type state =
   , active_request Stream.remote_state )
   Stream.state
 
-type t = (state, error, error_handler) Stream.stream
+type t = (state, error, error_handler) Stream.t
 
 let create_active_response response response_body =
-  ActiveMessage
+  Stream.ActiveMessage
     { response
     ; response_body
     ; response_body_bytes = Int64.zero
     ; trailers_parser = None
     }
 
-let response_body_exn t =
+let response_body_exn (t : t) =
   match t.state with
   | Idle | Reserved _ ->
     failwith "h2.Respd.response_exn: response has not arrived"
@@ -115,12 +114,12 @@ let response_body_exn t =
  *  | _ ->
  *    assert false) *)
 
-let close_stream t =
+let close_stream (t : t) =
   (* TODO: reserved *)
   match t.state with
   | Active (HalfClosed _, _) ->
     (* easy case, just transition to the closed state. *)
-    finish_stream t Finished
+    Stream.finish_stream t Finished
   | Active (Open _, _) ->
     (* Still not done sending, reset stream with no error? *)
     (* TODO: *)
@@ -133,7 +132,7 @@ let _report_error (t : t) ?response_body (error : error) error_code =
     (match response_body with
     | Some response_body -> Body.Reader.close response_body
     | None -> ());
-    t.error_code <- error_to_code error error_code;
+    t.error_code <- Stream.error_to_code error error_code;
     t.error_handler error
   | Exn _ | Other _ ->
     (* Already handling error.
@@ -148,11 +147,11 @@ let report_error (t : t) error error_code =
       , s ) ->
     Body.Writer.close s.request_body;
     _report_error t ~response_body error error_code;
-    reset_stream t error_code
+    Stream.reset_stream t error_code
   | Reserved (ActiveMessage s) | Active (_, s) ->
     Body.Writer.close s.request_body;
     _report_error t error error_code;
-    reset_stream t error_code
+    Stream.reset_stream t error_code
   | Reserved _ ->
     (* Streams in the reserved state don't yet have a stream-level error
      * handler registered with them *)
@@ -161,7 +160,7 @@ let report_error (t : t) error error_code =
     (* Not allowed to send RST_STREAM frames in these states *)
     ignore (_report_error t error error_code)
 
-let requires_output t =
+let requires_output (t : t) =
   match t.state with
   | Idle -> true
   | Reserved _ -> false
@@ -169,7 +168,7 @@ let requires_output t =
   | Active (HalfClosed _, _) -> false
   | Closed _ -> false
 
-let flush_request_body t ~max_bytes =
+let flush_request_body (t : t) ~max_bytes =
   match t.state with
   | Active (Open active_state, ({ request_body; _ } as s)) ->
     if Body.Writer.has_pending_output request_body && max_bytes > 0
@@ -200,7 +199,7 @@ let flush_request_body t ~max_bytes =
       0
   | _ -> 0
 
-let deliver_trailer_headers t headers =
+let deliver_trailer_headers (t : t) headers =
   match t.state with
   | Active
       ( (Open (ActiveMessage _) | HalfClosed (ActiveMessage _))
@@ -208,7 +207,7 @@ let deliver_trailer_headers t headers =
     trailers_handler headers
   | _ -> assert false
 
-let flush_response_body t =
+let flush_response_body (t : t) =
   match t.state with
   | Active
       ( ( Open (ActiveMessage { response_body; _ })
