@@ -449,6 +449,10 @@ module Make (Streamd : StreamDescriptor) = struct
           then (
             update_t_last p_node i.t;
             update_t i_node written;
+            (let updated_children = PriorityQueue.add id i_node children' in
+             match p_node with
+             | Connection s -> s.children <- updated_children
+             | Stream s -> s.children <- updated_children);
             written, subtree_is_active)
           else
             (* Otherwise check if any of the remaining children wants to
