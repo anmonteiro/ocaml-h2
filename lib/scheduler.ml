@@ -167,7 +167,8 @@ module Make (Streamd : StreamDescriptor) = struct
 
   let pq_add stream_id node pq = PriorityQueue.add stream_id node pq
 
-  let remove_from_parent (Parent parent) id =
+  let remove_child : type a. a node -> int32 -> unit =
+   fun parent id ->
     match parent with
     | Connection root ->
       (* From RFC7540§5.3.1:
@@ -187,10 +188,12 @@ module Make (Streamd : StreamDescriptor) = struct
     | Stream { descriptor; _ } -> Streamd.id descriptor
 
   let set_parent stream_node ~exclusive new_parent =
-    let (Stream ({ descriptor; _ } as stream)) = stream_node in
     let (Parent new_parent_node) = new_parent in
+    let (Stream ({ descriptor; parent = Parent old_parent_node; _ } as stream)) =
+      stream_node
+    in
     let stream_id = Streamd.id descriptor in
-    remove_from_parent stream.parent stream_id;
+    remove_child old_parent_node stream_id;
     stream.parent <- new_parent;
     let new_children =
       let new_children = children new_parent_node in
@@ -400,12 +403,6 @@ module Make (Streamd : StreamDescriptor) = struct
    *)
 
   let flush t max_seen_ids =
-    let remove_child : type a. a node -> int32 -> unit =
-     fun p_node id ->
-      match p_node with
-      | Connection p -> p.children <- PriorityQueue.remove id p.children
-      | Stream p -> p.children <- PriorityQueue.remove id p.children
-    in
     let update_t_last : type a. a node -> int -> unit =
      fun p_node t_last ->
       match p_node with
