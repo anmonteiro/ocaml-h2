@@ -187,8 +187,7 @@ module Make (Streamd : StreamDescriptor) = struct
     | Connection _ -> Stream_identifier.connection
     | Stream { descriptor; _ } -> Streamd.id descriptor
 
-  let set_parent stream_node ~exclusive new_parent =
-    let (Parent new_parent_node) = new_parent in
+  let set_parent stream_node ~exclusive (Parent new_parent_node as new_parent) =
     let (Stream ({ descriptor; parent = Parent old_parent_node; _ } as stream)) =
       stream_node
     in
