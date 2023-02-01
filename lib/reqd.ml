@@ -499,7 +499,6 @@ let flush_response_body t ~max_bytes =
           then Flags.default_flags
           else Flags.(set_end_stream default_flags)
         in
-
         Writer.make_frame_info ~max_frame_size:t.max_frame_size ~flags t.id
       in
       let len_to_write = if is_partial_flush then max_bytes else len in
