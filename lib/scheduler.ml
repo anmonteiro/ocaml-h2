@@ -430,7 +430,7 @@ module Make (Streamd : StreamDescriptor) = struct
           written, subtree_is_active
         else traverse p_node children
     and traverse : type a. a node -> PriorityQueue.t -> int * bool =
-     fun p_node ->
+     fun p_node children ->
       let rec loop children =
         match PriorityQueue.pop children with
         | Some ((id, (Stream i as i_node)), children') ->
@@ -459,11 +459,10 @@ module Make (Streamd : StreamDescriptor) = struct
            * Therefore, we can't determine the subtree is inactive. *)
           0, true
       in
-      fun children ->
-        if PriorityQueue.is_empty children
-        then (* Queue is empty, see line 6 above. *)
-          0, false
-        else loop children
+      if PriorityQueue.is_empty children
+      then (* Queue is empty, see line 6 above. *)
+        0, false
+      else loop children
     in
 
     let (Connection root) = t in
