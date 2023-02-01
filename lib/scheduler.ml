@@ -280,7 +280,7 @@ module Make (Streamd : StreamDescriptor) = struct
          *   When assigning a dependency on another stream, the stream is added
          *   as a new dependency of the parent stream. *)
         set_parent stream_node ~exclusive new_parent);
-      stream.priority <- priority)
+      stream.priority <- new_priority)
 
   let add
       (Connection root as t)
