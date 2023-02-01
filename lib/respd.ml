@@ -94,26 +94,6 @@ let response_body_exn (t : t) =
     failwith "h2.Respd.response_exn: response has not arrived"
   | Closed _ -> failwith "h2.Respd.response_exn: stream already closed"
 
-(* let close_stream t =
- *match t.error_code with
- *| _, Some error_code ->
- *  reset_stream t error_code
- *| _, None ->
- *  (match t.state with
- *  | HalfClosedLocal (ActiveMessage _) ->
- *    (* From RFC7540§8.1: A server can send a complete response prior to the
- *       client sending an entire request if the response does not depend on
- *       any portion of the request that has not been sent and received. When
- *       this is true, a server MAY request that the client abort transmission
- *       of a request without error by sending a RST_STREAM with an error code
- *       of NO_ERROR after sending a complete response (i.e., a frame with the
- *       END_STREAM flag). *)
- *    reset_stream t Error.NoError
- *  | Open (ActiveMessage _) ->
- *    Writer.flush t.writer (fun () -> finish_stream t Finished)
- *  | _ ->
- *    assert false) *)
-
 let close_stream (t : t) =
   (* TODO: reserved *)
   match t.state with
