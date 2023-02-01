@@ -490,27 +490,27 @@ let flush_response_body t ~max_bytes =
           0)
       else (* no pending output but Body is still open *)
         0
-    | Fixed r when max_bytes > 0 ->
-      (match r.iovec with
-      | { buffer; off; len } as iovec ->
-        if max_bytes < len
-        then (
-          let frame_info =
-            Writer.make_frame_info ~max_frame_size:t.max_frame_size t.id
-          in
-          write_buffer_data t.writer ~off ~len:max_bytes frame_info buffer;
-          r.iovec <- Httpaf.IOVec.shift iovec max_bytes;
-          max_bytes)
-        else
-          let frame_info =
-            Writer.make_frame_info
-              ~max_frame_size:t.max_frame_size
-              ~flags:Flags.(set_end_stream default_flags)
-              t.id
-          in
-          write_buffer_data t.writer ~off ~len frame_info buffer;
-          close_stream t;
-          len)
+    | Fixed ({ iovec = { buffer; off; len } as iovec; _ } as r)
+      when max_bytes > 0 ->
+      if max_bytes < len
+      then (
+        let frame_info =
+          Writer.make_frame_info ~max_frame_size:t.max_frame_size t.id
+        in
+        write_buffer_data t.writer ~off ~len:max_bytes frame_info buffer;
+        r.iovec <- Httpaf.IOVec.shift iovec max_bytes;
+        max_bytes)
+      else
+        let frame_info =
+          Writer.make_frame_info
+            ~max_frame_size:t.max_frame_size
+            ~flags:Flags.(set_end_stream default_flags)
+            t.id
+        in
+        write_buffer_data t.writer ~off ~len frame_info buffer;
+        r.iovec <- Httpaf.IOVec.shift iovec len;
+        close_stream t;
+        len
     | Fixed _ | Waiting | Complete _ -> 0)
   | _ -> 0
 
