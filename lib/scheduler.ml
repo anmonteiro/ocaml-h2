@@ -427,7 +427,11 @@ module Make (Streamd : StreamDescriptor) = struct
           let written = write t p_node in
           (* We check for activity again, because the stream may have gone
            * inactive after the call to `write` above. *)
-          written, Streamd.requires_output descriptor
+          let subtree_is_active =
+            Streamd.requires_output descriptor
+            || not (PriorityQueue.is_empty p.children)
+          in
+          written, subtree_is_active
         else (
           match PriorityQueue.pop p.children with
           | Some ((id, (Stream i as i_node)), children') ->
