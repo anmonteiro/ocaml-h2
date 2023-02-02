@@ -87,8 +87,7 @@ module Make (Streamd : StreamDescriptor) = struct
             mutable flow : Settings.WindowSize.t
           ; (* inbound flow control, what the client is allowed to send. *)
             mutable inflow : Settings.WindowSize.t
-          ; mutable marked_for_removal :
-              (Stream_identifier.t * Stream.closed) list
+          ; mutable marked_for_removal : Stream.closed StreamsTbl.t
           }
           -> root node
       | Stream :
@@ -135,7 +134,7 @@ module Make (Streamd : StreamDescriptor) = struct
       ; all_streams = StreamsTbl.create ~random:true capacity
       ; flow = Settings.WindowSize.default_initial_window_size
       ; inflow = Settings.WindowSize.default_initial_window_size
-      ; marked_for_removal = []
+      ; marked_for_removal = StreamsTbl.create ~random:true capacity
       }
 
   let children : type a. a node -> PriorityQueue.t = function
@@ -199,7 +198,9 @@ module Make (Streamd : StreamDescriptor) = struct
     update_t stream 0;
     stream
 
-  let pq_add stream_id node pq = PriorityQueue.add stream_id node pq
+  let children : type a. a node -> PriorityQueue.t = function
+    | Stream { children; _ } -> children
+    | Connection { children; _ } -> children
 
   let stream_id : type a. a node -> int32 = function
     | Connection _ -> Stream_identifier.connection
@@ -234,7 +235,7 @@ module Make (Streamd : StreamDescriptor) = struct
          *   sole dependency of its parent stream, causing other dependencies
          *   to become dependent on the exclusive stream. *)
         PriorityQueue.sg stream_id stream_node)
-      else pq_add stream_id stream_node new_children
+      else PriorityQueue.add stream_id stream_node new_children
     in
     match new_parent_node with
     | Stream stream -> stream.children <- new_children
@@ -260,7 +261,15 @@ module Make (Streamd : StreamDescriptor) = struct
         match
           StreamsTbl.find_opt root.all_streams priority.stream_dependency
         with
-        | Some parent_stream -> Parent parent_stream, priority
+        | Some parent_stream ->
+          (match
+             StreamsTbl.mem root.marked_for_removal priority.stream_dependency
+           with
+          | true ->
+            (* A stream that is marked for removal is also not present in the
+               tree *)
+            Parent t, Priority.default_priority
+          | false -> Parent parent_stream, priority)
         | None ->
           (* From RFC7540§5.3.1:
            *   A dependency on a stream that is not currently in the tree —
@@ -320,7 +329,7 @@ module Make (Streamd : StreamDescriptor) = struct
     in
     let stream_id = Streamd.id descriptor in
     StreamsTbl.add root.all_streams stream_id stream;
-    root.children <- pq_add stream_id stream root.children;
+    root.children <- PriorityQueue.add stream_id stream root.children;
     if priority != Priority.default_priority
     then reprioritize_stream t ~priority stream;
     stream
@@ -372,7 +381,7 @@ module Make (Streamd : StreamDescriptor) = struct
     Int32.to_int written
 
   let mark_for_removal (Connection root) id closed =
-    root.marked_for_removal <- (id, closed) :: root.marked_for_removal
+    StreamsTbl.replace root.marked_for_removal id closed
 
   let implicitly_close_idle_stream descriptor max_seen_ids =
     let implicitly_close_stream descriptor =
@@ -502,24 +511,20 @@ module Make (Streamd : StreamDescriptor) = struct
 
     let (Connection root) = t in
     ignore (schedule t);
-    root.marked_for_removal <-
-      List.fold_left
-        (fun acc (id, closed) ->
-          (* When a stream completes, i.e. doesn't require more output and
-           * enters the `Closed` state, we set a TTL value which represents the
-           * number of writer yields that the stream has before it is removed
-           * from the connection Hash Table. By doing this we avoid losing some
-           * potentially useful information regarding the stream's state at the
-           * cost of keeping it around for a little while longer. *)
-          if closed.Stream.ttl = 0
-          then (
-            StreamsTbl.remove root.all_streams id;
-            acc)
-          else (
-            closed.ttl <- closed.ttl - 1;
-            (id, closed) :: acc))
-        []
-        root.marked_for_removal
+    StreamsTbl.iter
+      (fun id closed ->
+        (* When a stream completes, i.e. doesn't require more output and
+         * enters the `Closed` state, we set a TTL value which represents the
+         * number of writer yields that the stream has before it is removed
+         * from the connection Hash Table. By doing this we avoid losing some
+         * potentially useful information regarding the stream's state at the
+         * cost of keeping it around for a little while longer. *)
+        if closed.Stream.ttl = 0
+        then (
+          StreamsTbl.remove root.marked_for_removal id;
+          StreamsTbl.remove root.all_streams id)
+        else closed.ttl <- closed.ttl - 1)
+      root.marked_for_removal
 
   (* XXX(anmonteiro): Consider using `optint` for this?
    * https://github.com/mirage/optint
