@@ -104,7 +104,7 @@ type 'a error_status =
       ; code : Error_code.t
       }
 
-type ('state, 'error, 'error_handler) stream =
+type ('state, 'error, 'error_handler) t =
   { id : Stream_identifier.t
   ; writer : Serialize.Writer.t
   ; error_handler : 'error_handler

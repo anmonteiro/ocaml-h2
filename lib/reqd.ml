@@ -33,7 +33,6 @@
  *---------------------------------------------------------------------------*)
 
 module Writer = Serialize.Writer
-open Stream
 
 type error =
   [ `Bad_request
@@ -73,7 +72,7 @@ type active_stream =
         (* We're not doing anything with these yet, we could probably have a
          * `Reqd.schedule_read_trailers` function that would be called once
          * trailer headers are emitted. *)
-  ; mutable trailers_parser : partial_headers option
+  ; mutable trailers_parser : Stream.partial_headers option
   ; mutable trailers : Headers.t option
   ; create_push_stream :
       Stream_identifier.t
@@ -83,7 +82,7 @@ type active_stream =
 and state =
   (active_state, active_stream, request_info * active_stream) Stream.state
 
-and t = (state, error, error_handler) Stream.stream
+and t = (state, error, error_handler) Stream.t
 
 let create_active_request request request_body =
   { request; request_body; request_body_bytes = Int64.zero }
@@ -97,7 +96,7 @@ let create_active_stream encoder body_buffer_size create_push_stream =
   ; create_push_stream
   }
 
-let request t =
+let request (t : t) =
   match t.state with
   | Idle | Active (Open (WaitingForPeer | PartialHeaders _ | FullHeaders), _) ->
     assert false
@@ -106,7 +105,7 @@ let request t =
     request
   | Closed _ -> assert false
 
-let request_body t =
+let request_body (t : t) =
   match t.state with
   | Idle | Active (Open (WaitingForPeer | PartialHeaders _ | FullHeaders), _) ->
     assert false
@@ -122,7 +121,7 @@ let request_body t =
       "h2.Reqd.request_body: Promised requests must not include a request body"
   | Closed _ -> failwith "h2.Reqd.request_body: Stream already closed"
 
-let response t =
+let response (t : t) =
   match t.state with
   | Idle | Active (Open (WaitingForPeer | PartialHeaders _), _) -> None
   | Active
@@ -135,7 +134,7 @@ let response t =
       Some response)
   | Closed _ -> None
 
-let response_exn t =
+let response_exn (t : t) =
   match t.state with
   | Idle | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
     failwith "h2.Reqd.response_exn: response has not started"
@@ -149,7 +148,7 @@ let response_exn t =
       response)
   | Closed _ -> assert false
 
-let send_fixed_response t s response data =
+let send_fixed_response (t : t) s response data =
   match s.response_state with
   | Waiting ->
     let iovec, length =
@@ -186,7 +185,7 @@ let send_fixed_response t s response data =
   | Fixed _ -> failwith "h2.Reqd.respond_with_*: response already sent"
   | Complete _ -> failwith "h2.Reqd.respond_with_*: response already complete"
 
-let schedule_trailers t new_trailers =
+let schedule_trailers (t : t) new_trailers =
   match t.state with
   | Idle | Active (Open (WaitingForPeer | PartialHeaders _), _) -> assert false
   | Closed _ -> failwith "h2.Reqd.schedule_trailers: stream already closed"
@@ -202,7 +201,7 @@ let schedule_trailers t new_trailers =
       failwith
         "h2.Reqd.schedule_trailers: can only send trailers in Streaming mode")
 
-let unsafe_respond_with_data t response data =
+let unsafe_respond_with_data (t : t) response data =
   match t.state with
   | Idle | Active (Open (WaitingForPeer | PartialHeaders _), _) -> assert false
   | Active ((Open (FullHeaders | ActiveMessage _) | HalfClosed _), stream) ->
@@ -217,21 +216,21 @@ let unsafe_respond_with_data t response data =
         t.state <- Active (HalfClosed request_info, stream))
   | Closed _ -> assert false
 
-let respond_with_string t response str =
+let respond_with_string (t : t) response str =
   match t.error_code with
   | No_error -> unsafe_respond_with_data t response (`String str)
   | _ ->
     failwith
       "h2.Reqd.respond_with_string: invalid state, currently handling error"
 
-let respond_with_bigstring t response bstr =
+let respond_with_bigstring (t : t) response bstr =
   match t.error_code with
   | No_error -> unsafe_respond_with_data t response (`Bigstring bstr)
   | _ ->
     failwith
       "h2.Reqd.respond_with_bigstring: invalid state, currently handling error"
 
-let send_streaming_response ~flush_headers_immediately t s response =
+let send_streaming_response ~flush_headers_immediately (t : t) s response =
   let wait_for_first_flush = not flush_headers_immediately in
   match s.response_state with
   | Waiting ->
@@ -253,7 +252,7 @@ let send_streaming_response ~flush_headers_immediately t s response =
   | Fixed _ | Complete _ ->
     failwith "h2.Reqd.respond_with_streaming: response already complete"
 
-let unsafe_respond_with_streaming t ~flush_headers_immediately response =
+let unsafe_respond_with_streaming (t : t) ~flush_headers_immediately response =
   match t.state with
   | Idle | Active (Open (WaitingForPeer | PartialHeaders _), _) -> assert false
   | Active ((Open (FullHeaders | ActiveMessage _) | HalfClosed _), stream) ->
@@ -271,7 +270,8 @@ let unsafe_respond_with_streaming t ~flush_headers_immediately response =
     response_body
   | Closed _ -> assert false
 
-let respond_with_streaming t ?(flush_headers_immediately = false) response =
+let respond_with_streaming (t : t) ?(flush_headers_immediately = false) response
+  =
   match t.error_code with
   | No_error ->
     unsafe_respond_with_streaming ~flush_headers_immediately t response
@@ -279,7 +279,7 @@ let respond_with_streaming t ?(flush_headers_immediately = false) response =
     failwith
       "h2.Reqd.respond_with_streaming: invalid state, currently handling error"
 
-let start_push_stream t s request =
+let start_push_stream (t : t) s request =
   match s.create_push_stream t.id with
   | Ok promised_reqd ->
     let frame_info =
@@ -315,7 +315,7 @@ let start_push_stream t s request =
 (* TODO: We could easily allow the priority of the PUSH request to be
  * configurable. We should allow users of this API to define the weight (maybe
  * not strictly), dependency on the current Reqd, and exclusivity *)
-let unsafe_push t request =
+let unsafe_push (t : t) request =
   match t.state with
   | Idle | Active (Open (WaitingForPeer | PartialHeaders _), _) -> assert false
   | Active ((Open (FullHeaders | ActiveMessage _) | HalfClosed _), stream) ->
@@ -323,7 +323,7 @@ let unsafe_push t request =
   (* Already checked in `push` *)
   | Reserved _ | Closed _ -> assert false
 
-let push t request =
+let push (t : t) request =
   match t.error_code with
   | No_error ->
     if Stream_identifier.is_pushed t.id
@@ -338,7 +338,7 @@ let push t request =
 let _report_error ?request (t : t) s (error : error) error_code =
   match s.response_state, t.error_code with
   | Waiting, No_error ->
-    t.error_code <- error_to_code error error_code;
+    t.error_code <- Stream.error_to_code error error_code;
     let status =
       match (error :> [ error | Status.standard ]) with
       | `Exn _ -> `Internal_server_error
@@ -349,14 +349,14 @@ let _report_error ?request (t : t) s (error : error) error_code =
         unsafe_respond_with_streaming ~flush_headers_immediately:true t response)
   | Streaming { response_body; _ }, No_error ->
     Body.Writer.close response_body;
-    t.error_code <- error_to_code error error_code;
-    reset_stream t error_code
+    t.error_code <- Stream.error_to_code error error_code;
+    Stream.reset_stream t error_code
   | Fixed _, No_error ->
     (* Still need to send an RST_STREAM frame. Set t.error_code with
      * `error_code` and `flush_response_body` below will reset the stream after
      * flushing any remaining body bytes. *)
-    t.error_code <- error_to_code error error_code;
-    reset_stream t error_code
+    t.error_code <- Stream.error_to_code error error_code;
+    Stream.reset_stream t error_code
   | (Waiting | Fixed _ | Streaming _), Exn _ ->
     (* XXX(seliopou): Decide what to do in this unlikely case. There is an
      * outstanding call to the [error_handler], but an intervening exception
@@ -364,7 +364,7 @@ let _report_error ?request (t : t) s (error : error) error_code =
     failwith "h2.Reqd.report_exn: NYI"
   | (Waiting | Streaming _ | Fixed _ | Complete _), _ -> ()
 
-let report_error t exn error_code =
+let report_error (t : t) exn error_code =
   match t.state with
   | Idle | Reserved _ | Active (Open (WaitingForPeer | PartialHeaders _), _) ->
     assert false
@@ -391,7 +391,7 @@ let try_with t f : (unit, exn) Result.result =
 let error_code = Stream.error_code
 (* Private API, not exposed to the user through h2.mli *)
 
-let requires_output t =
+let requires_output (t : t) =
   match t.state with
   | Idle -> false
   | Reserved _ -> true
@@ -410,7 +410,7 @@ let requires_output t =
     | Waiting -> true)
   | Closed _ -> false
 
-let flush_request_body t =
+let flush_request_body (t : t) =
   match t.state with
   | Active
       ( ( Open (ActiveMessage { request_body; _ })
@@ -426,7 +426,7 @@ let write_buffer_data writer ~off ~len frame_info buffer =
   | `String str -> Writer.write_data writer ~off ~len frame_info str
   | `Bigstring bstr -> Writer.schedule_data writer ~off ~len frame_info bstr
 
-let close_stream t =
+let close_stream (t : t) =
   match t.error_code with
   | No_error ->
     (match t.state with
@@ -439,14 +439,14 @@ let close_stream t =
        *   without error by sending a RST_STREAM with an error code of NO_ERROR
        *   after sending a complete response (i.e., a frame with the END_STREAM
        *   flag). *)
-      reset_stream t Error_code.NoError
+      Stream.reset_stream t Error_code.NoError
     | Active (HalfClosed _, _) ->
       Writer.flush t.writer (fun () -> Stream.finish_stream t Finished)
     | _ -> assert false)
-  | Exn _ -> reset_stream t InternalError
-  | Other { code; _ } -> reset_stream t code
+  | Exn _ -> Stream.reset_stream t InternalError
+  | Other { code; _ } -> Stream.reset_stream t code
 
-let flush_response_body t ~max_bytes =
+let flush_response_body (t : t) ~max_bytes =
   match t.state with
   | Active ((Open _ | HalfClosed _), stream) ->
     (match stream.response_state with
@@ -490,31 +490,26 @@ let flush_response_body t ~max_bytes =
           0)
       else (* no pending output but Body is still open *)
         0
-    | Fixed r when max_bytes > 0 ->
-      (match r.iovec with
-      | { buffer; off; len } as iovec ->
-        if max_bytes < len
-        then (
-          let frame_info =
-            Writer.make_frame_info ~max_frame_size:t.max_frame_size t.id
-          in
-          write_buffer_data t.writer ~off ~len:max_bytes frame_info buffer;
-          r.iovec <- Httpaf.IOVec.shift iovec max_bytes;
-          max_bytes)
-        else
-          let frame_info =
-            Writer.make_frame_info
-              ~max_frame_size:t.max_frame_size
-              ~flags:Flags.(set_end_stream default_flags)
-              t.id
-          in
-          write_buffer_data t.writer ~off ~len frame_info buffer;
-          close_stream t;
-          len)
+    | Fixed ({ iovec = { buffer; off; len } as iovec; _ } as r)
+      when max_bytes > 0 ->
+      let is_partial_flush = max_bytes < len in
+      let frame_info =
+        let flags =
+          if is_partial_flush
+          then Flags.default_flags
+          else Flags.(set_end_stream default_flags)
+        in
+        Writer.make_frame_info ~max_frame_size:t.max_frame_size ~flags t.id
+      in
+      let len_to_write = if is_partial_flush then max_bytes else len in
+      write_buffer_data t.writer ~off ~len:len_to_write frame_info buffer;
+      r.iovec <- Httpaf.IOVec.shift iovec len_to_write;
+      if not is_partial_flush then close_stream t;
+      len_to_write
     | Fixed _ | Waiting | Complete _ -> 0)
   | _ -> 0
 
-let deliver_trailer_headers t headers =
+let deliver_trailer_headers (t : t) headers =
   match t.state with
   | Active (Open (PartialHeaders _ | FullHeaders), _) -> assert false
   | Active ((Open (ActiveMessage _) | HalfClosed _), stream) ->

@@ -26,6 +26,8 @@ Unreleased
   inferred default priority when a dependent stream is not in the tree
   ([RFC7540§5.3.1](https://www.rfc-editor.org/rfc/rfc7540.html#section-5.3.1)))
   ([#200](https://github.com/anmonteiro/ocaml-h2/pull/200))
+- h2: don't remove parent streams from the scheduler if they have children
+  ([#201](https://github.com/anmonteiro/ocaml-h2/pull/201))
 
 0.9.0 2022-08-14
 ---------------
