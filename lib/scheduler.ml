@@ -138,34 +138,9 @@ module Make (Streamd : StreamDescriptor) = struct
       ; marked_for_removal = []
       }
 
-  let create
-      ~parent
-      ~initial_send_window_size
-      ~initial_recv_window_size
-      descriptor
-    =
-    let t_last =
-      match parent with
-      | Parent (Connection root) -> root.t_last
-      | Parent (Stream stream) -> stream.t_last
-    in
-    Stream
-      { descriptor
-      ; t_last
-      ; t = t_last
-      ; (* From RFC7540§5.3.5:
-         *   All streams are initially assigned a non-exclusive dependency on
-         *   stream 0x0. Pushed streams (Section 8.2) initially depend on their
-         *   associated stream. In both cases, streams are assigned a default
-         *   weight of 16. *)
-        priority = Priority.default_priority
-      ; parent
-      ; children = PriorityQueue.empty
-      ; flow = initial_send_window_size
-      ; inflow = initial_recv_window_size
-      }
-
-  let pq_add stream_id node pq = PriorityQueue.add stream_id node pq
+  let children : type a. a node -> PriorityQueue.t = function
+    | Stream { children; _ } -> children
+    | Connection { children; _ } -> children
 
   let remove_child : type a. a node -> int32 -> unit =
    fun parent id ->
@@ -179,9 +154,52 @@ module Make (Streamd : StreamDescriptor) = struct
     | Stream ({ children; _ } as node) ->
       node.children <- PriorityQueue.remove id children
 
-  let children : type a. a node -> PriorityQueue.t = function
-    | Stream { children; _ } -> children
-    | Connection { children; _ } -> children
+  let update_children : type a. a node -> PriorityQueue.t -> unit =
+   fun parent updated_children ->
+    match parent with
+    | Connection s -> s.children <- updated_children
+    | Stream s -> s.children <- updated_children
+
+  let update_t node n =
+    let (Stream ({ parent = Parent parent; descriptor; _ } as stream)) = node in
+    let tlast_p =
+      match parent with
+      | Connection { t_last; _ } -> t_last
+      | Stream { t_last; _ } -> t_last
+    in
+    stream.t <- tlast_p + (n * 256 / stream.priority.weight);
+    let id = Streamd.id descriptor in
+    remove_child parent id;
+    let updated_children = PriorityQueue.add id node (children parent) in
+    update_children parent updated_children
+
+  let create
+      ~parent
+      ~initial_send_window_size
+      ~initial_recv_window_size
+      descriptor
+    =
+    let stream =
+      Stream
+        { descriptor
+        ; t_last = 0
+        ; t = 0
+        ; (* From RFC7540§5.3.5:
+           *   All streams are initially assigned a non-exclusive dependency on
+           *   stream 0x0. Pushed streams (Section 8.2) initially depend on their
+           *   associated stream. In both cases, streams are assigned a default
+           *   weight of 16. *)
+          priority = Priority.default_priority
+        ; parent
+        ; children = PriorityQueue.empty
+        ; flow = initial_send_window_size
+        ; inflow = initial_recv_window_size
+        }
+    in
+    update_t stream 0;
+    stream
+
+  let pq_add stream_id node pq = PriorityQueue.add stream_id node pq
 
   let stream_id : type a. a node -> int32 = function
     | Connection _ -> Stream_identifier.connection
@@ -353,15 +371,6 @@ module Make (Streamd : StreamDescriptor) = struct
     stream.flow <- Int32.sub stream.flow written;
     Int32.to_int written
 
-  let update_t stream n =
-    let (Stream ({ parent = Parent parent; _ } as stream)) = stream in
-    let tlast_p =
-      match parent with
-      | Connection { t_last; _ } -> t_last
-      | Stream { t_last; _ } -> t_last
-    in
-    stream.t <- tlast_p + (n * 256 / stream.priority.weight)
-
   let mark_for_removal (Connection root) id closed =
     root.marked_for_removal <- (id, closed) :: root.marked_for_removal
 
@@ -408,18 +417,11 @@ module Make (Streamd : StreamDescriptor) = struct
       | Connection p -> p.t_last <- t_last
       | Stream p -> p.t_last <- t_last
     in
-    let update_children : type a. a node -> PriorityQueue.t -> unit =
-     fun parent updated_children ->
-      match parent with
-      | Connection s -> s.children <- updated_children
-      | Stream s -> s.children <- updated_children
-    in
     let rec schedule : type a. a node -> int * bool = function
       | Connection _ as p_node ->
         (* The root can never send data. *)
         traverse p_node
-      | Stream ({ descriptor; parent = Parent parent; _ } as stream) as p_node
-        ->
+      | Stream ({ descriptor; _ } as stream) as p_node ->
         let written =
           if Streamd.requires_output descriptor
           then
@@ -449,16 +451,10 @@ module Make (Streamd : StreamDescriptor) = struct
           if written > 0
           then (
             if subtree_is_active
-            then (
-              update_t p_node written;
+            then
               (* If there's still more to write, put the node back in the
                  tree. *)
-              let id = Streamd.id descriptor in
-              remove_child parent id;
-              let updated_children =
-                PriorityQueue.add id p_node (children parent)
-              in
-              update_children parent updated_children);
+              update_t p_node written;
             written, subtree_is_active)
           else written, subtree_is_active
     and traverse : type a. a node -> int * bool =
@@ -483,17 +479,10 @@ module Make (Streamd : StreamDescriptor) = struct
               * won't be flushed until a few write operations later. *)
           then (
             if subtree_is_active
-            then (
-              update_t i_node written;
+            then
               (* If there's still more to write, put the node back in the
                  tree. *)
-              remove_child p_node id;
-              let updated_children =
-                PriorityQueue.add id i_node (children p_node)
-              in
-              match p_node with
-              | Connection s -> s.children <- updated_children
-              | Stream s -> s.children <- updated_children);
+              update_t i_node written;
             written, subtree_is_active)
           else
             (* Otherwise check if any of the remaining children wants to
