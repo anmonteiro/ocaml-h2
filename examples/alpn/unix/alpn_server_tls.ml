@@ -43,10 +43,6 @@ let start_https_server () =
                   ~alpn_protocols:[ "h2"; "http/1.1" ]
                     (* accept h2 before http/1.1 *)
                   ~certificates:(`Single certificate)
-                  ~ciphers:
-                    (List.filter
-                       Tls.Ciphersuite.ciphersuite_tls12_only
-                       Tls.Config.Ciphers.supported)
                   ()
               in
               Tls_lwt.Unix.server_of_fd config fd >>= fun tls_server ->

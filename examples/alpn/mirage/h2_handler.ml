@@ -6,7 +6,7 @@ let request_handler : Reqd.t -> unit =
   let response_content_type =
     match Headers.get headers "Content-Type" with
     | Some request_content_type -> request_content_type
-    | None -> "application/octet-stream"
+    | None -> "text/plain"
   in
   let response =
     Response.create
@@ -19,8 +19,8 @@ let request_handler : Reqd.t -> unit =
     "Welcome to an ALPN-negotiated HTTP/2 connection"
 
 let error_handler
-    : ?request:H2.Request.t -> _ -> (Headers.t -> [ `write ] Body.t) -> unit
+    : ?request:H2.Request.t -> _ -> (Headers.t -> Body.Writer.t) -> unit
   =
  fun ?request:_ _error start_response ->
   let response_body = start_response Headers.empty in
-  Body.close_writer response_body
+  Body.Writer.close response_body
