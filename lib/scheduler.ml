@@ -408,26 +408,59 @@ module Make (Streamd : StreamDescriptor) = struct
       | Connection p -> p.t_last <- t_last
       | Stream p -> p.t_last <- t_last
     in
+    let update_children : type a. a node -> PriorityQueue.t -> unit =
+     fun parent updated_children ->
+      match parent with
+      | Connection s -> s.children <- updated_children
+      | Stream s -> s.children <- updated_children
+    in
     let rec schedule : type a. a node -> int * bool = function
       | Connection _ as p_node ->
         (* The root can never send data. *)
         traverse p_node
-      | Stream { descriptor; children; _ } as p_node ->
-        if Streamd.requires_output descriptor
+      | Stream ({ descriptor; parent = Parent parent; _ } as stream) as p_node
+        ->
+        let written =
+          if Streamd.requires_output descriptor
+          then
+            (* In this branch, flow-control has no bearing on activity, otherwise
+             * a flow-controlled stream would be considered inactive (because it
+             * can't make progress at the moment) and removed from the priority
+             * tree altogether. *)
+            write t p_node
+          else 0
+        in
+        let subtree_is_active =
+          Streamd.requires_output descriptor
+          || not (PriorityQueue.is_empty stream.children)
+        in
+        if written > 0
         then
-          (* In this branch, flow-control has no bearing on activity, otherwise
-           * a flow-controlled stream would be considered inactive (because it
-           * can't make progress at the moment) and removed from the priority
-           * tree altogether. *)
-          let written = write t p_node in
           (* We check for activity again, because the stream may have gone
            * inactive after the call to `write` above. *)
-          let subtree_is_active =
-            Streamd.requires_output descriptor
-            || not (PriorityQueue.is_empty children)
-          in
           written, subtree_is_active
-        else traverse p_node
+        else
+          (* If we haven't written anything, check if any of our children
+             have. *)
+          let written, subtree_is_active' = traverse p_node in
+          let subtree_is_active =
+            Streamd.requires_output descriptor || subtree_is_active'
+          in
+          if written > 0
+          then (
+            if subtree_is_active
+            then (
+              update_t p_node written;
+              (* If there's still more to write, put the node back in the
+                 tree. *)
+              let id = Streamd.id descriptor in
+              remove_child parent id;
+              let updated_children =
+                PriorityQueue.add id p_node (children parent)
+              in
+              update_children parent updated_children);
+            written, subtree_is_active)
+          else written, subtree_is_active
     and traverse : type a. a node -> int * bool =
      fun p_node ->
       let rec loop remaining_children =
