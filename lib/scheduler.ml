@@ -170,14 +170,14 @@ module Make (Streamd : StreamDescriptor) = struct
   let remove_child : type a. a node -> int32 -> unit =
    fun parent id ->
     match parent with
-    | Connection root ->
+    | Connection ({ children; _ } as node) ->
       (* From RFC7540§5.3.1:
        *   A stream that is not dependent on any other stream is given a stream
        *   dependency of 0x0. In other words, the non-existent stream 0 forms
        *   the root of the tree. *)
-      root.children <- PriorityQueue.remove id root.children
-    | Stream stream ->
-      stream.children <- PriorityQueue.remove id stream.children
+      node.children <- PriorityQueue.remove id children
+    | Stream ({ children; _ } as node) ->
+      node.children <- PriorityQueue.remove id children
 
   let children : type a. a node -> PriorityQueue.t = function
     | Stream { children; _ } -> children
@@ -433,6 +433,7 @@ module Make (Streamd : StreamDescriptor) = struct
       let rec loop remaining_children =
         match PriorityQueue.pop remaining_children with
         | Some ((id, (Stream i as i_node)), remaining_children') ->
+          update_t_last p_node i.t;
           let written, subtree_is_active = schedule i_node in
 
           if not subtree_is_active
@@ -448,10 +449,9 @@ module Make (Streamd : StreamDescriptor) = struct
               * Without this check, we might end up in a situation where a stream
               * won't be flushed until a few write operations later. *)
           then (
-            update_t_last p_node i.t;
-            update_t i_node written;
             if subtree_is_active
             then (
+              update_t i_node written;
               (* If there's still more to write, put the node back in the
                  tree. *)
               remove_child p_node id;
