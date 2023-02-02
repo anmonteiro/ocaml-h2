@@ -403,11 +403,17 @@ module Make (Streamd : StreamDescriptor) = struct
    *)
 
   let flush t max_seen_ids =
-    let remove_child : type a. a node -> int32 -> unit =
-     fun p_node id ->
+    let add_child : type a. a node -> int32 -> nonroot node -> unit =
+     fun p_node id i_node ->
       match p_node with
-      | Connection p -> p.children <- PriorityQueue.remove id p.children
-      | Stream p -> p.children <- PriorityQueue.remove id p.children
+      | Connection p -> p.children <- PriorityQueue.add id i_node p.children
+      | Stream p -> p.children <- PriorityQueue.add id i_node p.children
+    in
+    let update_children : type a. a node -> PriorityQueue.t -> unit =
+     fun p_node queue ->
+      match p_node with
+      | Connection p -> p.children <- queue
+      | Stream p -> p.children <- queue
     in
     let update_t_last : type a. a node -> int -> unit =
      fun p_node t_last ->
@@ -432,40 +438,34 @@ module Make (Streamd : StreamDescriptor) = struct
           written, Streamd.requires_output descriptor
         else traverse p_node children
     and traverse : type a. a node -> PriorityQueue.t -> int * bool =
-     fun p_node ->
-      let rec loop children =
-        match PriorityQueue.pop children with
-        | Some ((id, (Stream i as i_node)), children') ->
-          let written, subtree_is_active = schedule i_node in
-          if not subtree_is_active
-          then (
-            implicitly_close_idle_stream i.descriptor max_seen_ids;
-            (* XXX(anmonteiro): we may not want to remove from the tree right
-             * away. *)
-            remove_child p_node id);
-          if written > 0
-             (* We need this check because the queue contains both streams that
-              * want to send data and streams that don't want to send data.
-              * Without this check, we might end up in a situation where a stream
-              * won't be flushed until a few write operations later. *)
-          then (
-            update_t_last p_node i.t;
-            update_t i_node written;
-            written, subtree_is_active)
-          else
-            (* Otherwise check if any of the remaining children wants to
-               write *)
-            loop children'
-        | None ->
-          (* No data written, but queue was not originally empty.
-           * Therefore, we can't determine the subtree is inactive. *)
-          0, true
-      in
-      fun children ->
-        if PriorityQueue.is_empty children
-        then (* Queue is empty, see line 6 above. *)
-          0, false
-        else loop children
+     fun p_node children ->
+      match PriorityQueue.pop children with
+      | Some ((id, (Stream i as i_node)), children') ->
+        let written, subtree_is_active = schedule i_node in
+        if not subtree_is_active
+        then (
+          implicitly_close_idle_stream i.descriptor max_seen_ids;
+          (* XXX(anmonteiro): we may not want to remove from the tree right *
+           * away. *)
+          update_children p_node children');
+        if written > 0
+           (* We need this check because the queue contains both streams that
+            * want to send data and streams that don't want to send data.
+            * Without this check, we might end up in a situation where a stream
+            * won't be flushed until a few write operations later. *)
+        then (
+          update_t_last p_node i.t;
+          update_t i_node written;
+          written, subtree_is_active)
+        else
+          (* Otherwise check if any of the remaining children wants to write *)
+          let written, subtree_is_active = traverse p_node children' in
+          (* ...and finally add the popped node back *)
+          add_child p_node id i_node;
+          written, subtree_is_active
+      | None ->
+        (* Queue is empty, see line 6 above. *)
+        0, false
     in
 
     let (Connection root) = t in
