@@ -48,7 +48,7 @@ let repeat (Scheduler.PriorityTreeNode.Connection root) queue num =
         (* simulate writing 100 bytes *)
         root.t_last <- p.t;
         Scheduler.update_t p_node 100;
-        loop (Scheduler.pq_add k p_node q') (n - 1) (k :: acc)
+        loop (Scheduler.PriorityQueue.add k p_node q') (n - 1) (k :: acc)
   in
   loop queue num []
 
