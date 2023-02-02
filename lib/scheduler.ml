@@ -409,9 +409,9 @@ module Make (Streamd : StreamDescriptor) = struct
       | Stream p -> p.t_last <- t_last
     in
     let rec schedule : type a. a node -> int * bool = function
-      | Connection { children; _ } as p_node ->
+      | Connection _ as p_node ->
         (* The root can never send data. *)
-        traverse p_node children
+        traverse p_node
       | Stream { descriptor; children; _ } as p_node ->
         if Streamd.requires_output descriptor
         then
@@ -427,25 +427,21 @@ module Make (Streamd : StreamDescriptor) = struct
             || not (PriorityQueue.is_empty children)
           in
           written, subtree_is_active
-        else traverse p_node children
-    and traverse : type a. a node -> PriorityQueue.t -> int * bool =
-     fun p_node children ->
-      let update_children : a node -> PriorityQueue.t -> unit =
-       fun p_node children ->
-        match p_node with
-        | Connection s -> s.children <- children
-        | Stream s -> s.children <- children
-      in
-      let rec loop children =
-        match PriorityQueue.pop children with
-        | Some ((id, (Stream i as i_node)), children') ->
+        else traverse p_node
+    and traverse : type a. a node -> int * bool =
+     fun p_node ->
+      let rec loop remaining_children =
+        match PriorityQueue.pop remaining_children with
+        | Some ((id, (Stream i as i_node)), remaining_children') ->
           let written, subtree_is_active = schedule i_node in
+
           if not subtree_is_active
           then (
             implicitly_close_idle_stream i.descriptor max_seen_ids;
             (* XXX(anmonteiro): we may not want to remove from the tree right
              * away. *)
-            update_children p_node children');
+            remove_child p_node id);
+
           if written > 0
              (* We need this check because the queue contains both streams that
               * want to send data and streams that don't want to send data.
@@ -454,17 +450,28 @@ module Make (Streamd : StreamDescriptor) = struct
           then (
             update_t_last p_node i.t;
             update_t i_node written;
-            update_children p_node (PriorityQueue.add id i_node children');
+            if subtree_is_active
+            then (
+              (* If there's still more to write, put the node back in the
+                 tree. *)
+              remove_child p_node id;
+              let updated_children =
+                PriorityQueue.add id i_node (children p_node)
+              in
+              match p_node with
+              | Connection s -> s.children <- updated_children
+              | Stream s -> s.children <- updated_children);
             written, subtree_is_active)
           else
             (* Otherwise check if any of the remaining children wants to
                write *)
-            loop children'
+            loop remaining_children'
         | None ->
           (* No data written, but queue was not originally empty.
            * Therefore, we can't determine the subtree is inactive. *)
           0, true
       in
+      let children = children p_node in
       if PriorityQueue.is_empty children
       then (* Queue is empty, see line 6 above. *)
         0, false

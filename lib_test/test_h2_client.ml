@@ -1389,7 +1389,7 @@ module Client_connection_tests = struct
     report_write_result t (`Ok lenv);
     let frames, _lenv = flush_pending_writes t in
     Alcotest.(check (list int))
-      "Writes empty DATA frame"
+      "Writes empty DATA frames for the two requests"
       (List.map Frame.FrameType.serialize Frame.FrameType.[ Data; Data ])
       (List.map
          (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
