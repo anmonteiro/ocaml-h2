@@ -51,4 +51,4 @@ let body_length headers =
     if List.for_all (String.equal hd) tl then
       content_length_of_string hd
     else
-      `Error `Bad_request
+      `Unknown
