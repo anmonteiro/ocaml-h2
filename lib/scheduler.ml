@@ -78,16 +78,15 @@ module Make (Streamd : StreamDescriptor) = struct
           { all_streams : stream StreamsTbl.t
           ; mutable t_last : int
           ; mutable children : PriorityQueue.t
-                (* Connection-level flow control window.
-                 * outbound flow control, what we're allowed to send.
-                 *
-                 * From RFC7540§6.9.1:
-                 *   Two flow-control windows are applicable: the stream
-                 *   flow-control window and the connection flow-control
-                 *   window. *)
-          ; mutable flow : Settings.WindowSize.t
-                (* inbound flow control, what the client is allowed to send. *)
-          ; mutable inflow : Settings.WindowSize.t
+          ; (* Connection-level flow control window.
+             * outbound flow control, what we're allowed to send.
+             *
+             * From RFC7540§6.9.1:
+             *   Two flow-control windows are applicable: the stream
+             * flow-control window and the connection flow-control window. *)
+            mutable flow : Settings.WindowSize.t
+          ; (* inbound flow control, what the client is allowed to send. *)
+            mutable inflow : Settings.WindowSize.t
           ; mutable marked_for_removal :
               (Stream_identifier.t * Stream.closed) list
           }
@@ -99,13 +98,12 @@ module Make (Streamd : StreamDescriptor) = struct
           ; mutable priority : Priority.t
           ; mutable parent : parent
           ; mutable children : PriorityQueue.t
-                (* Stream-level flow control window. See connection-level above.
-                 *
-                 * From RFC7540§6.9.1:
-                 *   Two flow-control windows are applicable: the stream
-                 *   flow-control window and the connection flow-control
-                 *   window. *)
-          ; mutable flow : Settings.WindowSize.t
+          ; (* Stream-level flow control window. See connection-level above.
+             *
+             * From RFC7540§6.9.1:
+             *   Two flow-control windows are applicable: the stream
+             * flow-control window and the connection flow-control window. *)
+            mutable flow : Settings.WindowSize.t
           ; mutable inflow : Settings.WindowSize.t
           }
           -> nonroot node
@@ -149,14 +147,13 @@ module Make (Streamd : StreamDescriptor) = struct
     Stream
       { descriptor
       ; t_last = 0
-      ; t =
-          0
-          (* From RFC7540§5.3.5:
-           *   All streams are initially assigned a non-exclusive dependency on
-           *   stream 0x0. Pushed streams (Section 8.2) initially depend on
-           *   their associated stream. In both cases, streams are assigned a
-           *   default weight of 16. *)
-      ; priority = Priority.default_priority
+      ; t = 0
+      ; (* From RFC7540§5.3.5:
+         *   All streams are initially assigned a non-exclusive dependency on
+         *   stream 0x0. Pushed streams (Section 8.2) initially depend on their
+         *   associated stream. In both cases, streams are assigned a default
+         *   weight of 16. *)
+        priority = Priority.default_priority
       ; parent
       ; children = PriorityQueue.empty
       ; flow = initial_send_window_size
@@ -280,7 +277,7 @@ module Make (Streamd : StreamDescriptor) = struct
          *   When assigning a dependency on another stream, the stream is added
          *   as a new dependency of the parent stream. *)
         set_parent stream_node ~exclusive new_parent);
-      stream.priority <- priority)
+      stream.priority <- new_priority)
 
   let add
       (Connection root as t)
@@ -427,7 +424,11 @@ module Make (Streamd : StreamDescriptor) = struct
           let written = write t p_node in
           (* We check for activity again, because the stream may have gone
            * inactive after the call to `write` above. *)
-          written, Streamd.requires_output descriptor
+          let subtree_is_active =
+            Streamd.requires_output descriptor
+            || not (PriorityQueue.is_empty p.children)
+          in
+          written, subtree_is_active
         else (
           match PriorityQueue.pop p.children with
           | Some ((id, (Stream i as i_node)), children') ->
