@@ -36,22 +36,18 @@
  * responses, which are collectively referred to in the HTTP 1.1 specifications
  * as 'messages'. *)
 
-let sort_uniq xs =
-  (* Though {!List.sort_uniq} performs a check on the input length and returns
-   * immediately for lists of length less than [2], it still allocates closures
-   * before it does that check! To avoid that just do our own checking here to
-   * avoid the allocations in the common case. *)
-  match xs with [] | [ _ ] -> xs | _ -> List.sort_uniq String.compare xs
-
-let unique_content_length_values headers =
-  (* XXX(seliopou): perform proper content-length parsing *)
-  sort_uniq (Headers.get_multi headers "content-length")
-
-let content_length_of_string s = try Int64.of_string s with _ -> -1L
+let content_length_of_string s =
+  match Int64.of_string s with
+  | len when Int64.compare len 0L >= 0 -> `Fixed len
+  | _ | (exception _) -> `Error `Bad_request
 
 let body_length headers =
-  match unique_content_length_values headers with
-  | [ len ] ->
-    let len = content_length_of_string len in
-    if Int64.compare len 0L >= 0 then `Fixed len else `Error `Bad_request
-  | _ -> `Unknown
+  match Headers.get_multi headers "content-length" with
+  | [] -> `Unknown
+  | [ x ] -> content_length_of_string x
+  | hd :: tl ->
+    (* if there are multiple content-length headers we require them all to be
+     * exactly equal. *)
+    if List.for_all (String.equal hd) tl
+    then content_length_of_string hd
+    else `Unknown
