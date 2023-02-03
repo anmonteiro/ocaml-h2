@@ -39,16 +39,15 @@
 let content_length_of_string s =
   match Int64.of_string s with
   | len when Int64.compare len 0L >= 0 -> `Fixed len
-  | _ | exception _ -> `Error `Bad_request
+  | _ | (exception _) -> `Error `Bad_request
 
 let body_length headers =
   match Headers.get_multi headers "content-length" with
   | [] -> `Unknown
-  | [ x ] ->  content_length_of_string x
+  | [ x ] -> content_length_of_string x
   | hd :: tl ->
     (* if there are multiple content-length headers we require them all to be
      * exactly equal. *)
-    if List.for_all (String.equal hd) tl then
-      content_length_of_string hd
-    else
-      `Unknown
+    if List.for_all (String.equal hd) tl
+    then content_length_of_string hd
+    else `Unknown
