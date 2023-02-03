@@ -35,6 +35,7 @@ module Server = struct
       ?(config = H2.Config.default)
       ~request_handler
       ~error_handler
+      ~sw
       client_addr
       socket
     =
@@ -42,7 +43,9 @@ module Server = struct
       H2.Server_connection.create
         ~config
         ~error_handler:(error_handler client_addr)
-        (request_handler client_addr)
+        (fun reqd ->
+          Eio.Fiber.fork ~sw (fun () ->
+            request_handler client_addr reqd))
     in
     Gluten_eio.Server.create_connection_handler
       ~read_buffer_size:config.read_buffer_size

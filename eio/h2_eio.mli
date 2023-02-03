@@ -36,6 +36,7 @@ module Server : sig
     -> request_handler:(Eio.Net.Sockaddr.stream -> H2.Reqd.t -> unit)
     -> error_handler:
          (Eio.Net.Sockaddr.stream -> H2.Server_connection.error_handler)
+    -> sw:Eio.Switch.t
     -> Eio.Net.Sockaddr.stream
     -> Eio.Flow.two_way
     -> unit
