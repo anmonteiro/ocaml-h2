@@ -30,6 +30,11 @@ Unreleased
   ([#201](https://github.com/anmonteiro/ocaml-h2/pull/201))
 - h2: don't schedule streams as dependencies of others marked for removal
   ([#205](https://github.com/anmonteiro/ocaml-h2/pull/205))
+- h2: revise scheduling algorithm to avoid starvation
+  ([#199](https://github.com/anmonteiro/ocaml-h2/pull/199),
+  [#204](https://github.com/anmonteiro/ocaml-h2/pull/204), reported in
+  [#162](https://github.com/anmonteiro/ocaml-h2/issues/162), thanks
+  [@quernd](https://github.com/quernd))
 
 0.9.0 2022-08-14
 ---------------
