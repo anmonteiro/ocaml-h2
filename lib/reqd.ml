@@ -490,7 +490,7 @@ let flush_response_body (t : t) ~max_bytes =
           0)
       else (* no pending output but Body is still open *)
         0
-    | Fixed ({ iovec = { buffer; off; len } as iovec; _ } as r)
+    | Fixed ({ iovec = { buffer; off; len } as iovec; response } as r)
       when max_bytes > 0 ->
       let is_partial_flush = max_bytes < len in
       let frame_info =
@@ -504,7 +504,10 @@ let flush_response_body (t : t) ~max_bytes =
       let len_to_write = if is_partial_flush then max_bytes else len in
       write_buffer_data t.writer ~off ~len:len_to_write frame_info buffer;
       r.iovec <- Httpaf.IOVec.shift iovec len_to_write;
-      if not is_partial_flush then close_stream t;
+      if not is_partial_flush
+      then (
+        stream.response_state <- Complete response;
+        close_stream t);
       len_to_write
     | Fixed _ | Waiting | Complete _ -> 0)
   | _ -> 0
