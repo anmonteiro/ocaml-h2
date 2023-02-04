@@ -6,7 +6,7 @@ let request_handler : Unix.sockaddr -> Reqd.t -> unit =
   let response_content_type =
     match Headers.get request.headers "Content-Type" with
     | Some request_content_type -> request_content_type
-    | None -> "application/octet-stream"
+    | None -> "text/plain"
   in
   let response =
     Response.create

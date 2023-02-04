@@ -82,10 +82,6 @@ struct
     Tls.Config.server
       ~alpn_protocols:[ "h2"; "http/1.1" ] (* accept h2 before http/1.1 *)
       ~certificates:(`Single certificate)
-      ~ciphers:
-        (List.filter
-           Tls.Ciphersuite.ciphersuite_tls12_only
-           Tls.Config.Ciphers.supported)
       ()
 
   let start _random stack keys c _clock =

@@ -28,6 +28,8 @@ Unreleased
   ([#200](https://github.com/anmonteiro/ocaml-h2/pull/200))
 - h2: don't remove parent streams from the scheduler if they have children
   ([#201](https://github.com/anmonteiro/ocaml-h2/pull/201))
+- h2: don't schedule streams as dependencies of others marked for removal
+  ([#205](https://github.com/anmonteiro/ocaml-h2/pull/205))
 
 0.9.0 2022-08-14
 ---------------
