@@ -11,7 +11,7 @@
       let
         pkgs = nixpkgs.legacyPackages."${system}".extend (self: super: {
           h2spec = super.callPackage ./nix/h2spec.nix { };
-          ocamlPackages = super.ocaml-ng.ocamlPackages_5_00;
+          ocamlPackages = super.ocaml-ng.ocamlPackages_5_0;
         });
       in
       rec {

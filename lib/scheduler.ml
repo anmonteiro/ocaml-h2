@@ -134,7 +134,7 @@ module Make (Streamd : StreamDescriptor) = struct
       ; all_streams = StreamsTbl.create ~random:true capacity
       ; flow = Settings.WindowSize.default_initial_window_size
       ; inflow = Settings.WindowSize.default_initial_window_size
-      ; marked_for_removal = StreamsTbl.create ~random:true capacity
+      ; marked_for_removal = StreamsTbl.create ~random:true 256
       }
 
   let create
