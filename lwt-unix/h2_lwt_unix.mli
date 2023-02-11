@@ -46,6 +46,23 @@ module Server : sig
         with type socket = Gluten_lwt_unix.Server.TLS.socket
          and type addr := Unix.sockaddr
 
+    val create_connection_handler_full
+      :  certificates:Tls.Config.own_cert
+      -> ?config:Config.t
+      -> request_handler:(Unix.sockaddr -> Server_connection.request_handler)
+      -> error_handler:(Unix.sockaddr -> Server_connection.error_handler)
+      -> ?ciphers:Tls.Ciphersuite.ciphersuite list
+      -> ?version:(Tls.Core.tls_version * Tls.Core.tls_version)
+      -> ?signature_algorithms:Tls.Core.signature_algorithm list
+      -> ?reneg:bool
+      -> ?acceptable_cas:X509.Distinguished_name.t list
+      -> ?authenticator:X509.Authenticator.t
+      -> ?zero_rtt:int32
+      -> ?ip:Ipaddr.t
+      -> Unix.sockaddr
+      -> Lwt_unix.file_descr
+      -> unit Lwt.t
+
     val create_connection_handler_with_default
       :  certfile:string
       -> keyfile:string
@@ -86,6 +103,22 @@ module Client : sig
       H2_lwt.Client
         with type socket = Gluten_lwt_unix.Client.TLS.socket
          and type runtime = Gluten_lwt_unix.Client.TLS.t
+
+    val create_connection_full
+      :  ?config:Config.t
+      -> ?push_handler:
+          (Request.t -> (Client_connection.response_handler, unit) result)
+      -> error_handler:Client_connection.error_handler
+      -> ?certificates:Tls.Config.own_cert
+      -> ?peer_name:[ `host ] Domain_name.t
+      -> ?ciphers:Tls.Ciphersuite.ciphersuite list
+      -> ?version:(Tls.Core.tls_version * Tls.Core.tls_version)
+      -> ?signature_algorithms:Tls.Core.signature_algorithm list
+      -> ?reneg:bool
+      -> authenticator:X509.Authenticator.t
+      -> ?ip:Ipaddr.t
+      -> Lwt_unix.file_descr
+      -> t Lwt.t
 
     val create_connection_with_default
       :  ?config:Config.t

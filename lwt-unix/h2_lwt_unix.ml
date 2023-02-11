@@ -39,6 +39,43 @@ module Server = struct
   module TLS = struct
     include H2_lwt.Server (Gluten_lwt_unix.Server.TLS)
 
+    let create_connection_handler_full
+        ~certificates
+        ?config
+        ~request_handler
+        ~error_handler
+        ?ciphers
+        ?version
+        ?signature_algorithms
+        ?reneg
+        ?acceptable_cas
+        ?authenticator
+        ?zero_rtt
+        ?ip
+    =
+    let make_tls_server =
+      Gluten_lwt_unix.Server.TLS.create_full
+        ?ciphers
+        ?version
+        ?signature_algorithms
+        ?reneg
+        ~certificates:certificates
+        ?acceptable_cas
+        ?authenticator
+        ~alpn_protocols:[ "h2" ]
+        ?zero_rtt
+        ?ip
+    in
+    fun client_addr socket ->
+      make_tls_server client_addr socket >>= fun tls_server ->
+      create_connection_handler
+        ?config
+        ~request_handler
+        ~error_handler
+        client_addr
+        tls_server
+
+
     let create_connection_handler_with_default
         ~certfile
         ~keyfile
@@ -94,6 +131,26 @@ module Client = struct
 
   module TLS = struct
     include H2_lwt.Client (Gluten_lwt_unix.Client.TLS)
+
+    let create_connection_full
+        ?config
+        ?push_handler
+        ~error_handler
+        ?certificates
+        ?peer_name
+        ?ciphers
+        ?version
+        ?signature_algorithms
+        ?reneg
+        ~authenticator
+        ?ip
+        socket
+      =
+      Gluten_lwt_unix.Client.TLS.create_full authenticator ?peer_name ?ciphers ?version
+        ?signature_algorithms ?reneg ?certificates
+        ~alpn_protocols:[ "h2" ] ?ip socket
+      >>= fun tls_client ->
+      create_connection ?config ?push_handler ~error_handler tls_client
 
     let create_connection_with_default
         ?config
