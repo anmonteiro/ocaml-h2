@@ -26,7 +26,7 @@ opam install h2
 ### Resources
 
 First of all, the generated documentation lives
-[here](https://anmonteiro.github.io/ocaml-h2/). It is recommended to browse it
+[here](https://ocaml.org/p/h2/latest/doc/index.html). It is recommended to browse it
 and get to know the API exposed by `H2`.
 
 There are also some examples in the [`examples`](./examples) folder. Most
