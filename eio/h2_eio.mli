@@ -71,6 +71,6 @@ module Client : sig
     -> t
     -> (unit, [ `EOF ]) result Eio.Promise.t
 
-  val shutdown : t -> unit
+  val shutdown : t -> unit Eio.Promise.t
   val is_closed : t -> bool
 end
