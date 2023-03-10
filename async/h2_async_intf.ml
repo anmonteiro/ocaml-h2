@@ -36,8 +36,8 @@ open H2
 module type Server = sig
   type 'a socket constraint 'a = [< Socket.Address.t ]
 
-  val create_connection_handler
-    :  ?config:Config.t
+  val create_connection_handler :
+     ?config:Config.t
     -> request_handler:('a -> Server_connection.request_handler)
     -> error_handler:('a -> Server_connection.error_handler)
     -> 'a
@@ -54,16 +54,16 @@ module type Client = sig
     ; runtime : 'a runtime
     }
 
-  val create_connection
-    :  ?config:Config.t
+  val create_connection :
+     ?config:Config.t
     -> ?push_handler:
          (Request.t -> (Client_connection.response_handler, unit) result)
     -> error_handler:Client_connection.error_handler
     -> 'a socket
     -> 'a t Deferred.t
 
-  val request
-    :  'a t
+  val request :
+     'a t
     -> ?flush_headers_immediately:bool
     -> ?trailers_handler:Client_connection.trailers_handler
     -> Request.t
@@ -71,8 +71,8 @@ module type Client = sig
     -> response_handler:Client_connection.response_handler
     -> Body.Writer.t
 
-  val ping
-    :  _ t
+  val ping :
+     _ t
     -> ?payload:Bigstringaf.t
     -> ?off:int
     -> ((unit, [ `EOF ]) result -> unit)

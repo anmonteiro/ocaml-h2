@@ -36,8 +36,8 @@ module type Server = sig
   type socket
   type addr
 
-  val create_connection_handler
-    :  ?config:Config.t
+  val create_connection_handler :
+     ?config:Config.t
     -> request_handler:(addr -> Server_connection.request_handler)
     -> error_handler:(addr -> Server_connection.error_handler)
     -> addr
@@ -56,16 +56,16 @@ module type Client = sig
     ; runtime : runtime
     }
 
-  val create_connection
-    :  ?config:Config.t
+  val create_connection :
+     ?config:Config.t
     -> ?push_handler:
          (Request.t -> (Client_connection.response_handler, unit) result)
     -> error_handler:Client_connection.error_handler
     -> socket
     -> t Lwt.t
 
-  val request
-    :  t
+  val request :
+     t
     -> ?flush_headers_immediately:bool
     -> ?trailers_handler:Client_connection.trailers_handler
     -> Request.t
@@ -73,8 +73,8 @@ module type Client = sig
     -> response_handler:Client_connection.response_handler
     -> Body.Writer.t
 
-  val ping
-    :  ?payload:Bigstringaf.t
+  val ping :
+     ?payload:Bigstringaf.t
     -> ?off:int
     -> t
     -> (unit, [ `EOF ]) result Lwt.t

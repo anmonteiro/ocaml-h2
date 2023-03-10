@@ -130,11 +130,11 @@ let decode_header_field table prefix prefix_length =
      *   (see Section 5.2). A value 0 is used in place [...], followed by the
      *   header field name. *)
     (if index == 0
-    then decode_string
-    else
-      match get_indexed_field table index with
-      | Ok (name, _) -> ok name
-      | Error e -> error e)
+     then decode_string
+     else
+       match get_indexed_field table index with
+       | Ok (name, _) -> ok name
+       | Error e -> error e)
     decode_string
 
 let decode_headers ({ table; _ } as t) =

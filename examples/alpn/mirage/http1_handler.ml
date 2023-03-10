@@ -11,8 +11,8 @@ let redirect_handler : Reqd.t Gluten.reqd -> unit =
   in
   Reqd.respond_with_string reqd response ""
 
-let redirect_error_handler
-    : ?request:Request.t -> _ -> (Headers.t ->  Body.Writer.t) -> unit
+let redirect_error_handler :
+    ?request:Request.t -> _ -> (Headers.t -> Body.Writer.t) -> unit
   =
  fun ?request:_ _error start_response ->
   let response_body = start_response Headers.empty in
@@ -38,8 +38,8 @@ let request_handler : Reqd.t Gluten.reqd -> unit =
   in
   Reqd.respond_with_string reqd response response_body
 
-let error_handler
-    : ?request:Request.t -> _ -> (Headers.t -> Body.Writer.t) -> unit
+let error_handler :
+    ?request:Request.t -> _ -> (Headers.t -> Body.Writer.t) -> unit
   =
  fun ?request:_ _error start_response ->
   let response_body = start_response Headers.empty in

@@ -175,8 +175,8 @@ let on_close_stream t id ~active closed =
     t.current_client_streams <- t.current_client_streams - 1;
   Scheduler.mark_for_removal t.streams id closed
 
-let send_window_update
-    : type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
+let send_window_update :
+    type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
   =
  fun t stream n ->
   let send_window_update_frame stream_id n =
@@ -978,8 +978,8 @@ let process_goaway_frame t _frame payload =
    * complete. *)
   shutdown t
 
-let add_window_increment
-    : type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
+let add_window_increment :
+    type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
   =
  fun t stream increment ->
   let open Scheduler in

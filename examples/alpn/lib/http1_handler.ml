@@ -11,8 +11,11 @@ let redirect_handler : Unix.sockaddr -> Reqd.t Gluten.reqd -> unit =
   in
   Reqd.respond_with_string reqd response ""
 
-let redirect_error_handler
-    :  Unix.sockaddr -> ?request:Request.t -> _ -> (Headers.t -> Body.Writer.t)
+let redirect_error_handler :
+     Unix.sockaddr
+    -> ?request:Request.t
+    -> _
+    -> (Headers.t -> Body.Writer.t)
     -> unit
   =
  fun _client_address ?request:_ _error start_response ->
@@ -39,8 +42,11 @@ let request_handler : Unix.sockaddr -> Reqd.t Gluten.reqd -> unit =
   in
   Reqd.respond_with_string reqd response response_body
 
-let error_handler
-    :  Unix.sockaddr -> ?request:Request.t -> _ -> (Headers.t -> Body.Writer.t)
+let error_handler :
+     Unix.sockaddr
+    -> ?request:Request.t
+    -> _
+    -> (Headers.t -> Body.Writer.t)
     -> unit
   =
  fun _client_address ?request:_ _error start_response ->
