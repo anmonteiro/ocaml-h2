@@ -35,6 +35,8 @@ Unreleased
   [#204](https://github.com/anmonteiro/ocaml-h2/pull/204), reported in
   [#162](https://github.com/anmonteiro/ocaml-h2/issues/162), thanks
   [@quernd](https://github.com/quernd))
+- h2-eio: adapt to the next gluten-eio version
+  ([#210](https://github.com/anmonteiro/ocaml-h2/pull/210))
 
 0.9.0 2022-08-14
 ---------------
