@@ -46,8 +46,8 @@ module Server : sig
       H2_async_intf.Server
         with type 'a socket := 'a Gluten_async.Server.SSL.socket
 
-    val create_connection_handler_with_default
-      :  certfile:string
+    val create_connection_handler_with_default :
+       certfile:string
       -> keyfile:string
       -> ?config:Config.t
       -> request_handler:('a -> Server_connection.request_handler)
@@ -69,8 +69,8 @@ module Client : sig
       H2_async_intf.Client
         with type 'a socket = 'a Gluten_async.Client.SSL.socket
 
-    val create_connection_with_default
-      :  ?config:Config.t
+    val create_connection_with_default :
+       ?config:Config.t
       -> ?push_handler:
            (Request.t -> (Client_connection.response_handler, unit) result)
       -> error_handler:Client_connection.error_handler
@@ -83,8 +83,8 @@ module Client : sig
       H2_async_intf.Client
         with type 'a socket = 'a Gluten_async.Client.TLS.socket
 
-    val create_connection_with_default
-      :  ?config:Config.t
+    val create_connection_with_default :
+       ?config:Config.t
       -> ?push_handler:
            (Request.t -> (Client_connection.response_handler, unit) result)
       -> error_handler:Client_connection.error_handler

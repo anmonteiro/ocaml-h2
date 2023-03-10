@@ -168,8 +168,8 @@ let send_fixed_response (t : t) s response data =
         ~max_frame_size:t.max_frame_size
         ~flags:
           (if should_send_data
-          then Flags.default_flags
-          else Flags.(set_end_stream default_flags))
+           then Flags.default_flags
+           else Flags.(set_end_stream default_flags))
         t.id
     in
     Writer.write_response_headers t.writer s.encoder frame_info response;

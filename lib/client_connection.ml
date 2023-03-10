@@ -126,8 +126,8 @@ let report_error t = function
         ~debug_data
         ~last_stream_id:
           (if Stream_identifier.(t.current_stream_id === -1l)
-          then Stream_identifier.connection
-          else t.current_stream_id)
+           then Stream_identifier.connection
+           else t.current_stream_id)
         error;
       t.did_send_go_away <- true;
       if error <> Error_code.NoError
@@ -173,8 +173,8 @@ let report_exn t exn =
     let reason = Printexc.to_string exn in
     report_connection_error t ~reason Error_code.InternalError
 
-let send_window_update
-    : type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
+let send_window_update :
+    type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
   =
  fun t stream n ->
   let send_window_update_frame stream_id n =
@@ -310,8 +310,8 @@ let handle_response_headers t stream ~end_stream active_request headers =
       respd.state <-
         Active
           ( (if Stream.is_open respd
-            then Open new_response_state
-            else HalfClosed new_response_state)
+             then Open new_response_state
+             else HalfClosed new_response_state)
           , active_request );
       active_request.response_handler response response_body;
       if end_stream
@@ -462,8 +462,8 @@ let handle_first_response_bytes
   let remote_state = Stream.PartialHeaders partial_headers in
   descriptor.Stream.state <-
     (if Stream.is_open descriptor
-    then Active (Open remote_state, active_request)
-    else Active (HalfClosed remote_state, active_request));
+     then Active (Open remote_state, active_request)
+     else Active (HalfClosed remote_state, active_request));
   if not (Flags.test_end_header flags)
   then t.receiving_headers_for_stream <- Some stream_id;
   handle_headers_block t stream partial_headers flags headers_block
@@ -1056,8 +1056,8 @@ let process_goaway_frame t _frame payload =
    * complete. *)
   shutdown_rw t
 
-let add_window_increment
-    : type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
+let add_window_increment :
+    type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
   =
  fun t stream increment ->
   let open Scheduler in
@@ -1289,13 +1289,13 @@ let create ?(config = Config.default) ?push_handler ~error_handler () =
    *   The connection flow-control window can only be changed using
    *   WINDOW_UPDATE frames. *)
   (if t.config.initial_window_size > Settings.default.initial_window_size
-  then
-    let diff =
-      Int32.sub
-        t.config.initial_window_size
-        Settings.default.initial_window_size
-    in
-    send_window_update t t.streams diff);
+   then
+     let diff =
+       Int32.sub
+         t.config.initial_window_size
+         Settings.default.initial_window_size
+     in
+     send_window_update t t.streams diff);
   t
 
 let create_and_add_stream t ~error_handler =

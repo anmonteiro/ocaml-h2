@@ -217,8 +217,8 @@ let valid_headers ?(is_request = true) t =
                   (List.mem
                      name
                      (if is_request
-                     then Pseudo.reserved_request
-                     else Pseudo.reserved_response)))
+                      then Pseudo.reserved_request
+                      else Pseudo.reserved_response)))
           || (* From RFC7540§8.1.2.1:
               *   All pseudo-header fields MUST appear in the header block
               *   before regular header fields. Any request or response that

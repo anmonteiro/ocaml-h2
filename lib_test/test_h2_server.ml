@@ -140,8 +140,8 @@ module Server_connection_tests = struct
       Writer.make_frame_info
         ~flags:
           (if has_body
-          then Flags.default_flags
-          else Flags.(default_flags |> set_end_stream))
+           then Flags.default_flags
+           else Flags.(default_flags |> set_end_stream))
         1l
     in
     Serialize.Writer.write_request_headers
@@ -163,8 +163,8 @@ module Server_connection_tests = struct
       Writer.make_frame_info
         ~flags:
           (if has_body
-          then Flags.default_flags
-          else Flags.(default_flags |> set_end_stream))
+           then Flags.default_flags
+           else Flags.(default_flags |> set_end_stream))
         1l
     in
     Serialize.Writer.write_response_headers

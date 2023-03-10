@@ -38,8 +38,8 @@ open H2
 module type Server = sig
   type socket
 
-  val create_connection_handler
-    :  ?config:Config.t
+  val create_connection_handler :
+     ?config:Config.t
     -> request_handler:Server_connection.request_handler
     -> error_handler:Server_connection.error_handler
     -> socket

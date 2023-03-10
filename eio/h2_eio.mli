@@ -31,8 +31,8 @@
  *---------------------------------------------------------------------------*)
 
 module Server : sig
-  val create_connection_handler
-    :  ?config:H2.Config.t
+  val create_connection_handler :
+     ?config:H2.Config.t
     -> request_handler:(Eio.Net.Sockaddr.stream -> H2.Reqd.t -> unit)
     -> error_handler:
          (Eio.Net.Sockaddr.stream -> H2.Server_connection.error_handler)
@@ -47,8 +47,8 @@ module Client : sig
     ; runtime : Gluten_eio.Client.t
     }
 
-  val create_connection
-    :  ?config:H2.Config.t
+  val create_connection :
+     ?config:H2.Config.t
     -> ?push_handler:
          (H2.Request.t -> (H2.Client_connection.response_handler, unit) result)
     -> sw:Eio.Switch.t
@@ -56,8 +56,8 @@ module Client : sig
     -> Eio.Flow.two_way
     -> t
 
-  val request
-    :  t
+  val request :
+     t
     -> ?flush_headers_immediately:bool
     -> ?trailers_handler:H2.Client_connection.trailers_handler
     -> H2.Request.t
@@ -65,8 +65,8 @@ module Client : sig
     -> response_handler:H2.Client_connection.response_handler
     -> H2.Body.Writer.t
 
-  val ping
-    :  ?payload:Bigstringaf.t
+  val ping :
+     ?payload:Bigstringaf.t
     -> ?off:int
     -> t
     -> (unit, [ `EOF ]) result Eio.Promise.t

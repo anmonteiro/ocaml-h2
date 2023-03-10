@@ -18,8 +18,8 @@ let request_handler : Reqd.t -> unit =
     response
     "Welcome to an ALPN-negotiated HTTP/2 connection"
 
-let error_handler
-    : ?request:H2.Request.t -> _ -> (Headers.t -> Body.Writer.t) -> unit
+let error_handler :
+    ?request:H2.Request.t -> _ -> (Headers.t -> Body.Writer.t) -> unit
   =
  fun ?request:_ _error start_response ->
   let response_body = start_response Headers.empty in

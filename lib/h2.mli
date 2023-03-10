@@ -90,8 +90,9 @@ module Status : sig
       more details.
 
       In addition to http/af, this type also includes the 421 (Misdirected
-      Request) tag. See {{:https://tools.ietf.org/html/rfc7540#section-9.1.2}
-      RFC7540§9.1.2} for more details. *)
+      Request) tag. See
+      {{:https://tools.ietf.org/html/rfc7540#section-9.1.2} RFC7540§9.1.2} for
+      more details. *)
 
   type standard =
     [ Httpaf.Status.standard
@@ -326,8 +327,8 @@ module Body : sig
   module Reader : sig
     type t
 
-    val schedule_read
-      :  t
+    val schedule_read :
+       t
       -> on_eof:(unit -> unit)
       -> on_read:(Bigstringaf.t -> off:int -> len:int -> unit)
       -> unit
@@ -405,8 +406,8 @@ module Request : sig
     ; headers : Headers.t
     }
 
-  val create
-    :  ?headers:Headers.t (** default is {!Headers.empty} *)
+  val create :
+     ?headers:Headers.t (** default is {!Headers.empty} *)
     -> scheme:string
     -> Method.t
     -> string
@@ -419,11 +420,12 @@ module Request : sig
       includes the authority portion of the target URI, and should be used
       instead of the [Host] header field in HTTP/2.
 
-      See {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.3}
-      RFC7540§8.1.2.4} for more details. *)
+      See
+      {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.3} RFC7540§8.1.2.4}
+      for more details. *)
 
-  val body_length
-    :  t
+  val body_length :
+     t
     -> [ `Error of [ `Bad_request ] | `Fixed of int64 | `Unknown ]
   (** [body_length t] is the length of the message body accompanying [t].
 
@@ -442,19 +444,20 @@ module Response : sig
     ; headers : Headers.t
     }
 
-  val create
-    :  ?headers:Headers.t (** default is {!Headers.empty} *)
+  val create :
+     ?headers:Headers.t (** default is {!Headers.empty} *)
     -> Status.t
     -> t
   (** [create ?headers status] creates an HTTP response with the given
       parameters. Unlike the [Response] type in http/af, h2 does not define a
       way for responses to carry reason phrases or protocol version.
 
-      See {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.4}
-      RFC7540§8.1.2.4} for more details. *)
+      See
+      {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.4} RFC7540§8.1.2.4}
+      for more details. *)
 
-  val body_length
-    :  request_method:Method.standard
+  val body_length :
+     request_method:Method.standard
     -> t
     -> [ `Error of [ `Bad_request ] | `Fixed of int64 | `Unknown ]
   (** [body_length ~request_method t] is the length of the message body
@@ -497,8 +500,8 @@ module Reqd : sig
   val respond_with_string : t -> Response.t -> string -> unit
   val respond_with_bigstring : t -> Response.t -> Bigstringaf.t -> unit
 
-  val respond_with_streaming
-    :  t
+  val respond_with_streaming :
+     t
     -> ?flush_headers_immediately:bool
     -> Response.t
     -> Body.Writer.t
@@ -534,8 +537,8 @@ module Reqd : sig
       See {{:https://tools.ietf.org/html/rfc7540#section-8.2} RFC7540§8.2} for
       more details. *)
 
-  val push
-    :  t
+  val push :
+     t
     -> Request.t
     -> ( t
        , [ `Push_disabled | `Stream_cant_push | `Stream_ids_exhausted ] )
@@ -543,9 +546,10 @@ module Reqd : sig
   (** [push reqd request] creates a new ("pushed") request descriptor that
       allows responding to the "promised" [request]. As per the HTTP/2
       specification, [request] must be cacheable, safe, and must not include a
-      request body (see {{:https://tools.ietf.org/html/rfc7540.html#section-8.2}
-      RFC7540§8.2} for more details). {b Note}: h2 will not validate [request]
-      against these assumptions.
+      request body (see
+      {{:https://tools.ietf.org/html/rfc7540.html#section-8.2} RFC7540§8.2} for
+      more details). {b Note}: h2 will not validate [request] against these
+      assumptions.
 
       This function returns [Error `Push_disabled] when the value of
       [SETTINGS_ENABLE_PUSH] is set to [0] (see
@@ -698,16 +702,16 @@ module Server_connection : sig
   type error_handler =
     ?request:Request.t -> error -> (Headers.t -> Body.Writer.t) -> unit
 
-  val create
-    :  ?config:Config.t
+  val create :
+     ?config:Config.t
     -> ?error_handler:error_handler
     -> request_handler
     -> t
   (** [create ?config ?error_handler ~request_handler] creates a connection
       handler that will service individual requests with [request_handler]. *)
 
-  val create_h2c
-    :  ?config:Config.t
+  val create_h2c :
+     ?config:Config.t
     -> ?error_handler:error_handler
     -> http_request:Httpaf.Request.t
     -> ?request_body:Bigstringaf.t IOVec.t list
@@ -744,8 +748,8 @@ module Server_connection : sig
       connection will attempt to consume any buffered input and then shutdown
       the HTTP parser for the connection. *)
 
-  val next_write_operation
-    :  t
+  val next_write_operation :
+     t
     -> [ `Write of Bigstringaf.t IOVec.t list | `Yield | `Close of int ]
   (** [next_write_operation t] returns a value describing the next operation
       that the caller should conduct on behalf of the connection. *)
@@ -810,8 +814,8 @@ module Client_connection : sig
   type response_handler = Response.t -> Body.Reader.t -> unit
   type error_handler = error -> unit
 
-  val create
-    :  ?config:Config.t
+  val create :
+     ?config:Config.t
     -> ?push_handler:(Request.t -> (response_handler, unit) result)
     -> error_handler:error_handler
     -> unit
@@ -838,16 +842,16 @@ module Client_connection : sig
       promised streams by returning a RST_STREAM referencing the promised stream
       identifier back to the sender of the PUSH_PROMISE. *)
 
-  val create_h2c
-    :  ?config:Config.t
+  val create_h2c :
+     ?config:Config.t
     -> ?push_handler:(Request.t -> (response_handler, unit) result)
     -> http_request:Httpaf.Request.t
     -> error_handler:error_handler
     -> response_handler * error_handler
     -> (t, string) result
 
-  val request
-    :  t
+  val request :
+     t
     -> ?flush_headers_immediately:bool
     -> ?trailers_handler:trailers_handler
     -> Request.t
@@ -867,8 +871,8 @@ module Client_connection : sig
       {{:https://tools.ietf.org/html/rfc7540#section-5.4} RFC7540§5.4} for more
       details. *)
 
-  val ping
-    :  t
+  val ping :
+     t
     -> ?payload:Bigstringaf.t
     -> ?off:int
     -> ((unit, [ `EOF ]) result -> unit)
@@ -909,8 +913,8 @@ module Client_connection : sig
       connection will attempt to consume any buffered input and then shutdown
       the HTTP parser for the connection. *)
 
-  val next_write_operation
-    :  t
+  val next_write_operation :
+     t
     -> [ `Write of Bigstringaf.t IOVec.t list | `Yield | `Close of int ]
   (** [next_write_operation t] returns a value describing the next operation
       that the caller should conduct on behalf of the connection. *)

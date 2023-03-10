@@ -46,8 +46,8 @@ module Server : sig
         with type socket = Gluten_lwt_unix.Server.TLS.socket
          and type addr := Unix.sockaddr
 
-    val create_connection_handler_with_default
-      :  certfile:string
+    val create_connection_handler_with_default :
+       certfile:string
       -> keyfile:string
       -> ?config:Config.t
       -> request_handler:(Unix.sockaddr -> Server_connection.request_handler)
@@ -63,8 +63,8 @@ module Server : sig
         with type socket = Gluten_lwt_unix.Server.SSL.socket
          and type addr := Unix.sockaddr
 
-    val create_connection_handler_with_default
-      :  certfile:string
+    val create_connection_handler_with_default :
+       certfile:string
       -> keyfile:string
       -> ?config:Config.t
       -> request_handler:(Unix.sockaddr -> Server_connection.request_handler)
@@ -87,8 +87,8 @@ module Client : sig
         with type socket = Gluten_lwt_unix.Client.TLS.socket
          and type runtime = Gluten_lwt_unix.Client.TLS.t
 
-    val create_connection_with_default
-      :  ?config:Config.t
+    val create_connection_with_default :
+       ?config:Config.t
       -> ?push_handler:
            (Request.t -> (Client_connection.response_handler, unit) result)
       -> error_handler:Client_connection.error_handler
@@ -102,8 +102,8 @@ module Client : sig
         with type socket = Gluten_lwt_unix.Client.SSL.socket
          and type runtime = Gluten_lwt_unix.Client.SSL.t
 
-    val create_connection_with_default
-      :  ?config:Config.t
+    val create_connection_with_default :
+       ?config:Config.t
       -> ?push_handler:
            (Request.t -> (Client_connection.response_handler, unit) result)
       -> error_handler:Client_connection.error_handler
