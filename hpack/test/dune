@@ -4,8 +4,8 @@
 
 (include_subdirs unqualified)
 
-(alias
- (name slowtests)
+(rule
+ (alias slowtests)
  (deps
   (:test_exe test.exe)
   (source_tree "hpack-test-case/"))
