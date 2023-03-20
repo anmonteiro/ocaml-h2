@@ -11,6 +11,7 @@ bug-reports: "https://github.com/anmonteiro/ocaml-h2/issues"
 depends: [
   "dune" {>= "2.7"}
   "ocaml" {>= "4.08.0"}
+  "angstrom"
   "faraday" {>= "0.7.3"}
   "yojson" {with-test}
   "hex" {with-test}

@@ -29,6 +29,7 @@
  (depends
   (ocaml
    (>= "4.08.0"))
+  angstrom
   (faraday
    (>= "0.7.3"))
   (yojson :with-test)
@@ -118,7 +119,7 @@
    (= :version))
   faraday-async
   (gluten-async
-   (>= "0.2.1")))
+   (>= "0.4.0")))
  (depopts async_ssl tls-async))
 
 (package
