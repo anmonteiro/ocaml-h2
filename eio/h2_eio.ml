@@ -35,6 +35,7 @@ module Server = struct
       ?(config = H2.Config.default)
       ~request_handler
       ~error_handler
+      ~sw
       client_addr
       socket
     =
@@ -47,6 +48,7 @@ module Server = struct
     Gluten_eio.Server.create_connection_handler
       ~read_buffer_size:config.read_buffer_size
       ~protocol:(module H2.Server_connection)
+      ~sw
       connection
       client_addr
       socket

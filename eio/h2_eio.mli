@@ -36,8 +36,9 @@ module Server : sig
     -> request_handler:(Eio.Net.Sockaddr.stream -> H2.Reqd.t -> unit)
     -> error_handler:
          (Eio.Net.Sockaddr.stream -> H2.Server_connection.error_handler)
+    -> sw:Eio.Switch.t
     -> Eio.Net.Sockaddr.stream
-    -> Eio.Flow.two_way
+    -> < Eio.Flow.two_way ; Eio.Flow.close ; .. >
     -> unit
 end
 
@@ -53,7 +54,7 @@ module Client : sig
          (H2.Request.t -> (H2.Client_connection.response_handler, unit) result)
     -> sw:Eio.Switch.t
     -> error_handler:H2.Client_connection.error_handler
-    -> Eio.Flow.two_way
+    -> < Eio.Flow.two_way ; Eio.Flow.close ; .. >
     -> t
 
   val request :
