@@ -379,7 +379,7 @@ let report_error (t : t) exn error_code =
 
 let report_exn t exn = report_error t (`Exn exn) Error_code.InternalError
 
-let try_with t f : (unit, exn) Result.result =
+let try_with t f : (unit, exn) result =
   try
     f ();
     Ok ()

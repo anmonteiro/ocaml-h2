@@ -1,4 +1,4 @@
 (library
  (name h2)
  (public_name h2)
- (libraries angstrom base64 faraday bigstringaf httpaf result psq hpack))
+ (libraries angstrom base64 faraday bigstringaf httpaf psq hpack))
