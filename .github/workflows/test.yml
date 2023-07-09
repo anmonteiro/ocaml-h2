@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ocamlVersion: [4_13, 4_14, 5_00]
+        ocamlVersion: [4_14, 5_0, 5_1]
     steps:
     - uses: actions/checkout@v3
       with:
