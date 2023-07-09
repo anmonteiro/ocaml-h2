@@ -22,16 +22,17 @@ let response_handler ~on_eof response response_body =
   in
   read_response ()
 
-let error_handler err =
-  match err with
+let error_handler u err =
+  (match err with
   | `Exn exn -> Format.eprintf "wut %S@." (Printexc.to_string exn)
   | `Invalid_response_body_length res ->
     Format.eprintf "invalid res: %a@." Response.pp_hum res
   | `Malformed_response str -> Format.eprintf "malformed %S@." str
   | `Protocol_error (err, s) ->
-    Format.eprintf "wut %a %s@." H2.Error_code.pp_hum err s
+    Format.eprintf "wut %a %S@." H2.Error_code.pp_hum err s);
+  Eio.Promise.resolve u ()
 
-let () =
+let[@ocaml.alert "-deprecated"] () =
   Ssl_threads.init ();
   Ssl.init ~thread_safe:true ();
   let host = ref None in
