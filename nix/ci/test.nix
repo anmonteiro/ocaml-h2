@@ -52,7 +52,7 @@ stdenv.mkDerivation {
     mkdir h2-tests
 
     chmod u+w -R testdir-*
-    mv -n testdir-*/* h2-tests
+    mv --backup=numbered testdir-*/* h2-tests
   '';
   dontBuild = true;
   installPhase = ''
