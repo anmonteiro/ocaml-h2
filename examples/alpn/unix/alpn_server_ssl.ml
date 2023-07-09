@@ -44,7 +44,9 @@ let start_https_server () =
               let server_ctx =
                 Ssl.create_context Ssl.TLSv1_3 Ssl.Server_context
               in
-              Ssl.disable_protocols server_ctx [ Ssl.SSLv23; Ssl.TLSv1_1 ];
+              Ssl.disable_protocols
+                server_ctx
+                ([ Ssl.SSLv23; Ssl.TLSv1_1 ] [@ocaml.alert "-deprecated"]);
               Ssl.use_certificate server_ctx cert priv_key;
               let protos = [ "h2"; "http/1.1" ] in
               Ssl.set_context_alpn_protos server_ctx protos;
