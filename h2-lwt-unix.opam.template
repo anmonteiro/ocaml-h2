@@ -1,0 +1,4 @@
+pin-depends: [
+  ["gluten-lwt-unix.dev" "git+https://github.com/tmcgilchrist/gluten#cd40c33d41b23a1dce3034ed06593bb8b390c2ae"]
+  ["gluten.dev" "git+https://github.com/tmcgilchrist/gluten#cd40c33d41b23a1dce3034ed06593bb8b390c2ae"]
+]
