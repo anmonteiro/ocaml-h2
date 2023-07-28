@@ -38,13 +38,13 @@ module Writer = Serialize.Writer
 module StreamsTbl = Scheduler.StreamsTbl
 
 module Scheduler = Scheduler.Make (struct
-  include Stream
+    include Stream
 
-  type t = Respd.t
+    type t = Respd.t
 
-  let flush_write_body = Respd.flush_request_body
-  let requires_output = Respd.requires_output
-end)
+    let flush_write_body = Respd.flush_request_body
+    let requires_output = Respd.requires_output
+  end)
 
 module Queue = struct
   include Queue

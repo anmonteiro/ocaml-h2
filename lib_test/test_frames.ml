@@ -11,16 +11,15 @@ let success_fixtures, error_fixtures =
   |> List.map (fun dir -> dir, Filename.concat fixtures_dir dir)
   |> List.filter (fun (_, dir) -> Sys.is_directory dir)
   |> List.map (fun (dir, fullpath) ->
-         let files_in_dir =
-           fullpath
-           |> Sys.readdir
-           |> Array.to_list
-           |> List.map (fun file -> Filename.concat fullpath file)
-           |> List.filter (fun file ->
-                  (not (Sys.is_directory file))
-                  && Filename.extension file = ".json")
-         in
-         dir, files_in_dir)
+      let files_in_dir =
+        fullpath
+        |> Sys.readdir
+        |> Array.to_list
+        |> List.map (fun file -> Filename.concat fullpath file)
+        |> List.filter (fun file ->
+            (not (Sys.is_directory file)) && Filename.extension file = ".json")
+      in
+      dir, files_in_dir)
   |> List.partition (fun (dir, _) -> dir <> "error")
 
 module P = struct

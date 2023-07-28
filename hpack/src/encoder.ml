@@ -33,18 +33,18 @@
 open Types
 
 module IntSet = Set.Make (struct
-  type t = int
+    type t = int
 
-  let compare = compare
-end)
+    let compare = compare
+  end)
 
 module HeaderFieldsTbl = struct
   include Hashtbl.Make (struct
-    type t = string
+      type t = string
 
-    let equal = String.equal
-    let hash s = Hashtbl.hash s
-  end)
+      let equal = String.equal
+      let hash s = Hashtbl.hash s
+    end)
 
   let[@inline] find_opt h key = try Some (find h key) with Not_found -> None
 end

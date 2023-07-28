@@ -423,17 +423,17 @@ let parse_unknown_frame typ { Frame.payload_length; _ } =
 
 let parse_frame_payload ({ Frame.frame_type; _ } as frame_header) =
   (match frame_type with
-  | Frame.FrameType.Data -> parse_data_frame frame_header
-  | Headers -> parse_headers_frame frame_header
-  | Priority -> parse_priority_frame frame_header
-  | RSTStream -> parse_rst_stream_frame frame_header
-  | Settings -> parse_settings_frame frame_header
-  | PushPromise -> parse_push_promise_frame frame_header
-  | Ping -> parse_ping_frame frame_header
-  | GoAway -> parse_go_away_frame frame_header
-  | WindowUpdate -> parse_window_update_frame frame_header
-  | Continuation -> parse_continuation_frame frame_header
-  | Unknown typ -> parse_unknown_frame typ frame_header)
+    | Frame.FrameType.Data -> parse_data_frame frame_header
+    | Headers -> parse_headers_frame frame_header
+    | Priority -> parse_priority_frame frame_header
+    | RSTStream -> parse_rst_stream_frame frame_header
+    | Settings -> parse_settings_frame frame_header
+    | PushPromise -> parse_push_promise_frame frame_header
+    | Ping -> parse_ping_frame frame_header
+    | GoAway -> parse_go_away_frame frame_header
+    | WindowUpdate -> parse_window_update_frame frame_header
+    | Continuation -> parse_continuation_frame frame_header
+    | Unknown typ -> parse_unknown_frame typ frame_header)
   <?> "frame_payload"
 
 let parse_frame parse_context =

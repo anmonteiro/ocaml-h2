@@ -5,11 +5,11 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1687709756,
-        "narHash": "sha256-Y5wKlQSkgEK2weWdOu4J3riRd+kV/VCgHsqLNTTWQ/0=",
+        "lastModified": 1689068808,
+        "narHash": "sha256-6ixXo3wt24N/melDWjq70UuHQLxGV8jZvooRanIHXw0=",
         "owner": "numtide",
         "repo": "flake-utils",
-        "rev": "dbabf0ca0c0c4bce6ea5eaf65af5cb694d2082c7",
+        "rev": "919d646de7be200f3bf08cb76ae1f09402b6f9b4",
         "type": "github"
       },
       "original": {
@@ -41,33 +41,32 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1688874406,
-        "narHash": "sha256-D+cbqCLZ7bOlSbf+lshMuBwQ5uXcp8IG/4tAfA32KjY=",
+        "lastModified": 1690583207,
+        "narHash": "sha256-Zajw93MQl4p0zk7wGxQpDcNOS2qXB+RgznhjMrLxyYY=",
         "owner": "anmonteiro",
         "repo": "nix-overlays",
-        "rev": "7f1558c4fef22bd20cbe636d9f86942281bf24f2",
+        "rev": "69927e2d1c73dd5a87fee672d6f0975366c5bd81",
         "type": "github"
       },
       "original": {
         "owner": "anmonteiro",
-        "ref": "anmonteiro/update-gluten-piaf",
         "repo": "nix-overlays",
         "type": "github"
       }
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1688784496,
-        "narHash": "sha256-s/EWMtzAJhS0gicB3epoKpAEooRdcZwsS24yqOQsX4s=",
+        "lastModified": 1690538549,
+        "narHash": "sha256-FfScFHxidupVGPw9BrQOHz/SoFLRjoNmVC5ymS+g8xU=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "038752b14eab3aa316537ae67d7c470b37e27fa3",
+        "rev": "de5ca86149b0c4ff8bf69782cd25896fff0254e1",
         "type": "github"
       },
       "original": {
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "038752b14eab3aa316537ae67d7c470b37e27fa3",
+        "rev": "de5ca86149b0c4ff8bf69782cd25896fff0254e1",
         "type": "github"
       }
     },

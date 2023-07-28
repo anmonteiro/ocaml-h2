@@ -208,17 +208,16 @@ let read_fixtures fixtures_dir =
   |> List.map (fun dir -> dir, Filename.concat fixtures_dir dir)
   (* don't need to decode raw-data, it's already in ocaml-hpack. *)
   |> List.filter (fun (dir, fullpath) ->
-         Sys.is_directory fullpath && dir <> "raw-data")
+      Sys.is_directory fullpath && dir <> "raw-data")
   |> List.map (fun (dir, fullpath) ->
-         let files_in_dir =
-           fullpath
-           |> files_in_dir
-           |> List.map (fun file -> Filename.concat fullpath file)
-           |> List.filter (fun file ->
-                  (not (Sys.is_directory file))
-                  && Filename.extension file = ".json")
-         in
-         dir, files_in_dir)
+      let files_in_dir =
+        fullpath
+        |> files_in_dir
+        |> List.map (fun file -> Filename.concat fullpath file)
+        |> List.filter (fun file ->
+            (not (Sys.is_directory file)) && Filename.extension file = ".json")
+      in
+      dir, files_in_dir)
 
 let test_evicting_table_size_0 () =
   let hs =

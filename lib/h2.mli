@@ -216,7 +216,7 @@ module Headers : sig
       hold:
 
       - [to_list (of_list lst) = lst]
-      - [get (of_list \[("k", "v1"); ("k", "v2")\]) "k" = Some "v2"]. *)
+      - [get (of_list [("k", "v1"); ("k", "v2")]) "k" = Some "v2"]. *)
 
   val of_rev_list : (name * value) list -> t
   (** [of_list assoc] is a collection of header fields defined by the
@@ -225,7 +225,7 @@ module Headers : sig
       following equations should hold:
 
       - [to_list (of_rev_list lst) = List.rev lst]
-      - [get (of_rev_list \[("k", "v1"); ("k", "v2")\]) "k" = Some "v1"]. *)
+      - [get (of_rev_list [("k", "v1"); ("k", "v2")]) "k" = Some "v1"]. *)
 
   val to_list : t -> (name * value) list
   (** [to_list t] is the association list of header fields contained in [t] in
