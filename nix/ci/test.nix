@@ -20,7 +20,11 @@ let
   pkgs = import "${src}" {
     extraOverlays = [
       (self: super: {
-        ocamlPackages = super.ocaml-ng."ocamlPackages_${ocamlVersion}";
+        ocamlPackages = super.ocaml-ng."ocamlPackages_${ocamlVersion}".overrideScope' (oself: osuper: {
+          gluten-lwt-unix = osuper.gluten-lwt-unix.overrideAttrs (o: {
+            propagatedBuildInputs = o.propagatedBuildInputs ++ [ oself.tls-lwt ];
+          });
+        });
       })
     ];
   };
@@ -60,12 +64,16 @@ stdenv.mkDerivation {
   '';
   buildInputs =
     (lib.attrValues h2Drvs) ++
-    (with ocamlPackages; [ ocaml dune findlib ocamlformat ]) ++
+    (with ocamlPackages; [ ocaml dune findlib ocamlformat httpaf-lwt-unix ]) ++
     (with pkgs; [ lsof h2spec ]);
+  checkInputs = with ocamlPackages; [ alcotest hex yojson ];
   doCheck = true;
   checkPhase = ''
     # Check code is formatted with OCamlformat
     dune build --root=. @fmt
+
+    # Build the examples
+    dune build @all --display=short
 
     dune build --root=. --display=short @spec/all
     dune exec --display=short spec/lwt_h2spec.exe &
