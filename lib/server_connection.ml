@@ -37,13 +37,13 @@ module Reader = Parse.Reader
 module Writer = Serialize.Writer
 
 module Scheduler = Scheduler.Make (struct
-  include Stream
+    include Stream
 
-  type t = Reqd.t
+    type t = Reqd.t
 
-  let flush_write_body = Reqd.flush_response_body
-  let requires_output = Reqd.requires_output
-end)
+    let flush_write_body = Reqd.flush_response_body
+    let requires_output = Reqd.requires_output
+  end)
 
 type request_handler = Reqd.t -> unit
 

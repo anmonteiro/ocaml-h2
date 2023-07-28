@@ -656,7 +656,7 @@ module Server_connection_tests = struct
         Frame.FrameType.(List.map serialize [ Headers; Headers; Data ])
         (frames
         |> List.map (fun { Frame.frame_header; _ } ->
-               Frame.(frame_header.frame_type |> FrameType.serialize)));
+            Frame.(frame_header.frame_type |> FrameType.serialize)));
       let data_frame = List.nth frames 2 in
       Alcotest.(check int32)
         "The emitted DATA frame belongs to stream 1"
@@ -671,7 +671,7 @@ module Server_connection_tests = struct
           Frame.FrameType.[ serialize Data ]
           (frames
           |> List.map (fun { Frame.frame_header; _ } ->
-                 Frame.(frame_header.frame_type |> FrameType.serialize)));
+              Frame.(frame_header.frame_type |> FrameType.serialize)));
         let data_frame = List.hd frames in
         Alcotest.(check int32)
           "The emitted DATA frame belongs to stream 3"

@@ -52,7 +52,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
               set_interval 1 (fun () ->
                   ignore
                   @@ Reqd.try_with request_descriptor (fun () ->
-                         Body.Writer.write_string response_body " data");
+                      Body.Writer.write_string response_body " data");
                   Body.Writer.flush response_body (fun () ->
                       Body.Writer.close response_body))
             | "/bigstring" ->
