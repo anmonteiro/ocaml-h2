@@ -1,7 +1,7 @@
 (executable
  (name alpn_server_tls)
  (modules alpn_server_tls)
- (libraries tls lwt lwt.unix alpn_lib))
+ (libraries tls tls-lwt lwt lwt.unix alpn_lib))
 
 (executable
  (name alpn_server_ssl)
