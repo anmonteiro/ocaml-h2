@@ -410,8 +410,8 @@ module Writer = struct
       in
       ignore
         (Faraday.serialize faraday (fun iovecs ->
-             write_frame t.encoder frame_info ~len:headers_block_len iovecs;
-             `Ok headers_block_len));
+           write_frame t.encoder frame_info ~len:headers_block_len iovecs;
+           `Ok headers_block_len));
       let rec loop remaining =
         if max_frame_payload < remaining
         then (
@@ -426,12 +426,12 @@ module Writer = struct
           let frame_info = { frame_info with flags = Flags.default_flags } in
           ignore
             (Faraday.serialize faraday (fun iovecs ->
-                 write_continuation_frame
-                   t.encoder
-                   frame_info
-                   ~len:max_frame_payload
-                   iovecs;
-                 `Ok max_frame_payload));
+               write_continuation_frame
+                 t.encoder
+                 frame_info
+                 ~len:max_frame_payload
+                 iovecs;
+               `Ok max_frame_payload));
           loop (remaining - max_frame_payload))
         else
           let frame_info =
@@ -439,12 +439,12 @@ module Writer = struct
           in
           ignore
             (Faraday.serialize faraday (fun iovecs ->
-                 write_continuation_frame
-                   t.encoder
-                   frame_info
-                   ~len:remaining
-                   iovecs;
-                 `Ok remaining))
+               write_continuation_frame
+                 t.encoder
+                 frame_info
+                 ~len:remaining
+                 iovecs;
+               `Ok remaining))
       in
       loop (block_size - headers_block_len))
     else
@@ -453,9 +453,9 @@ module Writer = struct
       in
       ignore
         (Faraday.serialize faraday (fun iovecs ->
-             let len = IOVec.lengthv iovecs in
-             write_frame t.encoder frame_info ~len iovecs;
-             `Ok len))
+           let len = IOVec.lengthv iovecs in
+           write_frame t.encoder frame_info ~len iovecs;
+           `Ok len))
 
   let encode_headers hpack_encoder faraday headers =
     List.iter
@@ -553,12 +553,12 @@ module Writer = struct
     then
       let writer t ~len ~iovecs = bounded_schedule_iovecs t ~len iovecs in
       chunk_data_frames frame_info len ~f:(fun ~off ~len frame_info ->
-          write_frame_with_padding
-            t.encoder
-            frame_info
-            Data
-            len
-            (writer ~iovecs:(IOVec.shiftv iovecs off) ~len))
+        write_frame_with_padding
+          t.encoder
+          frame_info
+          Data
+          len
+          (writer ~iovecs:(IOVec.shiftv iovecs off) ~len))
 
   let write_priority t frame_info priority =
     if not (is_closed t.encoder)

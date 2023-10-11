@@ -204,8 +204,8 @@ module Make (Streamd : StreamDescriptor) = struct
         stream.children <-
           PriorityQueue.fold
             (fun k (Stream p as p_node) pq ->
-              p.parent <- Parent stream_node;
-              PriorityQueue.add k p_node pq)
+               p.parent <- Parent stream_node;
+               PriorityQueue.add k p_node pq)
             stream.children
             new_children;
         (* From RFC7540§5.3.1:
@@ -494,17 +494,17 @@ module Make (Streamd : StreamDescriptor) = struct
     ignore (schedule t);
     StreamsTbl.iter
       (fun id closed ->
-        (* When a stream completes, i.e. doesn't require more output and
-         * enters the `Closed` state, we set a TTL value which represents the
-         * number of writer yields that the stream has before it is removed
-         * from the connection Hash Table. By doing this we avoid losing some
-         * potentially useful information regarding the stream's state at the
-         * cost of keeping it around for a little while longer. *)
-        if closed.Stream.ttl = 0
-        then (
-          StreamsTbl.remove root.marked_for_removal id;
-          StreamsTbl.remove root.all_streams id)
-        else closed.ttl <- closed.ttl - 1)
+         (* When a stream completes, i.e. doesn't require more output and
+          * enters the `Closed` state, we set a TTL value which represents the
+          * number of writer yields that the stream has before it is removed
+          * from the connection Hash Table. By doing this we avoid losing some
+          * potentially useful information regarding the stream's state at the
+          * cost of keeping it around for a little while longer. *)
+         if closed.Stream.ttl = 0
+         then (
+           StreamsTbl.remove root.marked_for_removal id;
+           StreamsTbl.remove root.all_streams id)
+         else closed.ttl <- closed.ttl - 1)
       root.marked_for_removal
 
   (* XXX(anmonteiro): Consider using `optint` for this?

@@ -39,10 +39,10 @@ module type Client = H2_lwt_intf.Client
    to [Lwt_io.establish_server_with_client_socket]. *)
 module Server (Server_runtime : Gluten_lwt.Server) :
   Server
-    with type socket = Server_runtime.socket
-     and type addr := Server_runtime.addr
+  with type socket = Server_runtime.socket
+   and type addr := Server_runtime.addr
 
 module Client (Client_runtime : Gluten_lwt.Client) :
   Client
-    with type socket = Client_runtime.socket
-     and type runtime = Client_runtime.t
+  with type socket = Client_runtime.socket
+   and type runtime = Client_runtime.t

@@ -79,12 +79,12 @@ let decode_string =
   decode_int h 7 >>= fun string_length ->
   lift
     (fun string_data ->
-      (* From RFC7541§5.2:
-       *   A one-bit flag, H, indicating whether or not the octets of the
-       *   string are Huffman encoded. *)
-      if h land 0b1000_0000 == 0
-      then Ok string_data
-      else Huffman.decode string_data)
+       (* From RFC7541§5.2:
+        *   A one-bit flag, H, indicating whether or not the octets of the
+        *   string are Huffman encoded. *)
+       if h land 0b1000_0000 == 0
+       then Ok string_data
+       else Huffman.decode string_data)
     (take string_length)
 
 let get_indexed_field table index =
@@ -117,9 +117,9 @@ let decode_header_field table prefix prefix_length =
   decode_int prefix prefix_length >>= fun index ->
   lift2
     (fun name value ->
-      match name, value with
-      | Ok name, Ok value -> Ok (name, value)
-      | Error e, _ | _, Error e -> Error e)
+       match name, value with
+       | Ok name, Ok value -> Ok (name, value)
+       | Error e, _ | _, Error e -> Error e)
     (* From RFC7541§6.2.1:
      *   If the header field name matches the header field name of an entry
      *   stored in the static table or the dynamic table, the header field

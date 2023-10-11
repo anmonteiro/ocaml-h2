@@ -108,13 +108,13 @@ let mk_encode_table encode_table =
   let items =
     Array.fold_left
       (fun acc (code, length) ->
-        let tup =
-          Exp.tuple
-            [ Exp.constant (Pconst_integer (string_of_int code, None))
-            ; Exp.constant (Pconst_integer (string_of_int length, None))
-            ]
-        in
-        tup :: acc)
+         let tup =
+           Exp.tuple
+             [ Exp.constant (Pconst_integer (string_of_int code, None))
+             ; Exp.constant (Pconst_integer (string_of_int length, None))
+             ]
+         in
+         tup :: acc)
       []
       encode_table
   in

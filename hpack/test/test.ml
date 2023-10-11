@@ -11,25 +11,25 @@ let parse_file file =
   let cases =
     List.map
       (fun case ->
-        let header_table_size =
-          match Json.(case |> member "header_table_size" |> to_int_option) with
-          | Some size -> size
-          | None -> 4096
-        in
-        let wire =
-          match Json.(case |> member "wire" |> to_string_option) with
-          | Some hex -> Hex.to_string (`Hex hex)
-          | None -> ""
-        in
-        let headers =
-          List.map
-            (function
-              | `Assoc [ (name, `String value) ] ->
-                { Hpack.name; value; sensitive = false }
-              | _ -> assert false)
-            Json.(case |> member "headers" |> to_list)
-        in
-        header_table_size, wire, headers)
+         let header_table_size =
+           match Json.(case |> member "header_table_size" |> to_int_option) with
+           | Some size -> size
+           | None -> 4096
+         in
+         let wire =
+           match Json.(case |> member "wire" |> to_string_option) with
+           | Some hex -> Hex.to_string (`Hex hex)
+           | None -> ""
+         in
+         let headers =
+           List.map
+             (function
+                | `Assoc [ (name, `String value) ] ->
+                  { Hpack.name; value; sensitive = false }
+                | _ -> assert false)
+             Json.(case |> member "headers" |> to_list)
+         in
+         header_table_size, wire, headers)
       Json.(json |> member "cases" |> to_list)
   in
   description, cases
@@ -46,8 +46,8 @@ let encode cases =
   let encoder = Hpack.Encoder.create 4096 in
   List.mapi
     (fun seq (_nosize, _nowire, headers) ->
-      let wire = encode_headers encoder headers in
-      seq, hex_of_string wire, headers)
+       let wire = encode_headers encoder headers in
+       seq, hex_of_string wire, headers)
     cases
 
 let encode_file fixtures_dir (story, file) =
@@ -136,50 +136,53 @@ let decode cases =
   let decoder2 = Decoder.create 65536 in
   List.iter
     (fun (size, wire, headers) ->
-      Encoder.set_capacity encoder size;
-      let decoded_headers = decode_headers decoder1 size wire in
-      Alcotest.(check int)
-        "same length"
-        (List.length headers)
-        (List.length decoded_headers);
-      List.iter2
-        (fun h1 h2 ->
-          Alcotest.(check header_testable "Headers are decoded correctly" h1 h2))
-        headers
-        decoded_headers;
-      (* roundtripping *)
-      let encoded = encode_headers encoder decoded_headers in
-      let decoded_headers' = decode_headers decoder2 size encoded in
-      Alcotest.(check int)
-        "same length"
-        (List.length headers)
-        (List.length decoded_headers);
-      List.iter2
-        (fun h1 h2 ->
-          Alcotest.(check header_testable "Headers are decoded correctly" h1 h2))
-        decoded_headers'
-        decoded_headers;
-      (* Now check that the `encoded_again` payload is smaller than the `encoded`
-       * payload. Indexing has happened! *)
-      let enc', dec' =
-        Array.fold_left
-          (fun (_, decoded_headers) _ ->
-            let encoded_again = encode_headers encoder decoded_headers in
-            let decoded_again = decode_headers decoder2 size encoded_again in
-            encoded_again, decoded_again)
-          ("", decoded_headers')
-          (Array.make 5 0)
-      in
-      Alcotest.(check bool)
-        "encoded_again payload is smaller or equal than encoded"
-        true
-        (String.length enc' <= String.length encoded);
-      (* And check roundtripping again for good measure. *)
-      List.iter2
-        (fun h1 h2 ->
-          Alcotest.(check header_testable "Headers are decoded correctly" h1 h2))
-        dec'
-        headers)
+       Encoder.set_capacity encoder size;
+       let decoded_headers = decode_headers decoder1 size wire in
+       Alcotest.(check int)
+         "same length"
+         (List.length headers)
+         (List.length decoded_headers);
+       List.iter2
+         (fun h1 h2 ->
+            Alcotest.(
+              check header_testable "Headers are decoded correctly" h1 h2))
+         headers
+         decoded_headers;
+       (* roundtripping *)
+       let encoded = encode_headers encoder decoded_headers in
+       let decoded_headers' = decode_headers decoder2 size encoded in
+       Alcotest.(check int)
+         "same length"
+         (List.length headers)
+         (List.length decoded_headers);
+       List.iter2
+         (fun h1 h2 ->
+            Alcotest.(
+              check header_testable "Headers are decoded correctly" h1 h2))
+         decoded_headers'
+         decoded_headers;
+       (* Now check that the `encoded_again` payload is smaller than the `encoded`
+        * payload. Indexing has happened! *)
+       let enc', dec' =
+         Array.fold_left
+           (fun (_, decoded_headers) _ ->
+              let encoded_again = encode_headers encoder decoded_headers in
+              let decoded_again = decode_headers decoder2 size encoded_again in
+              encoded_again, decoded_again)
+           ("", decoded_headers')
+           (Array.make 5 0)
+       in
+       Alcotest.(check bool)
+         "encoded_again payload is smaller or equal than encoded"
+         true
+         (String.length enc' <= String.length encoded);
+       (* And check roundtripping again for good measure. *)
+       List.iter2
+         (fun h1 h2 ->
+            Alcotest.(
+              check header_testable "Headers are decoded correctly" h1 h2))
+         dec'
+         headers)
     cases
 
 let rec take_n acc i ys =
@@ -196,8 +199,8 @@ let gen_suites fixtures =
   in
   List.map
     (fun (suite_name, files) ->
-      let suite = List.map gen_suite files in
-      suite_name, suite)
+       let suite = List.map gen_suite files in
+       suite_name, suite)
     fixtures
 
 let files_in_dir dir = dir |> Sys.readdir |> Array.to_list
@@ -208,16 +211,16 @@ let read_fixtures fixtures_dir =
   |> List.map (fun dir -> dir, Filename.concat fixtures_dir dir)
   (* don't need to decode raw-data, it's already in ocaml-hpack. *)
   |> List.filter (fun (dir, fullpath) ->
-      Sys.is_directory fullpath && dir <> "raw-data")
+    Sys.is_directory fullpath && dir <> "raw-data")
   |> List.map (fun (dir, fullpath) ->
-      let files_in_dir =
-        fullpath
-        |> files_in_dir
-        |> List.map (fun file -> Filename.concat fullpath file)
-        |> List.filter (fun file ->
-            (not (Sys.is_directory file)) && Filename.extension file = ".json")
-      in
-      dir, files_in_dir)
+    let files_in_dir =
+      fullpath
+      |> files_in_dir
+      |> List.map (fun file -> Filename.concat fullpath file)
+      |> List.filter (fun file ->
+        (not (Sys.is_directory file)) && Filename.extension file = ".json")
+    in
+    dir, files_in_dir)
 
 let test_evicting_table_size_0 () =
   let hs =
@@ -244,7 +247,7 @@ let test_evicting_table_size_0 () =
   let decoded_headers = decode_headers decoder 4096 wire in
   List.iter2
     (fun h1 h2 ->
-      Alcotest.(check header_testable "Decoded headers are roundtripped" h1 h2))
+       Alcotest.(check header_testable "Decoded headers are roundtripped" h1 h2))
     hs
     decoded_headers
 
@@ -268,7 +271,7 @@ let test_evicting_table_size_0_followup () =
   let decoded_headers = decode_headers decoder 60 encoded_headers in
   List.iter2
     (fun h1 h2 ->
-      Alcotest.(check header_testable "Decoded headers are roundtripped" h1 h2))
+       Alcotest.(check header_testable "Decoded headers are roundtripped" h1 h2))
     hs
     decoded_headers
 
@@ -288,7 +291,7 @@ let test_end_of_table () =
   let decoded_headers = decode_headers decoder 60 encoded_headers in
   List.iter2
     (fun h1 h2 ->
-      Alcotest.(check header_testable "Decoded headers are roundtripped" h1 h2))
+       Alcotest.(check header_testable "Decoded headers are roundtripped" h1 h2))
     hs
     decoded_headers
 

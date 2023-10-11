@@ -13,19 +13,19 @@ module Dispatch (C : Mirage_console.S) (Http2 : HTTP2) = struct
     let { Request.target; _ } = Reqd.request reqd in
     Lwt.catch
       (fun () ->
-        get_content c target >|= fun body ->
-        let response =
-          Response.create
-            ~headers:
-              (Headers.of_list
-                 [ "content-length", body |> String.length |> string_of_int ])
-            `OK
-        in
-        Reqd.respond_with_string reqd response body)
+         get_content c target >|= fun body ->
+         let response =
+           Response.create
+             ~headers:
+               (Headers.of_list
+                  [ "content-length", body |> String.length |> string_of_int ])
+             `OK
+         in
+         Reqd.respond_with_string reqd response body)
       (fun exn ->
-        let response = Response.create `Internal_server_error in
-        Lwt.return
-          (Reqd.respond_with_string reqd response (Printexc.to_string exn)))
+         let response = Response.create `Internal_server_error in
+         Lwt.return
+           (Reqd.respond_with_string reqd response (Printexc.to_string exn)))
     |> ignore
 
   let serve c dispatch =
@@ -33,7 +33,7 @@ module Dispatch (C : Mirage_console.S) (Http2 : HTTP2) = struct
       let response_body = mk_response Headers.empty in
       Body.Writer.write_string response_body "Error handled";
       Body.Writer.flush response_body (fun () ->
-          Body.Writer.close response_body)
+        Body.Writer.close response_body)
     in
     Http2.create_connection_handler
       ?config:None

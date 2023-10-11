@@ -348,10 +348,10 @@ let to_string t =
   let b = Buffer.create 128 in
   List.iter
     (fun (name, value) ->
-      Buffer.add_string b name;
-      Buffer.add_string b ": ";
-      Buffer.add_string b value;
-      Buffer.add_string b "\r\n")
+       Buffer.add_string b name;
+       Buffer.add_string b ": ";
+       Buffer.add_string b value;
+       Buffer.add_string b "\r\n")
     (to_list t);
   Buffer.add_string b "\r\n";
   Buffer.contents b

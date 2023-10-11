@@ -133,9 +133,9 @@ let report_error t = function
       if error <> Error_code.NoError
       then t.error_handler (`Protocol_error (error, data));
       Writer.flush t.writer (fun () ->
-          (* XXX: We need to allow lower numbered streams to complete before
-           * shutting down. *)
-          shutdown_rw t);
+        (* XXX: We need to allow lower numbered streams to complete before
+         * shutting down. *)
+        shutdown_rw t);
       Writer.wakeup t.writer)
   | StreamError (stream_id, error) ->
     (match Scheduler.find t.streams stream_id with
@@ -843,66 +843,66 @@ let process_settings_frame t { Frame.frame_header; _ } settings =
       let new_settings =
         List.fold_left
           (fun (acc : Settings.t) item ->
-            match item with
-            | Settings.HeaderTableSize x ->
-              (* From RFC7540§6.5.2:
-               *   Allows the sender to inform the remote endpoint of the maximum
-               *   size of the header compression table used to decode header
-               *   blocks, in octets. *)
-              Hpack.Encoder.set_capacity t.hpack_encoder x;
-              { acc with header_table_size = x }
-            | EnablePush x ->
-              (* We've already verified that this setting is either 0 or 1 in the
-               * call to `Settings.check_settings_list` above. *)
-              { acc with enable_push = x = 1 }
-            | MaxConcurrentStreams x -> { acc with max_concurrent_streams = x }
-            | InitialWindowSize new_val ->
-              (* From RFC7540§6.9.2:
-               *   In addition to changing the flow-control window for streams
-               *   that are not yet active,  a SETTINGS frame can alter the
-               *   initial flow-control window size for streams with active
-               *   flow-control windows (that is, streams in the "open" or
-               *   "half-closed (remote)" state). When the value of
-               *   SETTINGS_INITIAL_WINDOW_SIZE changes, a receiver MUST adjust
-               *   the size of all stream flow-control windows that it
-               *   maintains by the difference between the new value and the
-               *   old value.
-               *
-               *   [...] A SETTINGS frame cannot alter the connection
-               *   flow-control window. *)
-              let old_val = t.settings.initial_window_size in
-              let growth = Int32.sub new_val old_val in
-              let exception Local in
-              (match
-                 Scheduler.iter
-                   ~f:(fun stream ->
-                     (* From RFC7540§6.9.2:
-                      *   An endpoint MUST treat a change to
-                      *   SETTINGS_INITIAL_WINDOW_SIZE that causes any
-                      *   flow-control window to exceed the maximum size as a
-                      *   connection error (Section 5.4.1) of type
-                      *   FLOW_CONTROL_ERROR. *)
-                     if not (Scheduler.add_flow stream growth) then raise Local)
-                   t.streams
-               with
-              | () -> ()
-              | exception Local ->
-                report_connection_error
-                  t
-                  ~reason:
-                    (Format.sprintf
-                       "Window size for stream would exceed %ld"
-                       Settings.WindowSize.max_window_size)
-                  Error_code.FlowControlError);
-              { acc with initial_window_size = new_val }
-            | MaxFrameSize x ->
-              Scheduler.iter
-                ~f:(fun (Stream { descriptor; _ }) ->
-                  if Respd.requires_output descriptor
-                  then descriptor.max_frame_size <- x)
-                t.streams;
-              { acc with max_frame_size = x }
-            | MaxHeaderListSize x -> { acc with max_header_list_size = Some x })
+             match item with
+             | Settings.HeaderTableSize x ->
+               (* From RFC7540§6.5.2:
+                *   Allows the sender to inform the remote endpoint of the maximum
+                *   size of the header compression table used to decode header
+                *   blocks, in octets. *)
+               Hpack.Encoder.set_capacity t.hpack_encoder x;
+               { acc with header_table_size = x }
+             | EnablePush x ->
+               (* We've already verified that this setting is either 0 or 1 in the
+                * call to `Settings.check_settings_list` above. *)
+               { acc with enable_push = x = 1 }
+             | MaxConcurrentStreams x -> { acc with max_concurrent_streams = x }
+             | InitialWindowSize new_val ->
+               (* From RFC7540§6.9.2:
+                *   In addition to changing the flow-control window for streams
+                *   that are not yet active,  a SETTINGS frame can alter the
+                *   initial flow-control window size for streams with active
+                *   flow-control windows (that is, streams in the "open" or
+                *   "half-closed (remote)" state). When the value of
+                *   SETTINGS_INITIAL_WINDOW_SIZE changes, a receiver MUST adjust
+                *   the size of all stream flow-control windows that it
+                *   maintains by the difference between the new value and the
+                *   old value.
+                *
+                *   [...] A SETTINGS frame cannot alter the connection
+                *   flow-control window. *)
+               let old_val = t.settings.initial_window_size in
+               let growth = Int32.sub new_val old_val in
+               let exception Local in
+               (match
+                  Scheduler.iter
+                    ~f:(fun stream ->
+                      (* From RFC7540§6.9.2:
+                       *   An endpoint MUST treat a change to
+                       *   SETTINGS_INITIAL_WINDOW_SIZE that causes any
+                       *   flow-control window to exceed the maximum size as a
+                       *   connection error (Section 5.4.1) of type
+                       *   FLOW_CONTROL_ERROR. *)
+                      if not (Scheduler.add_flow stream growth) then raise Local)
+                    t.streams
+                with
+               | () -> ()
+               | exception Local ->
+                 report_connection_error
+                   t
+                   ~reason:
+                     (Format.sprintf
+                        "Window size for stream would exceed %ld"
+                        Settings.WindowSize.max_window_size)
+                   Error_code.FlowControlError);
+               { acc with initial_window_size = new_val }
+             | MaxFrameSize x ->
+               Scheduler.iter
+                 ~f:(fun (Stream { descriptor; _ }) ->
+                   if Respd.requires_output descriptor
+                   then descriptor.max_frame_size <- x)
+                 t.streams;
+               { acc with max_frame_size = x }
+             | MaxHeaderListSize x -> { acc with max_header_list_size = Some x })
           t.settings
           settings
       in

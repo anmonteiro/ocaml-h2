@@ -213,7 +213,7 @@ let unsafe_respond_with_data (t : t) response data =
      *   are possible: The endpoint can send a HEADERS frame. This causes the
      *   stream to open in a "half-closed (remote)" state. *)
     Writer.flush t.writer (fun () ->
-        t.state <- Active (HalfClosed request_info, stream))
+      t.state <- Active (HalfClosed request_info, stream))
   | Closed _ -> assert false
 
 let respond_with_string (t : t) response str =
@@ -266,7 +266,7 @@ let unsafe_respond_with_streaming (t : t) ~flush_headers_immediately response =
      *   are possible: The endpoint can send a HEADERS frame. This causes the
      *   stream to open in a "half-closed (remote)" state. *)
     Writer.flush t.writer (fun () ->
-        t.state <- Active (HalfClosed request_info, stream));
+      t.state <- Active (HalfClosed request_info, stream));
     response_body
   | Closed _ -> assert false
 
@@ -345,8 +345,8 @@ let _report_error ?request (t : t) s (error : error) error_code =
       | #Status.standard as status -> status
     in
     t.error_handler ?request error (fun headers ->
-        let response = Response.create ~headers status in
-        unsafe_respond_with_streaming ~flush_headers_immediately:true t response)
+      let response = Response.create ~headers status in
+      unsafe_respond_with_streaming ~flush_headers_immediately:true t response)
   | Streaming { response_body; _ }, No_error ->
     Body.Writer.close response_body;
     t.error_code <- Stream.error_to_code error error_code;

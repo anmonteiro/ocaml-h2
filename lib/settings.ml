@@ -196,20 +196,20 @@ let parse_settings_payload num_settings =
     else
       lift2
         (fun k (v : int32) ->
-          match k with
-          | 0x1 -> HeaderTableSize (Int32.to_int v) :: acc
-          | 0x2 -> EnablePush (Int32.to_int v) :: acc
-          | 0x3 -> MaxConcurrentStreams v :: acc
-          | 0x4 -> InitialWindowSize v :: acc
-          | 0x5 -> MaxFrameSize (Int32.to_int v) :: acc
-          | 0x6 -> MaxHeaderListSize (Int32.to_int v) :: acc
-          | _ ->
-            (* Note: This ignores unknown settings.
-             *
-             * From RFC7540§6.5.3:
-             *   Unsupported parameters MUST be ignored.
-             *)
-            acc)
+           match k with
+           | 0x1 -> HeaderTableSize (Int32.to_int v) :: acc
+           | 0x2 -> EnablePush (Int32.to_int v) :: acc
+           | 0x3 -> MaxConcurrentStreams v :: acc
+           | 0x4 -> InitialWindowSize v :: acc
+           | 0x5 -> MaxFrameSize (Int32.to_int v) :: acc
+           | 0x6 -> MaxHeaderListSize (Int32.to_int v) :: acc
+           | _ ->
+             (* Note: This ignores unknown settings.
+              *
+              * From RFC7540§6.5.3:
+              *   Unsupported parameters MUST be ignored.
+              *)
+             acc)
         BE.any_uint16
         BE.any_int32
       >>= fun acc' -> parse_inner acc' (remaining - 1)
@@ -220,31 +220,31 @@ let write_settings_payload t settings_list =
   let open Faraday in
   List.iter
     (fun setting ->
-      (* From RFC7540§6.5.1:
-       *   The payload of a SETTINGS frame consists of zero or more parameters,
-       *   each consisting of an unsigned 16-bit setting identifier and an
-       *   unsigned 32-bit value. *)
-      BE.write_uint16 t (serialize_key setting);
-      match setting with
-      | MaxConcurrentStreams value | InitialWindowSize value ->
-        BE.write_uint32 t value
-      | HeaderTableSize value
-      | EnablePush value
-      | MaxFrameSize value
-      | MaxHeaderListSize value ->
-        BE.write_uint32 t (Int32.of_int value))
+       (* From RFC7540§6.5.1:
+        *   The payload of a SETTINGS frame consists of zero or more parameters,
+        *   each consisting of an unsigned 16-bit setting identifier and an
+        *   unsigned 32-bit value. *)
+       BE.write_uint16 t (serialize_key setting);
+       match setting with
+       | MaxConcurrentStreams value | InitialWindowSize value ->
+         BE.write_uint32 t value
+       | HeaderTableSize value
+       | EnablePush value
+       | MaxFrameSize value
+       | MaxHeaderListSize value ->
+         BE.write_uint32 t (Int32.of_int value))
     settings_list
 
 let of_settings_list settings =
   List.fold_left
     (fun (acc : t) item ->
-      match item with
-      | HeaderTableSize x -> { acc with header_table_size = x }
-      | EnablePush x -> { acc with enable_push = x = 1 }
-      | MaxConcurrentStreams x -> { acc with max_concurrent_streams = x }
-      | InitialWindowSize new_val -> { acc with initial_window_size = new_val }
-      | MaxFrameSize x -> { acc with max_frame_size = x }
-      | MaxHeaderListSize x -> { acc with max_header_list_size = Some x })
+       match item with
+       | HeaderTableSize x -> { acc with header_table_size = x }
+       | EnablePush x -> { acc with enable_push = x = 1 }
+       | MaxConcurrentStreams x -> { acc with max_concurrent_streams = x }
+       | InitialWindowSize new_val -> { acc with initial_window_size = new_val }
+       | MaxFrameSize x -> { acc with max_frame_size = x }
+       | MaxHeaderListSize x -> { acc with max_header_list_size = Some x })
     default
     settings
 
