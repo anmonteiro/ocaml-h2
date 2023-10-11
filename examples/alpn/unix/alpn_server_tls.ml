@@ -16,13 +16,13 @@ let start_http_server () =
   let open Lwt.Infix in
   let listen_address = Unix.(ADDR_INET (inet_addr_loopback, 8080)) in
   Lwt.async (fun () ->
-      Lwt_io.establish_server_with_client_socket
-        listen_address
-        (Httpaf_lwt_unix.Server.create_connection_handler
-           ?config:None
-           ~request_handler:Http1_handler.redirect_handler
-           ~error_handler:Http1_handler.redirect_error_handler)
-      >>= fun _server -> Lwt.return_unit);
+    Lwt_io.establish_server_with_client_socket
+      listen_address
+      (Httpaf_lwt_unix.Server.create_connection_handler
+         ?config:None
+         ~request_handler:Http1_handler.redirect_handler
+         ~error_handler:Http1_handler.redirect_error_handler)
+    >>= fun _server -> Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   forever
 
@@ -32,11 +32,11 @@ let start_https_server () =
   let cert = "./certificates/server.pem" in
   let priv_key = "./certificates/server.key" in
   Lwt.async (fun () ->
-      Lwt_io.establish_server_with_client_socket
-        listen_address
-        (fun client_addr fd ->
-          Lwt.catch
-            (fun () ->
+    Lwt_io.establish_server_with_client_socket
+      listen_address
+      (fun client_addr fd ->
+         Lwt.catch
+           (fun () ->
               X509_lwt.private_of_pems ~cert ~priv_key >>= fun certificate ->
               let config =
                 Tls.Config.server
@@ -61,8 +61,8 @@ let start_https_server () =
                   (* Can't really happen - would mean that TLS negotiated a
                    * protocol that we didn't specify. *)
                   assert false))
-            (fun exn -> Lwt_io.eprintlf "EXN: %s" (Printexc.to_string exn)))
-      >>= fun _server -> Lwt.return_unit);
+           (fun exn -> Lwt_io.eprintlf "EXN: %s" (Printexc.to_string exn)))
+    >>= fun _server -> Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   forever
 

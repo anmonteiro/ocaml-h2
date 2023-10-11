@@ -11,15 +11,15 @@ let success_fixtures, error_fixtures =
   |> List.map (fun dir -> dir, Filename.concat fixtures_dir dir)
   |> List.filter (fun (_, dir) -> Sys.is_directory dir)
   |> List.map (fun (dir, fullpath) ->
-      let files_in_dir =
-        fullpath
-        |> Sys.readdir
-        |> Array.to_list
-        |> List.map (fun file -> Filename.concat fullpath file)
-        |> List.filter (fun file ->
-            (not (Sys.is_directory file)) && Filename.extension file = ".json")
-      in
-      dir, files_in_dir)
+    let files_in_dir =
+      fullpath
+      |> Sys.readdir
+      |> Array.to_list
+      |> List.map (fun file -> Filename.concat fullpath file)
+      |> List.filter (fun file ->
+        (not (Sys.is_directory file)) && Filename.extension file = ".json")
+    in
+    dir, files_in_dir)
   |> List.partition (fun (dir, _) -> dir <> "error")
 
 module P = struct
@@ -51,7 +51,7 @@ module P = struct
   let parse_success wire handler =
     let reader =
       parse_fn wire handler (fun _ ->
-          Alcotest.(fail "Expected to have thrown an error parsing frame."))
+        Alcotest.(fail "Expected to have thrown an error parsing frame."))
     in
     match Reader.next reader with
     | `Read -> ()
@@ -63,7 +63,7 @@ module P = struct
       parse_fn
         wire
         (fun _ ->
-          Alcotest.(fail "Expected to have thrown an error parsing frame."))
+           Alcotest.(fail "Expected to have thrown an error parsing frame."))
         handler
     in
     match Reader.next reader with
@@ -112,19 +112,19 @@ let frame_testable =
             , `List
                 (List.map
                    (fun setting ->
-                     `List
-                       [ `Int (Settings.serialize_key setting)
-                       ; `Int
-                           (match setting with
-                           | MaxConcurrentStreams value
-                           | InitialWindowSize value ->
-                             Int32.to_int value
-                           | HeaderTableSize value
-                           | EnablePush value
-                           | MaxFrameSize value
-                           | MaxHeaderListSize value ->
-                             value)
-                       ])
+                      `List
+                        [ `Int (Settings.serialize_key setting)
+                        ; `Int
+                            (match setting with
+                            | MaxConcurrentStreams value
+                            | InitialWindowSize value ->
+                              Int32.to_int value
+                            | HeaderTableSize value
+                            | EnablePush value
+                            | MaxFrameSize value
+                            | MaxHeaderListSize value ->
+                              value)
+                        ])
                    settings_list) )
           ]
         | PushPromise (stream_identifier, fragment) ->
@@ -212,16 +212,16 @@ let frame_payload_of_json frame_type json =
     let settings =
       List.map
         (fun setting_json ->
-          let setting = Json.to_list setting_json in
-          let key_value = List.nth setting 1 |> Json.to_int in
-          match Json.to_int (List.hd setting) with
-          | 0x1 -> Settings.HeaderTableSize key_value
-          | 0x2 -> EnablePush key_value
-          | 0x3 -> MaxConcurrentStreams (Int32.of_int key_value)
-          | 0x4 -> InitialWindowSize (Int32.of_int key_value)
-          | 0x5 -> MaxFrameSize key_value
-          | 0x6 -> MaxHeaderListSize key_value
-          | _ -> raise (Invalid_argument "settings key id"))
+           let setting = Json.to_list setting_json in
+           let key_value = List.nth setting 1 |> Json.to_int in
+           match Json.to_int (List.hd setting) with
+           | 0x1 -> Settings.HeaderTableSize key_value
+           | 0x2 -> EnablePush key_value
+           | 0x3 -> MaxConcurrentStreams (Int32.of_int key_value)
+           | 0x4 -> InitialWindowSize (Int32.of_int key_value)
+           | 0x5 -> MaxFrameSize key_value
+           | 0x6 -> MaxHeaderListSize key_value
+           | _ -> raise (Invalid_argument "settings key id"))
         Json.(json |> member "settings" |> to_list)
     in
     Settings settings
@@ -291,34 +291,26 @@ let success_suites =
         in
         let wire = Json.(fixture |> member "wire" |> to_string) in
         P.parse_success wire (fun frame ->
-            Alcotest.check
-              frame_testable
-              "Frames are equal"
-              expected_frame
-              frame;
-            let padding =
-              match
-                Json.(
-                  frame_payload_json |> member "padding" |> to_string_option)
-              with
-              | Some padding ->
-                Some
-                  Bigstringaf.(
-                    of_string ~off:0 ~len:(String.length padding) padding)
-              | None -> None
-            in
-            let serialized_wire = P.serialize ?padding frame in
-            Alcotest.(
-              check
-                string
-                "Parse / Serialize roundtripping"
-                wire
-                serialized_wire)) )
+          Alcotest.check frame_testable "Frames are equal" expected_frame frame;
+          let padding =
+            match
+              Json.(frame_payload_json |> member "padding" |> to_string_option)
+            with
+            | Some padding ->
+              Some
+                Bigstringaf.(
+                  of_string ~off:0 ~len:(String.length padding) padding)
+            | None -> None
+          in
+          let serialized_wire = P.serialize ?padding frame in
+          Alcotest.(
+            check string "Parse / Serialize roundtripping" wire serialized_wire))
+    )
   in
   List.map
     (fun (name, files) ->
-      let suite_name = Printf.sprintf "%s frame" name in
-      suite_name, List.map (gen_suite ~frame_type:name) files)
+       let suite_name = Printf.sprintf "%s frame" name in
+       suite_name, List.map (gen_suite ~frame_type:name) files)
     success_fixtures
 
 let error_suites =

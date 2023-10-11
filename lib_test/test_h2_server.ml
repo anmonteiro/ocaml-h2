@@ -41,13 +41,13 @@ module Server_connection_tests = struct
       let dst_off = ref 0 in
       List.iter
         (fun { IOVec.buffer; off = src_off; len } ->
-          Bigstringaf.unsafe_blit_to_bytes
-            buffer
-            ~src_off
-            bytes
-            ~dst_off:!dst_off
-            ~len;
-          dst_off := !dst_off + len)
+           Bigstringaf.unsafe_blit_to_bytes
+             buffer
+             ~src_off
+             bytes
+             ~dst_off:!dst_off
+             ~len;
+           dst_off := !dst_off + len)
         iovecs;
       Bytes.unsafe_to_string bytes
 
@@ -311,10 +311,10 @@ module Server_connection_tests = struct
   let read_frames conn frames =
     List.iter
       (fun frame ->
-        let frame_wire = Test_common.serialize_frame frame in
-        let frame_length = Bigstringaf.length frame_wire in
-        let read_frame = read conn ~off:0 ~len:frame_length frame_wire in
-        Alcotest.(check int) "Read the entire frame" frame_length read_frame)
+         let frame_wire = Test_common.serialize_frame frame in
+         let frame_length = Bigstringaf.length frame_wire in
+         let read_frame = read conn ~off:0 ~len:frame_length frame_wire in
+         Alcotest.(check int) "Read the entire frame" frame_length read_frame)
       frames
 
   let check_response conn =
@@ -656,7 +656,7 @@ module Server_connection_tests = struct
         Frame.FrameType.(List.map serialize [ Headers; Headers; Data ])
         (frames
         |> List.map (fun { Frame.frame_header; _ } ->
-            Frame.(frame_header.frame_type |> FrameType.serialize)));
+          Frame.(frame_header.frame_type |> FrameType.serialize)));
       let data_frame = List.nth frames 2 in
       Alcotest.(check int32)
         "The emitted DATA frame belongs to stream 1"
@@ -671,7 +671,7 @@ module Server_connection_tests = struct
           Frame.FrameType.[ serialize Data ]
           (frames
           |> List.map (fun { Frame.frame_header; _ } ->
-              Frame.(frame_header.frame_type |> FrameType.serialize)));
+            Frame.(frame_header.frame_type |> FrameType.serialize)));
         let data_frame = List.hd frames in
         Alcotest.(check int32)
           "The emitted DATA frame belongs to stream 3"
@@ -717,7 +717,7 @@ module Server_connection_tests = struct
         List.(
           map
             (fun { Frame.frame_header; _ } ->
-              Frame.FrameType.serialize frame_header.frame_type)
+               Frame.FrameType.serialize frame_header.frame_type)
             frames)
         List.(
           map
@@ -1141,7 +1141,7 @@ module Server_connection_tests = struct
            Frame.FrameType.[ WindowUpdate; WindowUpdate ])
         (List.map
            (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
-             Frame.FrameType.serialize frame_type)
+              Frame.FrameType.serialize frame_type)
            frames);
       report_write_result t (`Ok (IOVec.lengthv iovecs));
       Alcotest.(check bool) "Response handler called" true !body_read_called;
@@ -1155,7 +1155,7 @@ module Server_connection_tests = struct
       let response_body = Reqd.respond_with_streaming reqd response in
       Body.Writer.write_string response_body "hello";
       Body.Writer.flush response_body (fun () ->
-          Body.Writer.close response_body)
+        Body.Writer.close response_body)
     in
     let t =
       create_and_handle_preface
@@ -1183,7 +1183,7 @@ module Server_connection_tests = struct
         (List.map Frame.FrameType.serialize Frame.FrameType.[ Headers; Data ])
         (List.map
            (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
-             Frame.FrameType.serialize frame_type)
+              Frame.FrameType.serialize frame_type)
            frames);
       report_write_result t (`Ok (IOVec.lengthv iovecs));
       (match next_write_operation t with
@@ -1194,7 +1194,7 @@ module Server_connection_tests = struct
           (List.map Frame.FrameType.serialize Frame.FrameType.[ Data ])
           (List.map
              (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
-               Frame.FrameType.serialize frame_type)
+                Frame.FrameType.serialize frame_type)
              frames);
         report_write_result t (`Ok (IOVec.lengthv iovecs));
         writer_yields t
@@ -1207,8 +1207,8 @@ module Server_connection_tests = struct
     let response_body = Reqd.respond_with_streaming reqd response in
     Body.Writer.write_string response_body "somedata";
     Body.Writer.flush response_body (fun () ->
-        Reqd.schedule_trailers reqd Headers.(add empty "foo" "bar");
-        Body.Writer.close response_body)
+      Reqd.schedule_trailers reqd Headers.(add empty "foo" "bar");
+      Body.Writer.close response_body)
 
   let test_trailers () =
     let t = create ~error_handler trailers_request_handler in
@@ -1228,11 +1228,14 @@ module Server_connection_tests = struct
       let frames = parse_frames (Write_operation.iovecs_to_string iovecs) in
       List.iter2
         (fun { Frame.frame_header; _ } (label, frame_type, flags) ->
-          Alcotest.(check int)
-            ("Next write operation surfaces writes for " ^ label)
-            (Frame.FrameType.serialize frame_header.frame_type)
-            (Frame.FrameType.serialize frame_type);
-          Alcotest.(check int) "Correct flags are used" frame_header.flags flags)
+           Alcotest.(check int)
+             ("Next write operation surfaces writes for " ^ label)
+             (Frame.FrameType.serialize frame_header.frame_type)
+             (Frame.FrameType.serialize frame_type);
+           Alcotest.(check int)
+             "Correct flags are used"
+             frame_header.flags
+             flags)
         frames
         Frame.FrameType.
           [ ("HEADERS", Headers, Flags.(set_end_header default_flags))
@@ -1294,7 +1297,7 @@ module Server_connection_tests = struct
            Frame.FrameType.[ Headers; RSTStream ])
         (List.map
            (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
-             Frame.FrameType.serialize frame_type)
+              Frame.FrameType.serialize frame_type)
            frames);
       report_write_result t (`Ok (IOVec.lengthv iovecs));
       writer_yields t
@@ -1323,7 +1326,7 @@ module Server_connection_tests = struct
         (List.map Frame.FrameType.serialize Frame.FrameType.[ Headers; Data ])
         (List.map
            (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
-             Frame.FrameType.serialize frame_type)
+              Frame.FrameType.serialize frame_type)
            frames);
       report_write_result t (`Ok (IOVec.lengthv iovecs))
     | _ -> assert false

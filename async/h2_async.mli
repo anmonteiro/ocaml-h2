@@ -38,13 +38,12 @@ open H2
 module Server : sig
   include
     H2_async_intf.Server
-      with type 'a socket =
-        ([ `Active ], ([< Socket.Address.t ] as 'a)) Socket.t
+    with type 'a socket = ([ `Active ], ([< Socket.Address.t ] as 'a)) Socket.t
 
   module SSL : sig
     include
       H2_async_intf.Server
-        with type 'a socket := 'a Gluten_async.Server.SSL.socket
+      with type 'a socket := 'a Gluten_async.Server.SSL.socket
 
     val create_connection_handler_with_default :
        certfile:string
@@ -61,13 +60,12 @@ end
 module Client : sig
   include
     H2_async_intf.Client
-      with type 'a socket =
-        ([ `Active ], ([< Socket.Address.t ] as 'a)) Socket.t
+    with type 'a socket = ([ `Active ], ([< Socket.Address.t ] as 'a)) Socket.t
 
   module SSL : sig
     include
       H2_async_intf.Client
-        with type 'a socket = 'a Gluten_async.Client.SSL.socket
+      with type 'a socket = 'a Gluten_async.Client.SSL.socket
 
     val create_connection_with_default :
        ?config:Config.t
@@ -81,7 +79,7 @@ module Client : sig
   module TLS : sig
     include
       H2_async_intf.Client
-        with type 'a socket = 'a Gluten_async.Client.TLS.socket
+      with type 'a socket = 'a Gluten_async.Client.TLS.socket
 
     val create_connection_with_default :
        ?config:Config.t

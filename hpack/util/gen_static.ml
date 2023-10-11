@@ -53,15 +53,15 @@ let mk_tokens static_table =
   let _, tokens =
     Array.fold_left
       (fun (prev_token, acc) (i, name, _) ->
-        if name <> prev_token
-        then
-          let token =
-            let_
-              (Printf.sprintf "token_%s" (token_of_name name))
-              (Exp.constant (Pconst_integer (string_of_int i, None)))
-          in
-          name, token :: acc
-        else name, acc)
+         if name <> prev_token
+         then
+           let token =
+             let_
+               (Printf.sprintf "token_%s" (token_of_name name))
+               (Exp.constant (Pconst_integer (string_of_int i, None)))
+           in
+           name, token :: acc
+         else name, acc)
       ("", [])
       static_table
   in
@@ -90,18 +90,18 @@ let make_token_map static_table =
   let tbl = Hashtbl.create 60 in
   Array.iter
     (fun (i, name, _) ->
-      let length = String.length name in
-      let string_tbl =
-        match Hashtbl.find_opt tbl length with
-        | Some string_tbl -> string_tbl
-        | None -> Hashtbl.create 10
-      in
-      Hashtbl.add string_tbl name i)
+       let length = String.length name in
+       let string_tbl =
+         match Hashtbl.find_opt tbl length with
+         | Some string_tbl -> string_tbl
+         | None -> Hashtbl.create 10
+       in
+       Hashtbl.add string_tbl name i)
     static_table;
   Hashtbl.fold
     (fun length names ret ->
-      let bindings = Hashtbl.fold (fun k v lst -> (k, v) :: lst) names [] in
-      (length, find_pos names, bindings) :: ret)
+       let bindings = Hashtbl.fold (fun k v lst -> (k, v) :: lst) names [] in
+       (length, find_pos names, bindings) :: ret)
     tbl
     []
 
@@ -109,13 +109,13 @@ let mk_static_table static_table =
   let items =
     Array.fold_left
       (fun acc (_, name, value) ->
-        let tup =
-          Exp.tuple
-            [ Exp.constant (Pconst_string (name, ghloc, None))
-            ; Exp.constant (Pconst_string (value, ghloc, None))
-            ]
-        in
-        tup :: acc)
+         let tup =
+           Exp.tuple
+             [ Exp.constant (Pconst_string (name, ghloc, None))
+             ; Exp.constant (Pconst_string (value, ghloc, None))
+             ]
+         in
+         tup :: acc)
       []
       static_table
   in
@@ -141,51 +141,51 @@ let mk_lookup_token token_map =
           (List.concat
              [ List.map
                  (fun (length, pos, names) ->
-                   Exp.case
-                     (Pat.constant
-                        (Pconst_integer (string_of_int length, None)))
-                     (Exp.match_
-                        (Exp.apply
-                           (Exp.ident
-                              { txt = Ldot (Lident "String", "get")
-                              ; loc = !default_loc
-                              })
-                           [ ( Nolabel
-                             , Exp.ident
-                                 { txt = Lident "name"; loc = !default_loc } )
-                           ; ( Nolabel
-                             , Exp.constant
-                                 (Pconst_integer (string_of_int pos, None)) )
-                           ])
-                        (List.concat
-                           [ List.map
-                               (fun (name, i) ->
-                                 Exp.case
-                                   (Pat.constant (Pconst_char name.[pos]))
-                                   ~guard:
-                                     (Exp.apply
-                                        (Exp.ident
-                                           { txt = Lident "="
-                                           ; loc = !default_loc
-                                           })
-                                        [ ( Nolabel
-                                          , Exp.ident
-                                              { txt = Lident "name"
-                                              ; loc = !default_loc
-                                              } )
-                                        ; ( Nolabel
-                                          , Exp.constant
-                                              (Pconst_string (name, ghloc, None))
-                                          )
-                                        ])
-                                   (Exp.constant
-                                      (Pconst_integer (string_of_int i, None))))
-                               names
-                           ; [ Exp.case
-                                 (Pat.any ())
-                                 (Exp.constant (Pconst_integer ("-1", None)))
-                             ]
-                           ])))
+                    Exp.case
+                      (Pat.constant
+                         (Pconst_integer (string_of_int length, None)))
+                      (Exp.match_
+                         (Exp.apply
+                            (Exp.ident
+                               { txt = Ldot (Lident "String", "get")
+                               ; loc = !default_loc
+                               })
+                            [ ( Nolabel
+                              , Exp.ident
+                                  { txt = Lident "name"; loc = !default_loc } )
+                            ; ( Nolabel
+                              , Exp.constant
+                                  (Pconst_integer (string_of_int pos, None)) )
+                            ])
+                         (List.concat
+                            [ List.map
+                                (fun (name, i) ->
+                                   Exp.case
+                                     (Pat.constant (Pconst_char name.[pos]))
+                                     ~guard:
+                                       (Exp.apply
+                                          (Exp.ident
+                                             { txt = Lident "="
+                                             ; loc = !default_loc
+                                             })
+                                          [ ( Nolabel
+                                            , Exp.ident
+                                                { txt = Lident "name"
+                                                ; loc = !default_loc
+                                                } )
+                                          ; ( Nolabel
+                                            , Exp.constant
+                                                (Pconst_string
+                                                   (name, ghloc, None)) )
+                                          ])
+                                     (Exp.constant
+                                        (Pconst_integer (string_of_int i, None))))
+                                names
+                            ; [ Exp.case
+                                  (Pat.any ())
+                                  (Exp.constant (Pconst_integer ("-1", None)))
+                              ]
+                            ])))
                  token_map
              ; [ Exp.case
                    (Pat.any ())

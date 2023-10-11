@@ -47,76 +47,72 @@ let[@ocaml.alert "-deprecated"] () =
     | Some host -> host
   in
   Eio_main.run (fun env ->
-      let network = Eio.Stdenv.net env in
-      Eio.Switch.run (fun sw ->
-          let addrs =
-            let addrs =
-              Eio_unix.run_in_systhread (fun () ->
-                  Unix.getaddrinfo
-                    host
-                    (string_of_int !port)
-                    [ Unix.(AI_FAMILY PF_INET) ])
-            in
-            List.filter_map
-              (fun (addr : Unix.addr_info) ->
-                match addr.ai_addr with
-                | Unix.ADDR_UNIX _ -> None
-                | ADDR_INET (addr, port) -> Some (addr, port))
-              addrs
-          in
-          let addr =
-            let inet, port = List.hd addrs in
-            `Tcp (Eio_unix.Net.Ipaddr.of_unix inet, port)
-          in
-          let socket = Eio.Net.connect ~sw network addr in
+    let network = Eio.Stdenv.net env in
+    Eio.Switch.run (fun sw ->
+      let addrs =
+        let addrs =
+          Eio_unix.run_in_systhread (fun () ->
+            Unix.getaddrinfo
+              host
+              (string_of_int !port)
+              [ Unix.(AI_FAMILY PF_INET) ])
+        in
+        List.filter_map
+          (fun (addr : Unix.addr_info) ->
+             match addr.ai_addr with
+             | Unix.ADDR_UNIX _ -> None
+             | ADDR_INET (addr, port) -> Some (addr, port))
+          addrs
+      in
+      let addr =
+        let inet, port = List.hd addrs in
+        `Tcp (Eio_unix.Net.Ipaddr.of_unix inet, port)
+      in
+      let socket = Eio.Net.connect ~sw network addr in
 
-          let request =
-            Request.create
-              `GET
-              "/"
-              ~scheme:"https"
-              ~headers:
-                Headers.(
-                  add_list
-                    empty
-                    [ "user-agent", "carl/0.0.0-experimental"
-                    ; ":authority", host
-                    ])
-          in
+      let request =
+        Request.create
+          `GET
+          "/"
+          ~scheme:"https"
+          ~headers:
+            Headers.(
+              add_list
+                empty
+                [ "user-agent", "carl/0.0.0-experimental"; ":authority", host ])
+      in
 
-          let ctx = Ssl.create_context Ssl.SSLv23 Ssl.Client_context in
-          (* Ssl.disable_protocols ctx [ Ssl.SSLv23 ]; *)
-          Ssl.honor_cipher_order ctx;
-          Ssl.set_context_alpn_protos ctx [ "h2" ];
+      let ctx = Ssl.create_context Ssl.SSLv23 Ssl.Client_context in
+      (* Ssl.disable_protocols ctx [ Ssl.SSLv23 ]; *)
+      Ssl.honor_cipher_order ctx;
+      Ssl.set_context_alpn_protos ctx [ "h2" ];
 
-          Ssl.set_min_protocol_version ctx TLSv1_3;
-          Ssl.set_max_protocol_version ctx TLSv1_3;
+      Ssl.set_min_protocol_version ctx TLSv1_3;
+      Ssl.set_max_protocol_version ctx TLSv1_3;
 
-          let ssl_ctx = Eio_ssl.Context.create ~ctx socket in
-          let ssl_sock = Eio_ssl.Context.ssl_socket ssl_ctx in
-          Ssl.set_client_SNI_hostname ssl_sock host;
-          Ssl.set_hostflags ssl_sock [ No_partial_wildcards ];
-          Ssl.set_host ssl_sock host;
-          let ssl_sock = Eio_ssl.connect ssl_ctx in
+      let ssl_ctx = Eio_ssl.Context.create ~ctx socket in
+      let ssl_sock = Eio_ssl.Context.ssl_socket ssl_ctx in
+      Ssl.set_client_SNI_hostname ssl_sock host;
+      Ssl.set_hostflags ssl_sock [ No_partial_wildcards ];
+      Ssl.set_host ssl_sock host;
+      let ssl_sock = Eio_ssl.connect ssl_ctx in
 
-          let shut_p, shut_u = Eio.Promise.create () in
-          let error_handler = error_handler shut_u in
-          let connection =
-            Client.create_connection ~sw ~error_handler ssl_sock
-          in
-          let response_handler =
-            response_handler ~on_eof:(fun () ->
-                Format.eprintf "eof@.";
-                Eio.Promise.resolve shut_u ())
-          in
-          let request_body =
-            Client.request
-              connection
-              request
-              ~error_handler
-              ~response_handler
-              ~flush_headers_immediately:true
-          in
-          Body.Writer.close request_body;
-          Eio.Promise.await shut_p;
-          Eio.Promise.await (Client.shutdown connection)))
+      let shut_p, shut_u = Eio.Promise.create () in
+      let error_handler = error_handler shut_u in
+      let connection = Client.create_connection ~sw ~error_handler ssl_sock in
+      let response_handler =
+        response_handler ~on_eof:(fun () ->
+          Format.eprintf "eof@.";
+          Eio.Promise.resolve shut_u ())
+      in
+      let request_body =
+        Client.request
+          connection
+          request
+          ~error_handler
+          ~response_handler
+          ~flush_headers_immediately:true
+      in
+      Body.Writer.close request_body;
+      Eio.Promise.await shut_p;
+      Eio.Promise.await (Client.shutdown connection)))

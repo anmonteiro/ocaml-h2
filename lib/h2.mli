@@ -75,9 +75,9 @@ module Method : module type of Httpaf.Method
 module Status : sig
   include
     module type of Httpaf.Status
-      with type client_error := Httpaf.Status.client_error
-       and type standard := Httpaf.Status.standard
-       and type t := Httpaf.Status.t
+    with type client_error := Httpaf.Status.client_error
+     and type standard := Httpaf.Status.standard
+     and type t := Httpaf.Status.t
 
   type client_error =
     [ Httpaf.Status.client_error
@@ -265,7 +265,7 @@ module Headers : sig
         add_list
           t
           (List.concat_map assoc ~f:(fun (name, values) ->
-               List.map values ~f:(fun value -> name, value)))
+             List.map values ~f:(fun value -> name, value)))
       ]}
 
       but is implemented more efficiently. For example,
@@ -541,8 +541,8 @@ module Reqd : sig
      t
     -> Request.t
     -> ( t
-       , [ `Push_disabled | `Stream_cant_push | `Stream_ids_exhausted ] )
-       result
+         , [ `Push_disabled | `Stream_cant_push | `Stream_ids_exhausted ] )
+         result
   (** [push reqd request] creates a new ("pushed") request descriptor that
       allows responding to the "promised" [request]. As per the HTTP/2
       specification, [request] must be cacheable, safe, and must not include a
@@ -664,19 +664,17 @@ end
 module Config : sig
   type t =
     { read_buffer_size : int
-          (** [read_buffer_size] specifies the size of the largest frame payload
-              that the sender is willing to receive, in octets. Defaults to
-              [16384] *)
+    (** [read_buffer_size] specifies the size of the largest frame payload that
+        the sender is willing to receive, in octets. Defaults to [16384] *)
     ; request_body_buffer_size : int  (** Defaults to [4096] *)
     ; response_body_buffer_size : int  (** Defaults to [4096] *)
     ; enable_server_push : bool  (** Defaults to [true] *)
     ; max_concurrent_streams : int32
-          (** [max_concurrent_streams] specifies the maximum number of streams
-              that the sender will allow the peer to initiate. Defaults to
-              [2^31 - 1] *)
+    (** [max_concurrent_streams] specifies the maximum number of streams that
+        the sender will allow the peer to initiate. Defaults to [2^31 - 1] *)
     ; initial_window_size : int32
-          (** [initial_window_size] specifies the initial window size for flow
-              control tokens. Defaults to [65535] *)
+    (** [initial_window_size] specifies the initial window size for flow control
+        tokens. Defaults to [65535] *)
     }
 
   val default : t

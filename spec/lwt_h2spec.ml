@@ -50,11 +50,11 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
               in
               Body.Writer.write_string response_body (String.make 100 'a');
               set_interval 1 (fun () ->
-                  ignore
-                  @@ Reqd.try_with request_descriptor (fun () ->
-                      Body.Writer.write_string response_body " data");
-                  Body.Writer.flush response_body (fun () ->
-                      Body.Writer.close response_body))
+                ignore
+                @@ Reqd.try_with request_descriptor (fun () ->
+                  Body.Writer.write_string response_body " data");
+                Body.Writer.flush response_body (fun () ->
+                  Body.Writer.close response_body))
             | "/bigstring" ->
               let res_body = "non-empty data." in
               let bs =
@@ -107,11 +107,9 @@ let () =
     "Echoes POST requests. Runs forever.";
   let listen_address = Unix.(ADDR_INET (inet_addr_loopback, !port)) in
   Lwt.async (fun () ->
-      Lwt_io.establish_server_with_client_socket
-        listen_address
-        connection_handler
-      >>= fun _server ->
-      Printf.printf "Server listening on port %i\n%!" !port;
-      Lwt.return_unit);
+    Lwt_io.establish_server_with_client_socket listen_address connection_handler
+    >>= fun _server ->
+    Printf.printf "Server listening on port %i\n%!" !port;
+    Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   Lwt_main.run forever

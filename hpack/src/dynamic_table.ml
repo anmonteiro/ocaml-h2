@@ -98,7 +98,7 @@ let increase_capacity table =
   let new_capacity = 2 * table.capacity in
   let new_entries =
     Array.init new_capacity (fun i ->
-        if i < table.length then _get table i else default_entry)
+      if i < table.length then _get table i else default_entry)
   in
   table.entries <- new_entries;
   table.offset <- 0;

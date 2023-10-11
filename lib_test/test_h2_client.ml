@@ -42,13 +42,13 @@ module Client_connection_tests = struct
       let dst_off = ref 0 in
       List.iter
         (fun { IOVec.buffer; off = src_off; len } ->
-          Bigstringaf.unsafe_blit_to_bytes
-            buffer
-            ~src_off
-            bytes
-            ~dst_off:!dst_off
-            ~len;
-          dst_off := !dst_off + len)
+           Bigstringaf.unsafe_blit_to_bytes
+             buffer
+             ~src_off
+             bytes
+             ~dst_off:!dst_off
+             ~len;
+           dst_off := !dst_off + len)
         iovecs;
       Bytes.unsafe_to_string bytes
 
@@ -108,10 +108,10 @@ module Client_connection_tests = struct
   let read_frames conn frames =
     List.iter
       (fun frame ->
-        let frame_wire = Test_common.serialize_frame frame in
-        let frame_length = Bigstringaf.length frame_wire in
-        let read_frame = read conn ~off:0 ~len:frame_length frame_wire in
-        Alcotest.(check int) "Read the entire frame" frame_length read_frame)
+         let frame_wire = Test_common.serialize_frame frame in
+         let frame_length = Bigstringaf.length frame_wire in
+         let read_frame = read conn ~off:0 ~len:frame_length frame_wire in
+         Alcotest.(check int) "Read the entire frame" frame_length read_frame)
       frames
 
   let read_response
@@ -1233,7 +1233,7 @@ module Client_connection_tests = struct
          Frame.FrameType.[ WindowUpdate; WindowUpdate ])
       (List.map
          (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
-           Frame.FrameType.serialize frame_type)
+            Frame.FrameType.serialize frame_type)
          frames);
     report_write_result t (`Ok lenv);
     Alcotest.(check bool) "Response handler called" true !body_read_called
@@ -1262,7 +1262,7 @@ module Client_connection_tests = struct
       (List.map Frame.FrameType.serialize Frame.FrameType.[ Data ])
       (List.map
          (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
-           Frame.FrameType.serialize frame_type)
+            Frame.FrameType.serialize frame_type)
          frames)
 
   let test_dont_flush_headers_immediately () =
@@ -1295,7 +1295,7 @@ module Client_connection_tests = struct
       (List.map Frame.FrameType.serialize Frame.FrameType.[ Headers; Data ])
       (List.map
          (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
-           Frame.FrameType.serialize frame_type)
+            Frame.FrameType.serialize frame_type)
          frames);
     report_write_result t (`Ok lenv);
     Body.Writer.close request_body;
@@ -1305,7 +1305,7 @@ module Client_connection_tests = struct
       (List.map Frame.FrameType.serialize Frame.FrameType.[ Data ])
       (List.map
          (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
-           Frame.FrameType.serialize frame_type)
+            Frame.FrameType.serialize frame_type)
          frames)
 
   let test_header_buffer_sharing () =
@@ -1350,7 +1350,7 @@ module Client_connection_tests = struct
       (List.map Frame.FrameType.serialize Frame.FrameType.[ Headers; Headers ])
       (List.map
          (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
-           Frame.FrameType.serialize frame_type)
+            Frame.FrameType.serialize frame_type)
          frames);
 
     let[@ocaml.warning "-8"] [ headers1; headers2 ] = frames in
@@ -1393,7 +1393,7 @@ module Client_connection_tests = struct
       (List.map Frame.FrameType.serialize Frame.FrameType.[ Data; Data ])
       (List.map
          (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
-           Frame.FrameType.serialize frame_type)
+            Frame.FrameType.serialize frame_type)
          frames)
 
   let test_request_body_rst_stream_no_double_error () =

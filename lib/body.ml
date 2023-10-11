@@ -167,7 +167,7 @@ module Writer = struct
       let frame_info = Writer.make_frame_info ~max_frame_size stream_id in
       Writer.schedule_iovecs writer frame_info ~len:writev_len iovecs;
       Writer.flush writer (fun () ->
-          Faraday.shift faraday writev_len;
-          buffered := !buffered - writev_len);
+        Faraday.shift faraday writev_len;
+        buffered := !buffered - writev_len);
       writev_len
 end

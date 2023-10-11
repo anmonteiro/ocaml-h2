@@ -128,14 +128,12 @@ let () =
     "Echoes POST requests. Runs forever.";
   let listen_address = Unix.(ADDR_INET (inet_addr_loopback, !port)) in
   Lwt.async (fun () ->
-      Lwt_io.establish_server_with_client_socket
-        listen_address
-        connection_handler
-      >>= fun _server ->
-      Printf.printf "Listening on port %i and echoing POST requests.\n" !port;
-      print_string "To send a POST request, try\n\n";
-      print_string "  echo foo | dune exec examples/lwt/lwt_post.exe\n\n";
-      flush stdout;
-      Lwt.return_unit);
+    Lwt_io.establish_server_with_client_socket listen_address connection_handler
+    >>= fun _server ->
+    Printf.printf "Listening on port %i and echoing POST requests.\n" !port;
+    print_string "To send a POST request, try\n\n";
+    print_string "  echo foo | dune exec examples/lwt/lwt_post.exe\n\n";
+    flush stdout;
+    Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   Lwt_main.run forever

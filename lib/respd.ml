@@ -67,9 +67,9 @@ type active_state =
 
 type state =
   ( active_state
-  , active_request
-  , active_request Stream.remote_state )
-  Stream.state
+    , active_request
+    , active_request Stream.remote_state )
+    Stream.state
 
 type t = (state, error, error_handler) Stream.t
 

@@ -40,9 +40,9 @@ open Angstrom
  * error handlers that may never be released. *)
 let skip_many p =
   fix (fun m ->
-      p >>| (fun _ -> true) <|> return false >>= function
-      | true -> m
-      | false -> return ())
+    p >>| (fun _ -> true) <|> return false >>= function
+    | true -> m
+    | false -> return ())
 
 let default_frame_header =
   { Frame.payload_length = 0
@@ -100,7 +100,7 @@ let stream_identifier = lift parse_stream_identifier BE.any_int32
 let parse_frame_header =
   lift4
     (fun payload_length frame_type flags stream_id ->
-      { Frame.flags; payload_length; stream_id; frame_type })
+       { Frame.flags; payload_length; stream_id; frame_type })
     frame_length
     frame_type
     flags
@@ -164,16 +164,16 @@ let parse_data_frame ({ Frame.stream_id; payload_length; _ } as frame_header) =
 let parse_priority =
   lift2
     (fun stream_dependency weight ->
-      let e = Priority.test_exclusive stream_dependency in
-      { Priority.exclusive =
-          e
-          (* From RFC7540§6.3:
-           *   An unsigned 8-bit integer representing a priority weight for the
-           *   stream (see Section 5.3). Add one to the value to obtain a
-           *   weight between 1 and 256. *)
-      ; weight = weight + 1
-      ; stream_dependency = parse_stream_identifier stream_dependency
-      })
+       let e = Priority.test_exclusive stream_dependency in
+       { Priority.exclusive =
+           e
+           (* From RFC7540§6.3:
+            *   An unsigned 8-bit integer representing a priority weight for the
+            *   stream (see Section 5.3). Add one to the value to obtain a
+            *   weight between 1 and 256. *)
+       ; weight = weight + 1
+       ; stream_dependency = parse_stream_identifier stream_dependency
+       })
     BE.any_int32
     any_uint8
 
@@ -201,7 +201,7 @@ let parse_headers_frame frame_header =
       else
         lift
           (fun headers_block ->
-            Ok (Frame.Headers (Priority.default_priority, headers_block)))
+             Ok (Frame.Headers (Priority.default_priority, headers_block)))
           (take_bigstring length)
     in
     parse_padded_payload frame_header parse_headers
@@ -295,29 +295,31 @@ let parse_push_promise_frame frame_header =
     let parse_push_promise length =
       lift2
         (fun promised_stream_id fragment ->
-          if Stream_identifier.is_connection promised_stream_id
-          then
-            (* From RFC7540§6.6:
-             *   A receiver MUST treat the receipt of a PUSH_PROMISE that
-             *   promises an illegal stream identifier (Section 5.1.1) as a
-             *   connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
-            connection_error ProtocolError "PUSH must not promise stream id 0x0"
-          else if Stream_identifier.is_request promised_stream_id
-          then
-            (* From RFC7540§6.6:
-             *   A receiver MUST treat the receipt of a PUSH_PROMISE that
-             *   promises an illegal stream identifier (Section 5.1.1) as a
-             *   connection error (Section 5.4.1) of type PROTOCOL_ERROR.
-             *
-             * Note: An odd-numbered stream is an invalid stream identifier for
-             * the server, and only the server can send PUSH_PROMISE frames:
-             *
-             * From RFC7540§8.2.1:
-             *   PUSH_PROMISE frames MUST NOT be sent by the client. *)
-            connection_error
-              ProtocolError
-              "PUSH must be associated with an even-numbered stream id"
-          else Ok Frame.(PushPromise (promised_stream_id, fragment)))
+           if Stream_identifier.is_connection promised_stream_id
+           then
+             (* From RFC7540§6.6:
+              *   A receiver MUST treat the receipt of a PUSH_PROMISE that
+              *   promises an illegal stream identifier (Section 5.1.1) as a
+              *   connection error (Section 5.4.1) of type PROTOCOL_ERROR. *)
+             connection_error
+               ProtocolError
+               "PUSH must not promise stream id 0x0"
+           else if Stream_identifier.is_request promised_stream_id
+           then
+             (* From RFC7540§6.6:
+              *   A receiver MUST treat the receipt of a PUSH_PROMISE that
+              *   promises an illegal stream identifier (Section 5.1.1) as a
+              *   connection error (Section 5.4.1) of type PROTOCOL_ERROR.
+              *
+              * Note: An odd-numbered stream is an invalid stream identifier for
+              * the server, and only the server can send PUSH_PROMISE frames:
+              *
+              * From RFC7540§8.2.1:
+              *   PUSH_PROMISE frames MUST NOT be sent by the client. *)
+             connection_error
+               ProtocolError
+               "PUSH must be associated with an even-numbered stream id"
+           else Ok Frame.(PushPromise (promised_stream_id, fragment)))
         stream_identifier
         (* From RFC7540§6.6:
          *   The PUSH_PROMISE frame includes the unsigned 31-bit identifier of
@@ -361,7 +363,7 @@ let parse_go_away_frame { Frame.payload_length; stream_id; _ } =
   else
     lift3
       (fun last_stream_id err debug_data ->
-        Ok (Frame.GoAway (last_stream_id, err, debug_data)))
+         Ok (Frame.GoAway (last_stream_id, err, debug_data)))
       stream_identifier
       parse_error_code
       (take_bigstring (payload_length - 8))
@@ -379,24 +381,24 @@ let parse_window_update_frame { Frame.stream_id; payload_length; _ } =
   else
     lift
       (fun uint ->
-        (* From RFC7540§6.9:
-         *   The frame payload of a WINDOW_UPDATE frame is one reserved bit
-         *   plus an unsigned 31-bit integer indicating the number of octets
-         *   that the sender can transmit in addition to the existing
-         *   flow-control window. *)
-        let window_size_increment = Util.clear_bit_int32 uint 31 in
-        if Int32.equal window_size_increment 0l
-        then
-          if (* From RFC7540§6.9:
-              *   A receiver MUST treat the receipt of a WINDOW_UPDATE frame
-              *   with an flow-control window increment of 0 as a stream error
-              *   (Section 5.4.2) of type PROTOCOL_ERROR; errors on the
-              *   connection flow-control window MUST be treated as a connection
-              *   error (Section 5.4.1). *)
-             Stream_identifier.is_connection stream_id
-          then connection_error ProtocolError "Window update must not be 0"
-          else stream_error ProtocolError stream_id
-        else Ok (Frame.WindowUpdate window_size_increment))
+         (* From RFC7540§6.9:
+          *   The frame payload of a WINDOW_UPDATE frame is one reserved bit
+          *   plus an unsigned 31-bit integer indicating the number of octets
+          *   that the sender can transmit in addition to the existing
+          *   flow-control window. *)
+         let window_size_increment = Util.clear_bit_int32 uint 31 in
+         if Int32.equal window_size_increment 0l
+         then
+           if (* From RFC7540§6.9:
+               *   A receiver MUST treat the receipt of a WINDOW_UPDATE frame
+               *   with an flow-control window increment of 0 as a stream error
+               *   (Section 5.4.2) of type PROTOCOL_ERROR; errors on the
+               *   connection flow-control window MUST be treated as a connection
+               *   error (Section 5.4.1). *)
+              Stream_identifier.is_connection stream_id
+           then connection_error ProtocolError "Window update must not be 0"
+           else stream_error ProtocolError stream_id
+         else Ok (Frame.WindowUpdate window_size_increment))
       BE.any_int32
 
 let parse_continuation_frame { Frame.payload_length; stream_id; _ } =
@@ -457,8 +459,8 @@ let parse_frame parse_context =
       parse_context.remaining_bytes_to_skip + payload_length;
   lift
     (function
-      | Ok frame_payload -> Ok { Frame.frame_header; frame_payload }
-      | Error e -> Error e)
+       | Ok frame_payload -> Ok { Frame.frame_header; frame_payload }
+       | Error e -> Error e)
     (parse_frame_payload frame_header)
 
 (* This is the client connection preface. *)
@@ -500,9 +502,9 @@ module Reader = struct
           (* Whether the input source has left the building, indicating that no
            * further input will be received. *)
     ; parse_context : parse_context
-          (* The current stream identifier being processed, in order to discern
-           * whether the error that needs to be assembled is a stream or
-           * connection error. *)
+    (* The current stream identifier being processed, in order to discern
+     * whether the error that needs to be assembled is a stream or
+     * connection error. *)
     }
 
   type frame = parse_error t
@@ -582,15 +584,15 @@ module Reader = struct
     connection_preface_and_frames
       ~max_frame_size
       (fun parse_context ->
-        (* From RFC7540§3.5:
-         *   The client connection preface starts with a sequence of 24 octets,
-         *   which in hex notation is:
-         *
-         *     0x505249202a20485454502f322e300d0a0d0a534d0d0a0d0a
-         *   That is, the connection preface starts with the string
-         *   PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n). This sequence MUST be followed
-         *   by a SETTINGS frame (Section 6.5), which MAY be empty. *)
-        connection_preface *> settings_preface parse_context)
+         (* From RFC7540§3.5:
+          *   The client connection preface starts with a sequence of 24 octets,
+          *   which in hex notation is:
+          *
+          *     0x505249202a20485454502f322e300d0a0d0a534d0d0a0d0a
+          *   That is, the connection preface starts with the string
+          *   PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n). This sequence MUST be followed
+          *   by a SETTINGS frame (Section 6.5), which MAY be empty. *)
+         connection_preface *> settings_preface parse_context)
       preface_handler
       frame_handler
 

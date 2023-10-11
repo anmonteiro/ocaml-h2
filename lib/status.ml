@@ -43,9 +43,9 @@
 include (
   Httpaf.Status :
     module type of Httpaf.Status
-      with type client_error := Httpaf.Status.client_error
-       and type standard := Httpaf.Status.standard
-       and type t := Httpaf.Status.t)
+    with type client_error := Httpaf.Status.client_error
+     and type standard := Httpaf.Status.standard
+     and type t := Httpaf.Status.t)
 
 type client_error =
   [ Httpaf.Status.client_error

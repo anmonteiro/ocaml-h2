@@ -2,9 +2,9 @@ let set_interval s f destroy =
   let rec set_interval_loop s f n =
     let timeout =
       Lwt_timeout.create s (fun () ->
-          if n > 0
-          then (if f () then set_interval_loop s f (n - 1))
-          else destroy ())
+        if n > 0
+        then (if f () then set_interval_loop s f (n - 1))
+        else destroy ())
     in
     Lwt_timeout.start timeout
   in
@@ -62,11 +62,11 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
             set_interval
               1
               (fun () ->
-                Body.Writer.write_string response_body "FOO";
-                (* Body.flush response_body ignore; *)
-                true)
+                 Body.Writer.write_string response_body "FOO";
+                 (* Body.flush response_body ignore; *)
+                 true)
               (* Body.flush response_body ignore; *)
-                (fun () -> Body.Writer.close response_body))
+                 (fun () -> Body.Writer.close response_body))
           ~on_read:(fun request_data ~off ~len ->
             Body.Writer.write_bigstring response_body request_data ~off ~len;
             respond ())
@@ -85,22 +85,22 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
       (* let (finished, notify) = Lwt.wait () in *)
       let rec on_read _request_data ~off:_ ~len:_ =
         Body.Writer.flush response_body (fun () ->
-            Body.Reader.schedule_read request_body ~on_eof ~on_read)
+          Body.Reader.schedule_read request_body ~on_eof ~on_read)
       and on_eof () =
         set_interval
           2
           (fun () ->
-            let _ =
-              Body.Writer.write_string response_body "data: some data\n\n"
-            in
-            Body.Writer.flush response_body (fun () -> ());
-            true)
+             let _ =
+               Body.Writer.write_string response_body "data: some data\n\n"
+             in
+             Body.Writer.flush response_body (fun () -> ());
+             true)
           (fun () ->
-            let _ =
-              Body.Writer.write_string response_body "event: end\ndata: 1\n\n"
-            in
-            Body.Writer.flush response_body (fun () ->
-                Body.Writer.close response_body))
+             let _ =
+               Body.Writer.write_string response_body "event: end\ndata: 1\n\n"
+             in
+             Body.Writer.flush response_body (fun () ->
+               Body.Writer.close response_body))
       in
       Body.Reader.schedule_read ~on_read ~on_eof request_body;
       ()
@@ -144,14 +144,12 @@ let () =
     "Echoes POST requests. Runs forever.";
   let listen_address = Unix.(ADDR_INET (inet_addr_loopback, !port)) in
   Lwt.async (fun () ->
-      Lwt_io.establish_server_with_client_socket
-        listen_address
-        connection_handler
-      >>= fun _server ->
-      Printf.printf "Listening on port %i and echoing POST requests.\n" !port;
-      print_string "To send a POST request, try\n\n";
-      print_string "  echo foo | dune exec examples/lwt/lwt_post.exe\n\n";
-      flush stdout;
-      Lwt.return_unit);
+    Lwt_io.establish_server_with_client_socket listen_address connection_handler
+    >>= fun _server ->
+    Printf.printf "Listening on port %i and echoing POST requests.\n" !port;
+    print_string "To send a POST request, try\n\n";
+    print_string "  echo foo | dune exec examples/lwt/lwt_post.exe\n\n";
+    flush stdout;
+    Lwt.return_unit);
   let forever, _ = Lwt.wait () in
   Lwt_main.run forever

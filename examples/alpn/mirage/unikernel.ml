@@ -89,22 +89,22 @@ struct
     log c "started unikernel listen (http: 8080, https: 9443)" >>= fun () ->
     S.listen_tcpv4 stack ~port:8080 D.redirect;
     S.listen_tcpv4 stack ~port:9443 (fun flow ->
-        with_tls tls_config flow ~f:(fun flow ->
-            match TLS.epoch flow with
-            | Error () ->
-              Lwt_io.eprintlf
-                "Unable to fetch session data. Did the handshake fail?"
-            | Ok { Tls.Core.alpn_protocol; _ } ->
-              (match alpn_protocol with
-              | None ->
-                (* Unable to negotiate a protocol *)
-                Lwt.return_unit
-              | Some "http/1.1" -> D.http1_handler flow
-              | Some "h2" -> D.h2_handler flow
-              | _ ->
-                (* Can't really happen - would mean that TLS negotiated a
-                 * protocol that we didn't specify. *)
-                assert false)));
+      with_tls tls_config flow ~f:(fun flow ->
+        match TLS.epoch flow with
+        | Error () ->
+          Lwt_io.eprintlf
+            "Unable to fetch session data. Did the handshake fail?"
+        | Ok { Tls.Core.alpn_protocol; _ } ->
+          (match alpn_protocol with
+          | None ->
+            (* Unable to negotiate a protocol *)
+            Lwt.return_unit
+          | Some "http/1.1" -> D.http1_handler flow
+          | Some "h2" -> D.h2_handler flow
+          | _ ->
+            (* Can't really happen - would mean that TLS negotiated a
+             * protocol that we didn't specify. *)
+            assert false)));
     S.listen stack >>= fun () ->
     let forever, _ = Lwt.wait () in
     forever
