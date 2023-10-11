@@ -56,7 +56,7 @@ let main port host () =
   in
   let response_received_ivar = Ivar.create () in
   let response_handler = response_handler response_received_ivar in
-  let request_body =
+  let { Client_connection.request_body; _ } =
     H2_async.Client.TLS.request
       tls_conn
       request_headers

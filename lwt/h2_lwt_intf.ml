@@ -71,7 +71,7 @@ module type Client = sig
     -> Request.t
     -> error_handler:Client_connection.error_handler
     -> response_handler:Client_connection.response_handler
-    -> Body.Writer.t
+    -> H2.Client_connection.request_info
 
   val ping :
      ?payload:Bigstringaf.t

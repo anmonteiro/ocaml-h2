@@ -1368,6 +1368,12 @@ let create_h2c
     Ok t
   | Error msg -> Error msg
 
+type request_info =
+  { request_body : Body.Writer.t
+  ; rst_stream : code:Error_code.t -> unit
+  (** Cancel the request for this stream. Ignores invalid stream ids *)
+  }
+
 let request
     t
     ?(flush_headers_immediately = false)
@@ -1405,7 +1411,9 @@ let request
    * This is handled by {!Respd.flush_request_body}, which transitions the
    * state once it verifies that there's no more data to send for the
    * stream. *)
-  request_body
+  { request_body
+  ; rst_stream = (fun ~code -> Respd.report_error respd (`Exn End_of_file) code)
+  }
 
 (* XXX: we store PING callbacks in FIFO order. Would it ever be the case that
  * the receipt of a PING frame acknowledges a later callback? If so, we'd need

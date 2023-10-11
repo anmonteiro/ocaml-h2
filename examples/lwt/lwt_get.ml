@@ -54,7 +54,7 @@ let () =
       let response_handler = response_handler notify_response_received in
       Client.SSL.create_connection_with_default ~error_handler socket
       >>= fun connection ->
-      let request_body =
+      let { H2.Client_connection.request_body; _ } =
         Client.SSL.request connection request ~error_handler ~response_handler
       in
       Body.Writer.close request_body;

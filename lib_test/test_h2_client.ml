@@ -310,7 +310,7 @@ module Client_connection_tests = struct
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -351,7 +351,7 @@ module Client_connection_tests = struct
           true
       | _ -> Alcotest.fail "Expected stream error handler to pass"
     in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -390,7 +390,7 @@ module Client_connection_tests = struct
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -415,7 +415,7 @@ module Client_connection_tests = struct
     let second_response_handler _response _response_body =
       second_handler_called := true
     in
-    let second_request_body =
+    let { Client_connection.request_body = second_request_body; _ } =
       Client_connection.request
         t
         request
@@ -451,7 +451,7 @@ module Client_connection_tests = struct
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -500,7 +500,7 @@ module Client_connection_tests = struct
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -577,7 +577,7 @@ module Client_connection_tests = struct
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -680,7 +680,7 @@ module Client_connection_tests = struct
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -767,7 +767,7 @@ module Client_connection_tests = struct
         Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
       | _ -> Alcotest.fail "Expected stream error handler to pass"
     in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -822,7 +822,7 @@ module Client_connection_tests = struct
         Alcotest.(check pass) "Stream error handler gets a protocol error" () ()
       | _ -> Alcotest.fail "Expected stream error handler to pass"
     in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -872,7 +872,7 @@ module Client_connection_tests = struct
     let stream_level_error_handler _error =
       Alcotest.fail "didn't expect error handler to be called"
     in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -953,7 +953,7 @@ module Client_connection_tests = struct
     let request = Request.create ~scheme:"http" `GET "/" in
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -978,7 +978,7 @@ module Client_connection_tests = struct
     let t = create_and_handle_preface () in
     let request = Request.create ~scheme:"http" `GET "/" in
     let response_handler _response _response_body = () in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -998,7 +998,7 @@ module Client_connection_tests = struct
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
     let error_handler_called = ref false in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -1055,7 +1055,7 @@ module Client_connection_tests = struct
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
     let error_handler_called = ref false in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -1103,7 +1103,7 @@ module Client_connection_tests = struct
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
     let error_handler_called = ref false in
-    let body =
+    let { Client_connection.request_body = body; _ } =
       Client_connection.request
         t
         request
@@ -1167,7 +1167,7 @@ module Client_connection_tests = struct
             ~on_eof:ignore
             response_body)
     in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -1207,7 +1207,7 @@ module Client_connection_tests = struct
         ~on_eof:ignore
         ~on_read:(fun _bs ~off:_ ~len:_ -> body_read_called := true)
     in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -1244,7 +1244,7 @@ module Client_connection_tests = struct
     in
     let request = Request.create ~scheme:"http" `GET "/" in
     let response_handler _response _response_body = () in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
@@ -1277,7 +1277,7 @@ module Client_connection_tests = struct
         ~headers:Headers.(of_list [ "content-length", "5" ])
     in
     let response_handler _response _response_body = () in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         ~flush_headers_immediately:false
         t
@@ -1339,8 +1339,12 @@ module Client_connection_tests = struct
         ~error_handler:default_error_handler
         ~response_handler
     in
-    let req1_body = do_request request1 in
-    let req2_body = do_request request2 in
+    let { Client_connection.request_body = req1_body; _ } =
+      do_request request1
+    in
+    let { Client_connection.request_body = req2_body; _ } =
+      do_request request2
+    in
     (* Writer yields when `~flush_headers_immediately` is false *)
     writer_yielded t;
     (* Write to the body *)
@@ -1408,7 +1412,7 @@ module Client_connection_tests = struct
     let handler_called = ref false in
     let response_handler _response _response_body = handler_called := true in
     let error_handler_called = ref false in
-    let request_body =
+    let { Client_connection.request_body; _ } =
       Client_connection.request
         t
         request
