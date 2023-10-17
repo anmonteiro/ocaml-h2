@@ -75,4 +75,4 @@ let () =
       in
       Body.Writer.write_string request_body text_to_send;
       Body.Writer.close request_body;
-      response_received )
+      response_received >>= fun () -> H2_lwt_unix.Client.shutdown conn )

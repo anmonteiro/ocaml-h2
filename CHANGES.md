@@ -1,3 +1,11 @@
+Unreleased
+---------------
+
+- h2 (client): return a request cancellation function along with the
+  (write-end) request body
+  ([#224](https://github.com/anmonteiro/ocaml-h2/pull/224))
+
+
 0.10.0 2023-03-17
 ---------------
 
