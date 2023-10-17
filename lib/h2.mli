@@ -848,6 +848,12 @@ module Client_connection : sig
     -> response_handler * error_handler
     -> (t, string) result
 
+  type request_info =
+    { request_body : Body.Writer.t
+    ; rst_stream : code:Error_code.t -> unit
+    (** Cancel the request for this stream. Ignores invalid stream ids *)
+    }
+
   val request :
      t
     -> ?flush_headers_immediately:bool
@@ -855,7 +861,7 @@ module Client_connection : sig
     -> Request.t
     -> error_handler:error_handler
     -> response_handler:response_handler
-    -> Body.Writer.t
+    -> request_info
   (** [request connection ?trailers_handler req ~error_handler
       ~response_handler]
       opens a new HTTP/2 stream with [req] and returns a request body that can

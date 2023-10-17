@@ -66,7 +66,7 @@ let () =
       let response_received, notify_response_received = Lwt.wait () in
       let response_handler = response_handler notify_response_received in
       H2_lwt_unix.Client.create_connection ~error_handler socket >>= fun conn ->
-      let request_body =
+      let { H2.Client_connection.request_body; _ } =
         H2_lwt_unix.Client.request
           conn
           request_headers
@@ -75,4 +75,4 @@ let () =
       in
       Body.Writer.write_string request_body text_to_send;
       Body.Writer.close request_body;
-      response_received )
+      response_received >>= fun () -> H2_lwt_unix.Client.shutdown conn )

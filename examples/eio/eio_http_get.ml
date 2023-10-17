@@ -1,7 +1,7 @@
 open H2
 module Client = H2_eio.Client
 
-let response_handler ~on_eof response response_body =
+let _response_handler ~on_eof response response_body =
   Format.eprintf "Response: %a@." Response.pp_hum response;
 
   let rec read_response () =
@@ -9,7 +9,6 @@ let response_handler ~on_eof response response_body =
       response_body
       ~on_eof
       ~on_read:(fun bigstring ~off ~len ->
-        Format.eprintf "heh nice %d@." len;
         let response_fragment = Bytes.create len in
         Bigstringaf.blit_to_bytes
           bigstring
@@ -17,28 +16,26 @@ let response_handler ~on_eof response response_body =
           response_fragment
           ~dst_off:0
           ~len;
-        print_string (Bytes.to_string response_fragment);
+        print_endline (Bytes.to_string response_fragment);
         read_response ())
   in
   read_response ()
 
-let error_handler u err =
+let make_error_handler u err =
   (match err with
   | `Exn exn -> Format.eprintf "wut %S@." (Printexc.to_string exn)
   | `Invalid_response_body_length res ->
     Format.eprintf "invalid res: %a@." Response.pp_hum res
   | `Malformed_response str -> Format.eprintf "malformed %S@." str
   | `Protocol_error (err, s) ->
-    Format.eprintf "wut %a %S@." H2.Error_code.pp_hum err s);
+    Format.eprintf "pwut %a %S@." H2.Error_code.pp_hum err s);
   Eio.Promise.resolve u ()
 
-let[@ocaml.alert "-deprecated"] () =
-  Ssl_threads.init ();
-  Ssl.init ~thread_safe:true ();
+let () =
   let host = ref None in
-  let port = ref 443 in
+  let port = ref 8080 in
   Arg.parse
-    [ "-p", Set_int port, " Port number (443 by default)" ]
+    [ "-p", Set_int port, " Port number (8080 by default)" ]
     (fun host_argument -> host := Some host_argument)
     "eio_get.exe [-p N] HOST";
   let host =
@@ -74,7 +71,7 @@ let[@ocaml.alert "-deprecated"] () =
         Request.create
           `GET
           "/"
-          ~scheme:"https"
+          ~scheme:"http"
           ~headers:
             Headers.(
               add_list
@@ -82,30 +79,16 @@ let[@ocaml.alert "-deprecated"] () =
                 [ "user-agent", "carl/0.0.0-experimental"; ":authority", host ])
       in
 
-      let ctx = Ssl.create_context Ssl.SSLv23 Ssl.Client_context in
-      (* Ssl.disable_protocols ctx [ Ssl.SSLv23 ]; *)
-      Ssl.honor_cipher_order ctx;
-      Ssl.set_context_alpn_protos ctx [ "h2" ];
-
-      Ssl.set_min_protocol_version ctx TLSv1_3;
-      Ssl.set_max_protocol_version ctx TLSv1_3;
-
-      let ssl_ctx = Eio_ssl.Context.create ~ctx socket in
-      let ssl_sock = Eio_ssl.Context.ssl_socket ssl_ctx in
-      Ssl.set_client_SNI_hostname ssl_sock host;
-      Ssl.set_hostflags ssl_sock [ No_partial_wildcards ];
-      Ssl.set_host ssl_sock host;
-      let ssl_sock = Eio_ssl.connect ssl_ctx in
-
       let shut_p, shut_u = Eio.Promise.create () in
-      let error_handler = error_handler shut_u in
-      let connection = Client.create_connection ~sw ~error_handler ssl_sock in
+      let error_handler = make_error_handler shut_u in
+      let connection = Client.create_connection ~sw ~error_handler socket in
       let response_handler =
-        response_handler ~on_eof:(fun () ->
+        _response_handler ~on_eof:(fun () ->
           Format.eprintf "eof@.";
-          Eio.Promise.resolve shut_u ())
+          if not (Eio.Promise.is_resolved shut_p)
+          then Eio.Promise.resolve shut_u ())
       in
-      let { H2.Client_connection.request_body; _ } =
+      let { H2.Client_connection.request_body; rst_stream = _ } =
         Client.request
           connection
           request
@@ -115,4 +98,29 @@ let[@ocaml.alert "-deprecated"] () =
       in
       Body.Writer.close request_body;
       Eio.Promise.await shut_p;
+      Format.eprintf "Done@.";
+      let ps = ref [] in
+      for _i = 0 to 400 do
+        let shut_p, shut_u = Eio.Promise.create () in
+        let error_handler = make_error_handler shut_u in
+        let response_handler =
+          _response_handler ~on_eof:(fun () ->
+            Format.eprintf "eof@.";
+            if not (Eio.Promise.is_resolved shut_p)
+            then Eio.Promise.resolve shut_u ())
+        in
+
+        let { H2.Client_connection.request_body; rst_stream } =
+          Client.request
+            connection
+            request
+            ~error_handler
+            ~response_handler
+            ~flush_headers_immediately:true
+        in
+        Body.Writer.close request_body;
+        rst_stream ~code:H2.Error_code.EnhanceYourCalm;
+        ps := shut_p :: !ps
+      done;
+      Eio.Fiber.all (List.map (fun p () -> Eio.Promise.await p) !ps);
       Eio.Promise.await (Client.shutdown connection)))

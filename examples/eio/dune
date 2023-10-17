@@ -1,5 +1,5 @@
-(executable
- (name eio_get)
+(executables
+ (names eio_http_get eio_get)
  (libraries h2 h2-eio eio-ssl eio_main eio.unix))
 
 (alias
