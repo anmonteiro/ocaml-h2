@@ -1,3 +1,15 @@
+Unreleased
+--------------
+
+- h2-eio: adapt to Eio v0.12
+  ([#225](https://github.com/anmonteiro/ocaml-h2/pull/225))
+- h2-eio: track sw for gluten
+  ([#215](https://github.com/anmonteiro/ocaml-h2/pull/215))
+- h2: Add hpack {= version} constraint
+  ([#214](https://github.com/anmonteiro/ocaml-h2/pull/214))
+- h2, hpack, h2-async: Add opam constraints for angstrom and gluten-async
+  ([#212](https://github.com/anmonteiro/ocaml-h2/pull/212))
+
 0.10.0 2023-03-17
 ---------------
 
