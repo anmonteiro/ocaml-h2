@@ -1,4 +1,4 @@
-Unreleased
+0.11.0 2023-10-26
 --------------
 
 - h2-eio: adapt to Eio v0.12
