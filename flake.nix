@@ -17,7 +17,7 @@
         packages = pkgs.callPackage ./nix { nix-filter = nix-filter.lib; };
         defaultPackage = packages.h2;
         devShells = rec {
-          default = pkgs.callPackage ./shell.nix { inherit packages; };
+          default = pkgs.callPackage ./nix/shell.nix { inherit packages; };
           release = default.override { release-mode = true; };
         };
       });
