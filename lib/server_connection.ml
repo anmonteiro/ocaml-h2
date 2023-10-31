@@ -969,14 +969,15 @@ let process_ping_frame t { Frame.frame_header; _ } payload =
     Writer.write_ping t.writer frame_info payload;
     wakeup_writer t)
 
-let process_goaway_frame t _frame payload =
-  let _last_stream_id, _error, debug_data = payload in
-  let len = Bigstringaf.length debug_data in
-  let bytes = Bytes.create len in
-  Bigstringaf.unsafe_blit_to_bytes debug_data ~src_off:0 bytes ~dst_off:0 ~len;
+let process_goaway_frame t _frame ~last_stream_id:_ ~data error =
+  let reason =
+    match Bigstringaf.length data with
+    | 0 -> None
+    | len -> Some (Bigstringaf.substring data ~off:0 ~len)
+  in
   (* TODO(anmonteiro): I think we need to allow lower numbered streams to
    * complete. *)
-  shutdown t
+  report_connection_error t ?reason error
 
 let add_window_increment :
     type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
@@ -1200,8 +1201,8 @@ let create_generic ~h2c ~config ~error_handler request_handler =
             ~reason:"Client cannot push"
             Error_code.ProtocolError
         | Ping data -> process_ping_frame t frame data
-        | GoAway (last_stream_id, error, debug_data) ->
-          process_goaway_frame t frame (last_stream_id, error, debug_data)
+        | GoAway (last_stream_id, error, data) ->
+          process_goaway_frame t frame ~last_stream_id ~data error
         | WindowUpdate window_size ->
           process_window_update_frame t frame window_size
         | Continuation headers_block ->

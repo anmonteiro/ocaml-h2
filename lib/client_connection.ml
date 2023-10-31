@@ -88,11 +88,8 @@ let flush_request_body t =
 
 let shutdown_writer t =
   flush_request_body t;
-  Writer.close t.writer
-
-let shutdown_rw t =
-  shutdown_reader t;
-  shutdown_writer t
+  Writer.close t.writer;
+  Writer.wakeup t.writer
 
 (* Handling frames against closed streams is hard. See:
  * https://docs.google.com/presentation/d/1iG_U2bKTc9CnKr0jPTrNfmxyLufx_cK2nNh9VjrKH6s
@@ -102,53 +99,60 @@ let was_closed_or_implicitly_closed t stream_id =
   then Stream_identifier.(stream_id <= t.current_stream_id)
   else Stream_identifier.(stream_id <= t.max_pushed_stream_id)
 
-let report_error t = function
-  | Error.ConnectionError (error, data) ->
-    if not t.did_send_go_away
-    then (
-      (* From RFC7540§5.4.1:
-       *   An endpoint that encounters a connection error SHOULD first send a
-       *   GOAWAY frame (Section 6.8) with the stream identifier of the last
-       *   stream that it successfully received from its peer. The GOAWAY frame
-       *   includes an error code that indicates why the connection is
-       *   terminating. After sending the GOAWAY frame for an error condition,
-       *   the endpoint MUST close the TCP connection. *)
-      let debug_data =
-        if String.length data = 0
-        then Bigstringaf.empty
-        else Bigstringaf.of_string ~off:0 ~len:(String.length data) data
-      in
-      let frame_info = Writer.make_frame_info Stream_identifier.connection in
-      (* TODO: Only write if not already shutdown. *)
-      Writer.write_go_away
-        t.writer
-        frame_info
-        ~debug_data
-        ~last_stream_id:
-          (if Stream_identifier.(t.current_stream_id === -1l)
-           then Stream_identifier.connection
-           else t.current_stream_id)
-        error;
-      t.did_send_go_away <- true;
-      if error <> Error_code.NoError
-      then t.error_handler (`Protocol_error (error, data));
-      Writer.flush t.writer (fun () ->
-        (* XXX: We need to allow lower numbered streams to complete before
-         * shutting down. *)
-        shutdown_rw t);
-      Writer.wakeup t.writer)
-  | StreamError (stream_id, error) ->
-    (match Scheduler.find t.streams stream_id with
-    | Some respd -> Respd.report_error respd (`Protocol_error (error, "")) error
-    | None ->
-      if not (was_closed_or_implicitly_closed t stream_id)
-      then
-        (* Possible if the stream was going to enter the Idle state (first time
-         * we saw e.g. a PRIORITY frame for it) but had e.g. a
-         * FRAME_SIZE_ERROR. *)
-        let frame_info = Writer.make_frame_info stream_id in
-        Writer.write_rst_stream t.writer frame_info error);
-    Writer.wakeup t.writer
+let report_error =
+  let shutdown_rw t =
+    shutdown_reader t;
+    shutdown_writer t
+  in
+  fun t e ->
+    match e with
+    | Error.ConnectionError (error, data) ->
+      if not t.did_send_go_away
+      then (
+        (* From RFC7540§5.4.1:
+         *   An endpoint that encounters a connection error SHOULD first send a
+         *   GOAWAY frame (Section 6.8) with the stream identifier of the last
+         *   stream that it successfully received from its peer. The GOAWAY frame
+         *   includes an error code that indicates why the connection is
+         *   terminating. After sending the GOAWAY frame for an error condition,
+         *   the endpoint MUST close the TCP connection. *)
+        let debug_data =
+          if String.length data = 0
+          then Bigstringaf.empty
+          else Bigstringaf.of_string ~off:0 ~len:(String.length data) data
+        in
+        let frame_info = Writer.make_frame_info Stream_identifier.connection in
+        (* TODO: Only write if not already shutdown. *)
+        Writer.write_go_away
+          t.writer
+          frame_info
+          ~debug_data
+          ~last_stream_id:
+            (if Stream_identifier.(t.current_stream_id === -1l)
+             then Stream_identifier.connection
+             else t.current_stream_id)
+          error;
+        t.did_send_go_away <- true;
+        if error <> Error_code.NoError
+        then t.error_handler (`Protocol_error (error, data));
+        Writer.flush t.writer (fun () ->
+          (* XXX: We need to allow lower numbered streams to complete before
+           * shutting down. *)
+          shutdown_rw t);
+        Writer.wakeup t.writer)
+    | StreamError (stream_id, error) ->
+      (match Scheduler.find t.streams stream_id with
+      | Some respd ->
+        Respd.report_error respd (`Protocol_error (error, "")) error
+      | None ->
+        if not (was_closed_or_implicitly_closed t stream_id)
+        then
+          (* Possible if the stream was going to enter the Idle state (first time
+           * we saw e.g. a PRIORITY frame for it) but had e.g. a
+           * FRAME_SIZE_ERROR. *)
+          let frame_info = Writer.make_frame_info stream_id in
+          Writer.write_rst_stream t.writer frame_info error);
+      Writer.wakeup t.writer
 
 let report_connection_error t ?(reason = "") error =
   report_error t (ConnectionError (error, reason))
@@ -1047,14 +1051,15 @@ let process_ping_frame t { Frame.frame_header; _ } payload =
     Writer.write_ping t.writer frame_info payload;
     Writer.wakeup t.writer
 
-let process_goaway_frame t _frame payload =
-  let _last_stream_id, _error, debug_data = payload in
-  let len = Bigstringaf.length debug_data in
-  let bytes = Bytes.create len in
-  Bigstringaf.unsafe_blit_to_bytes debug_data ~src_off:0 bytes ~dst_off:0 ~len;
+let process_goaway_frame t _frame ~last_stream_id:_ ~data error =
+  let reason =
+    match Bigstringaf.length data with
+    | 0 -> None
+    | len -> Some (Bigstringaf.substring data ~off:0 ~len)
+  in
   (* TODO(anmonteiro): I think we need to allow lower numbered streams to
    * complete. *)
-  shutdown_rw t
+  report_connection_error t ?reason error
 
 let add_window_increment :
     type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
@@ -1217,8 +1222,8 @@ let create ?(config = Config.default) ?push_handler ~error_handler () =
         | PushPromise (promised_stream_id, bs) ->
           process_push_promise_frame t frame promised_stream_id bs
         | Ping data -> process_ping_frame t frame data
-        | GoAway (last_stream_id, error, debug_data) ->
-          process_goaway_frame t frame (last_stream_id, error, debug_data)
+        | GoAway (last_stream_id, error, data) ->
+          process_goaway_frame t frame ~last_stream_id ~data error
         | WindowUpdate window_size ->
           process_window_update_frame t frame window_size
         | Continuation headers_block ->
