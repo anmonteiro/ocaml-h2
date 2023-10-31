@@ -31,7 +31,14 @@
  *---------------------------------------------------------------------------*)
 
 open Types
-module HeaderFieldsTbl = Hashtbl.Make (String)
+
+module HeaderFieldsTbl = Hashtbl.Make (struct
+    type t = string
+
+    let equal = String.equal
+    let hash s = Hashtbl.hash s
+  end)
+
 module ValueMap = Map.Make (String)
 
 type t =
