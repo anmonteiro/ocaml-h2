@@ -295,6 +295,24 @@ let test_end_of_table () =
     hs
     decoded_headers
 
+let test_encode_newline () =
+  let hs =
+    [ { name = "authorization"; value = "helloworld\na"; sensitive = true } ]
+  in
+  let encoder = Encoder.create 4096 in
+  let encoded_headers = encode_headers encoder hs in
+  Alcotest.(check bool)
+    "Encodes to non-zero hex"
+    true
+    (String.length encoded_headers > 0);
+  let decoder = Decoder.create 4096 in
+  let decoded_headers = decode_headers decoder 4096 encoded_headers in
+  List.iter2
+    (fun h1 h2 ->
+       Alcotest.(check header_testable "Decoded headers are roundtripped" h1 h2))
+    hs
+    decoded_headers
+
 let () =
   let fixtures_dir = "hpack-test-case" in
   let raw_data_dir = Filename.concat fixtures_dir "raw-data" in
@@ -322,5 +340,8 @@ let () =
        ; ( "Encoding the header from the end of the static table"
          , `Quick
          , test_end_of_table )
+       ; ( "Encode huffman chars with bit length > 24"
+         , `Quick
+         , test_encode_newline )
        ] )
     :: suites)

@@ -1,3 +1,9 @@
+Unreleased
+--------------
+
+- hpack: fix huffman encoding for codes > 24bit
+  ([#229](https://github.com/anmonteiro/ocaml-h2/pull/229))
+
 0.11.0 2023-10-26
 --------------
 
