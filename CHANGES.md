@@ -15,6 +15,9 @@ Unreleased
   ([#214](https://github.com/anmonteiro/ocaml-h2/pull/214))
 - h2, hpack, h2-async: Add opam constraints for angstrom and gluten-async
   ([#212](https://github.com/anmonteiro/ocaml-h2/pull/212))
+- h2: read available `Body.Reader.t` immediately upon calling
+  `Body.Reader.schedule_read`
+  ([#238](https://github.com/anmonteiro/ocaml-h2/pull/238))
 
 0.10.0 2023-03-17
 ---------------
