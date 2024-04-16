@@ -91,12 +91,12 @@ module Reader = struct
   let schedule_read t ~on_eof ~on_read =
     if t.read_scheduled
     then failwith "Body.schedule_read: reader already scheduled";
-    if is_closed t
-    then do_execute_read t on_eof on_read
-    else (
+    if not (is_closed t)
+    then (
       t.read_scheduled <- true;
       t.on_eof <- on_eof;
-      t.on_read <- on_read)
+      t.on_read <- on_read);
+    do_execute_read t on_eof on_read
 
   let close t =
     Faraday.close t.faraday;

@@ -1447,6 +1447,60 @@ module Client_connection_tests = struct
     Body.Writer.write_string request_body "hello";
     Body.Writer.close request_body
 
+  let test_schedule_read_with_data_available () =
+    let t = create_and_handle_preface () in
+    let request =
+      Request.create
+        ~scheme:"http"
+        ~headers:(Headers.of_list [ "content-length", "5" ])
+        `GET
+        "/"
+    in
+    let body = ref None in
+    let response_handler _response response_body = body := Some response_body in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~flush_headers_immediately:true
+        ~error_handler:default_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    Body.Writer.close request_body;
+    let _, lenv = flush_pending_writes t in
+    report_write_result t (`Ok lenv);
+    writer_yielded t;
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    read_response
+      t
+      hpack_encoder
+      ~flags:Flags.(default_flags |> set_end_header)
+      (Response.create `OK ~headers:(Headers.of_list [ "content-length", "6" ]));
+    let body = Option.get !body in
+    let schedule_read expected =
+      let did_read = ref false in
+      Body.Reader.schedule_read
+        body
+        ~on_read:(fun buf ~off ~len ->
+          let actual = Bigstringaf.substring buf ~off ~len in
+          Format.eprintf "antonio %S@." actual;
+          did_read := true;
+          Alcotest.(check string) "Body" expected actual)
+        ~on_eof:(fun () -> assert false);
+      Alcotest.(check bool) "on_read called" true !did_read
+    in
+    read_response_body t "foo" ~flags:Flags.(default_flags);
+    schedule_read "foo";
+    read_response_body t "bar";
+    schedule_read "bar";
+    let did_eof = ref false in
+    Body.Reader.schedule_read
+      body
+      ~on_read:(fun _ ~off:_ ~len:_ -> Alcotest.fail "Expected eof")
+      ~on_eof:(fun () -> did_eof := true);
+    Alcotest.(check bool) "on_eof called" true !did_eof
+
   let suite =
     [ "initial reader state", `Quick, test_initial_reader_state
     ; "set up client connection", `Quick, test_set_up_connection
@@ -1502,6 +1556,9 @@ module Client_connection_tests = struct
     ; ( "dont fail if already handling error"
       , `Quick
       , test_request_body_rst_stream_no_double_error )
+    ; ( "schedule read when data is already available"
+      , `Quick
+      , test_schedule_read_with_data_available )
     ]
 end
 
