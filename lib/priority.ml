@@ -59,7 +59,7 @@ let highest_priority =
  *   +-+-------------+-----------------------------------------------+
  *   |   Weight (8)  |
  *   +-+-------------+
- *)
+*)
 
 let test_exclusive n = test_bit_int32 n 31
 let set_exclusive n = set_bit_int32 n 31

@@ -76,12 +76,12 @@ let default =
   }
 
 let to_settings
-    { read_buffer_size
-    ; max_concurrent_streams
-    ; initial_window_size
-    ; enable_server_push
-    ; _
-    }
+      { read_buffer_size
+      ; max_concurrent_streams
+      ; initial_window_size
+      ; enable_server_push
+      ; _
+      }
   =
   { Settings.default with
     max_frame_size = read_buffer_size

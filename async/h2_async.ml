@@ -39,11 +39,11 @@ module Server = struct
   type 'a socket = ([ `Active ], ([< Socket.Address.t ] as 'a)) Socket.t
 
   let create_connection_handler
-      ?(config = H2.Config.default)
-      ~request_handler
-      ~error_handler
-      client_addr
-      socket
+        ?(config = H2.Config.default)
+        ~request_handler
+        ~error_handler
+        client_addr
+        socket
     =
     let connection =
       H2.Server_connection.create
@@ -60,11 +60,11 @@ module Server = struct
 
   module SSL = struct
     let create_connection_handler
-        ?(config = H2.Config.default)
-        ~request_handler
-        ~error_handler
-        client_addr
-        socket
+          ?(config = H2.Config.default)
+          ~request_handler
+          ~error_handler
+          client_addr
+          socket
       =
       let connection =
         H2.Server_connection.create
@@ -80,11 +80,11 @@ module Server = struct
         socket
 
     let create_connection_handler_with_default
-        ~certfile
-        ~keyfile
-        ?config
-        ~request_handler
-        ~error_handler
+          ~certfile
+          ~keyfile
+          ?config
+          ~request_handler
+          ~error_handler
       =
       let make_ssl_server =
         Gluten_async.Server.SSL.create_default
@@ -115,10 +115,10 @@ module Client = struct
     }
 
   let create_connection
-      ?(config = Config.default)
-      ?push_handler
-      ~error_handler
-      socket
+        ?(config = Config.default)
+        ?push_handler
+        ~error_handler
+        socket
     =
     let connection =
       Client_connection.create ~config ?push_handler ~error_handler ()
@@ -147,10 +147,10 @@ module Client = struct
       }
 
     let create_connection
-        ?(config = Config.default)
-        ?push_handler
-        ~error_handler
-        socket
+          ?(config = Config.default)
+          ?push_handler
+          ~error_handler
+          socket
       =
       let connection =
         Client_connection.create ~config ?push_handler ~error_handler ()
@@ -163,10 +163,10 @@ module Client = struct
       >>| fun runtime -> { runtime; connection }
 
     let create_connection_with_default
-        ?(config = Config.default)
-        ?push_handler
-        ~error_handler
-        socket
+          ?(config = Config.default)
+          ?push_handler
+          ~error_handler
+          socket
       =
       Client_runtime.create_default ~alpn_protocols:[ "http/1.1" ] socket
       >>= fun ssl_client ->
@@ -190,10 +190,10 @@ module Client = struct
       }
 
     let create_connection
-        ?(config = Config.default)
-        ?push_handler
-        ~error_handler
-        socket
+          ?(config = Config.default)
+          ?push_handler
+          ~error_handler
+          socket
       =
       let connection =
         Client_connection.create ~config ?push_handler ~error_handler ()
@@ -206,11 +206,11 @@ module Client = struct
       >>| fun runtime -> { runtime; connection }
 
     let create_connection_with_default
-        ?(config = Config.default)
-        ?push_handler
-        ~error_handler
-        socket
-        where_to_connect
+          ?(config = Config.default)
+          ?push_handler
+          ~error_handler
+          socket
+          where_to_connect
       =
       Client_runtime.create_default
         ~alpn_protocols:[ "http/1.1" ]

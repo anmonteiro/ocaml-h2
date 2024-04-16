@@ -1,5 +1,5 @@
 (*
- * This code was adapted from
+   * This code was adapted from
  * https://github.com/mirage/mirage-www/blob/master/src/dispatch_tls.ml.
  *
  * Its copyright header is retained below.
@@ -17,7 +17,7 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *)
+*)
 open Lwt.Infix
 
 module type HTTP = Httpaf_mirage.Server
