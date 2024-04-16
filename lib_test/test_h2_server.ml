@@ -442,12 +442,21 @@ module Server_connection_tests = struct
       read_eof
         t
         ~off:(read1 + read2)
-        ~len:(frame_length - max_length - (* random *) 5)
+        ~len:
+          (frame_length
+          - max_length
+          -
+          (* random *)
+          5)
         frame_wire
     in
     Alcotest.(check int)
       "advances over more input"
-      (frame_length - max_length - (* random *) 5)
+      (frame_length
+      - max_length
+      -
+      (* random *)
+      5)
       read3;
     Alcotest.check
       read_operation

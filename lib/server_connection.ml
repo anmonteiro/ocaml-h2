@@ -95,7 +95,7 @@ let shutdown t =
 
 (* Handling frames against closed streams is hard. See:
  * https://docs.google.com/presentation/d/1iG_U2bKTc9CnKr0jPTrNfmxyLufx_cK2nNh9VjrKH6s
- *)
+*)
 let was_closed_or_implicitly_closed t stream_id =
   if Stream_identifier.is_request stream_id
   then Stream_identifier.(stream_id <= t.max_client_stream_id)
@@ -175,8 +175,8 @@ let on_close_stream t id ~active closed =
     t.current_client_streams <- t.current_client_streams - 1;
   Scheduler.mark_for_removal t.streams id closed
 
-let send_window_update :
-    type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
+let send_window_update : type a.
+  t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
   =
  fun t stream n ->
   let send_window_update_frame stream_id n =
@@ -253,11 +253,12 @@ let handle_headers t ~end_stream stream active_stream headers =
    *   receives a HEADERS frame that causes its advertised concurrent stream
    *   limit to be exceeded MUST treat this as a stream error (Section 5.4.2)
    *   of type PROTOCOL_ERROR or REFUSED_STREAM. *)
-  if Int32.(
-       compare
-         (of_int (t.current_client_streams + 1))
-         t.config.max_concurrent_streams)
-     > 0
+  if
+    Int32.(
+      compare
+        (of_int (t.current_client_streams + 1))
+        t.config.max_concurrent_streams)
+    > 0
   then
     if t.unacked_settings > 0
     then
@@ -334,13 +335,13 @@ let handle_headers t ~end_stream stream active_stream headers =
         wakeup_writer t))
 
 let handle_headers_block
-    t
-    ?(is_trailers = false)
-    stream
-    active_stream
-    partial_headers
-    flags
-    headers_block
+      t
+      ?(is_trailers = false)
+      stream
+      active_stream
+      partial_headers
+      flags
+      headers_block
   =
   let open AB in
   let (Scheduler.Stream { descriptor = reqd; _ }) = stream in
@@ -449,7 +450,7 @@ let open_stream t ~priority stream_id =
        * between adding the (idle) stream and opening it.
        *
        * Note: `inflow` doesn't change, that's set by us statically via config.
-       *)
+      *)
       node.flow <- t.settings.initial_window_size;
       Some stream
 
@@ -653,13 +654,14 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
             let end_stream = Flags.test_end_stream flags in
             if end_stream
             then
-              if (* From RFC7540§6.1:
+              if
+                (* From RFC7540§6.1:
                   *   When set, bit 0 indicates that this frame is the last that
                   *   the endpoint will send for the identified stream. Setting
                   *   this flag causes the stream to enter one of the
                   *   "half-closed" states or the "closed" state
                   *   (Section 5.1). *)
-                 Reqd.requires_output descriptor
+                Reqd.requires_output descriptor
               then
                 (* There's a potential race condition here if the request
                  * handler completes the response right after. *)
@@ -979,8 +981,8 @@ let process_goaway_frame t _frame ~last_stream_id:_ ~data error =
    * complete. *)
   report_connection_error t ?reason error
 
-let add_window_increment :
-    type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
+let add_window_increment : type a.
+  t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
   =
  fun t stream increment ->
   let open Scheduler in
@@ -1240,9 +1242,9 @@ let create_generic ~h2c ~config ~error_handler request_handler =
   Lazy.force t
 
 let create
-    ?(config = Config.default)
-    ?(error_handler = default_error_handler)
-    request_handler
+      ?(config = Config.default)
+      ?(error_handler = default_error_handler)
+      request_handler
   =
   (* `h2c` false = direct *)
   create_generic ~h2c:false ~config ~error_handler request_handler
@@ -1303,11 +1305,11 @@ let handle_h2c_request t headers request_body_iovecs =
  *   that a large request can block the use of the connection until
  *   it is completely sent. *)
 let create_h2c
-    ?(config = Config.default)
-    ?(error_handler = default_error_handler)
-    ~http_request
-    ?(request_body = [])
-    request_handler
+      ?(config = Config.default)
+      ?(error_handler = default_error_handler)
+      ~http_request
+      ?(request_body = [])
+      request_handler
   =
   let { Httpaf.Request.headers; _ } = http_request in
   (* From RFC7540§3.2.1:

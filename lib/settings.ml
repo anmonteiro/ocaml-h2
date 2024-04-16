@@ -208,7 +208,7 @@ let parse_settings_payload num_settings =
               *
               * From RFC7540§6.5.3:
               *   Unsupported parameters MUST be ignored.
-              *)
+             *)
              acc)
         BE.any_uint16
         BE.any_int32

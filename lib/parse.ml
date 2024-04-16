@@ -389,13 +389,14 @@ let parse_window_update_frame { Frame.stream_id; payload_length; _ } =
          let window_size_increment = Util.clear_bit_int32 uint 31 in
          if Int32.equal window_size_increment 0l
          then
-           if (* From RFC7540§6.9:
+           if
+             (* From RFC7540§6.9:
                *   A receiver MUST treat the receipt of a WINDOW_UPDATE frame
                *   with an flow-control window increment of 0 as a stream error
                *   (Section 5.4.2) of type PROTOCOL_ERROR; errors on the
                *   connection flow-control window MUST be treated as a connection
                *   error (Section 5.4.1). *)
-              Stream_identifier.is_connection stream_id
+             Stream_identifier.is_connection stream_id
            then connection_error ProtocolError "Window update must not be 0"
            else stream_error ProtocolError stream_id
          else Ok (Frame.WindowUpdate window_size_increment))
@@ -478,10 +479,11 @@ module Reader = struct
     (* Parse error reported by Angstrom *)
     [ `Parse of string list * string
     | (* Full error information *)
-      `Error of Error.t
+        `Error of
+        Error.t
     | (* Just the error code, need to puzzle back connection or stream info *)
-      `Error_code of
-      Error_code.t
+        `Error_code of
+        Error_code.t
     ]
 
   type 'error parse_state =
@@ -502,7 +504,7 @@ module Reader = struct
           (* Whether the input source has left the building, indicating that no
            * further input will be received. *)
     ; parse_context : parse_context
-    (* The current stream identifier being processed, in order to discern
+      (* The current stream identifier being processed, in order to discern
      * whether the error that needs to be assembled is a stream or
      * connection error. *)
     }
@@ -539,7 +541,8 @@ module Reader = struct
        *   deserve to know what that is. *)
       Error
         (`Error
-          Error.(ConnectionError (error_code, Bigstringaf.to_string debug_data)))
+            Error.(
+              ConnectionError (error_code, Bigstringaf.to_string debug_data)))
     | Ok _ ->
       (* From RFC7540§3.5:
        *   Clients and servers MUST treat an invalid connection preface as a
@@ -548,14 +551,15 @@ module Reader = struct
        *   preface indicates that the peer is not using HTTP/2. *)
       Error
         (`Error
-          Error.(ConnectionError (ProtocolError, "Invalid connection preface")))
+            Error.(
+              ConnectionError (ProtocolError, "Invalid connection preface")))
     | Error e -> Error (`Error e)
 
   let connection_preface_and_frames
-      ~max_frame_size
-      preface_parser
-      preface_handler
-      frame_handler
+        ~max_frame_size
+        preface_parser
+        preface_handler
+        frame_handler
     =
     let parse_context = create_parse_context max_frame_size in
     let parser =

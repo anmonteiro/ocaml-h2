@@ -177,7 +177,8 @@ let encode =
   in
   let[@inline] is_sensitive token value =
     token <> -1
-    && (* From RFC7541§7.1.3: Never-Indexed Literals
+    &&
+    (* From RFC7541§7.1.3: Never-Indexed Literals
         *   An encoder might also choose not to index values for header fields
         *   that are considered to be highly valuable or sensitive to recovery,
         *   such as the Cookie or Authorization header fields. *)

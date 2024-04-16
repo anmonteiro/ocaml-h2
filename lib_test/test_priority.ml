@@ -195,7 +195,7 @@ let set_up_dep_tree root =
   add_stream root ~priority:(depend_on 7l) (test_reqd 11l)
 
 (*
- * This is the tree from: https://tools.ietf.org/html/rfc7540#section-5.3.3
+   * This is the tree from: https://tools.ietf.org/html/rfc7540#section-5.3.3
  *
  *          1 --> 7
  *    0                0
@@ -209,7 +209,7 @@ let set_up_dep_tree root =
  *    11                   9
  *
  *                (non-exclusive)
- *)
+*)
 let test_reprioritize_to_dependency () =
   let open Scheduler in
   let root = Scheduler.make_root ~capacity:6 () in
@@ -258,7 +258,7 @@ let test_reprioritize_to_dependency () =
     (stream7.children |> PriorityQueue.to_list |> List.map fst)
 
 (*
- * This is the tree from: https://tools.ietf.org/html/rfc7540#section-5.3.3
+   * This is the tree from: https://tools.ietf.org/html/rfc7540#section-5.3.3
  *
  *          1 --> 7
  *    0                0
@@ -272,7 +272,7 @@ let test_reprioritize_to_dependency () =
  *    11               9
  *
  *                (exclusive)
- *)
+*)
 let test_reprioritize_to_dependency_exclusive () =
   let open Scheduler in
   let root = Scheduler.make_root ~capacity:6 () in

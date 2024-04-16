@@ -20,7 +20,7 @@ let
   pkgs = import "${src}" {
     extraOverlays = [
       (self: super: {
-        ocamlPackages = super.ocaml-ng."ocamlPackages_${ocamlVersion}".overrideScope' (oself: osuper: {
+        ocamlPackages = super.ocaml-ng."ocamlPackages_${ocamlVersion}".overrideScope (oself: osuper: {
           gluten-lwt-unix = osuper.gluten-lwt-unix.overrideAttrs (o: {
             propagatedBuildInputs = o.propagatedBuildInputs ++ [ oself.tls-lwt ];
           });

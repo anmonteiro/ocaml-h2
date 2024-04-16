@@ -115,11 +115,11 @@ module Client_connection_tests = struct
       frames
 
   let read_response
-      t
-      hpack_encoder
-      ?(stream_id = 1l)
-      ?(flags = Flags.(default_flags |> set_end_stream |> set_end_header))
-      response
+        t
+        hpack_encoder
+        ?(stream_id = 1l)
+        ?(flags = Flags.(default_flags |> set_end_stream |> set_end_header))
+        response
     =
     let writer = Writer.create 4096 in
     let frame_info = Writer.make_frame_info ~flags stream_id in
@@ -133,10 +133,10 @@ module Client_connection_tests = struct
       read_headers
 
   let read_response_body
-      t
-      ?(stream_id = 1l)
-      ?(flags = Flags.(default_flags |> set_end_stream))
-      s
+        t
+        ?(stream_id = 1l)
+        ?(flags = Flags.(default_flags |> set_end_stream))
+        s
     =
     let writer = Writer.create 4096 in
     let frame_info = Writer.make_frame_info ~flags stream_id in
@@ -231,11 +231,11 @@ module Client_connection_tests = struct
     handle_preface t
 
   let create_and_handle_preface
-      ?settings
-      ?config
-      ?push_handler
-      ?(error_handler = default_error_handler)
-      ()
+        ?settings
+        ?config
+        ?push_handler
+        ?(error_handler = default_error_handler)
+        ()
     =
     let t = create ?config ?push_handler ~error_handler () in
     handle_preface ?settings t;
@@ -263,7 +263,7 @@ module Client_connection_tests = struct
       read_operation
       "There was a connection error of type PROTOCOL_ERROR"
       (`Error
-        Error.(ConnectionError (ProtocolError, "Invalid connection preface")))
+          Error.(ConnectionError (ProtocolError, "Invalid connection preface")))
       (Reader.next t.reader);
     reader_closed t;
     Alcotest.(check bool) "Error handler got called" true !error_handler_called

@@ -488,7 +488,8 @@ let flush_response_body (t : t) ~max_bytes =
           close_stream t;
           stream.response_state <- Complete response;
           0)
-      else (* no pending output but Body is still open *)
+      else
+        (* no pending output but Body is still open *)
         0
     | Fixed ({ iovec = { buffer; off; len } as iovec; _ } as r)
       when max_bytes > 0 ->

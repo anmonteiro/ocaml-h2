@@ -41,11 +41,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1713229872,
-        "narHash": "sha256-z8AMpenXRAWDm7hqKuQCo9FuvpXuGNixlIbKvGPtV/E=",
+        "lastModified": 1713248028,
+        "narHash": "sha256-PMNPjCzu3MX+x9XhuIG385I5HyrcVgBHU8M9eOSjCgk=",
         "owner": "anmonteiro",
         "repo": "nix-overlays",
-        "rev": "f8b4900328c8b6dbda91c3dabc5f5ebedfa03f08",
+        "rev": "1dc87430352785217f3e5a9e8d17b3081f7a5c1b",
         "type": "github"
       },
       "original": {
