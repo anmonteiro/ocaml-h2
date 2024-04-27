@@ -84,6 +84,7 @@ let
 
     h2-mirage = buildDunePackage {
       pname = "h2-mirage";
+      inherit version;
       src = with nix-filter; filter {
         root = ./..;
         include = [ "dune-project" "mirage" "h2-mirage.opam" ];
