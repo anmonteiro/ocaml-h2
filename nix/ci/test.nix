@@ -32,7 +32,7 @@ let
 
   inherit (pkgs) lib stdenv fetchTarball ocamlPackages h2spec;
 
-  h2Pkgs = import ./.. { inherit pkgs nix-filter; };
+  h2Pkgs = pkgs.callPackage ./.. { inherit nix-filter; };
   h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
   srcs = lib.mapAttrsFlatten (n: v: v.src) h2Drvs ++ [
     (with nix-filter; filter {

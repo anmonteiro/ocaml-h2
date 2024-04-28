@@ -209,7 +209,7 @@ let set_up_dep_tree root =
  *    11                   9
  *
  *                (non-exclusive)
-*)
+ *)
 let test_reprioritize_to_dependency () =
   let open Scheduler in
   let root = Scheduler.make_root ~capacity:6 () in
@@ -272,7 +272,7 @@ let test_reprioritize_to_dependency () =
  *    11               9
  *
  *                (exclusive)
-*)
+ *)
 let test_reprioritize_to_dependency_exclusive () =
   let open Scheduler in
   let root = Scheduler.make_root ~capacity:6 () in

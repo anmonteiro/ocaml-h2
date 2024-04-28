@@ -1,127 +1,115 @@
-{ nix-filter, pkgs, doCheck ? true }:
+{ nix-filter, lib, stdenv, ocamlPackages, doCheck ? true }:
 
 let
-  inherit (pkgs) lib stdenv ocamlPackages;
-in
-
-with ocamlPackages;
-
-let
-  genSrc = { dirs, files }:
-    with nix-filter; filter {
-      root = ./..;
-      include = [ "dune-project" ] ++ files ++ (builtins.map inDirectory dirs);
-    };
-  buildH2 = args: buildDunePackage ({
-    version = "0.6.0-dev";
-    useDune2 = true;
-    doCheck = doCheck;
-  } // args);
+  inherit (ocamlPackages) buildDunePackage ocaml;
+  version = "dev";
   h2Pkgs = rec {
-    hpack = buildH2 {
+    hpack = buildDunePackage {
       pname = "hpack";
-      src = genSrc {
-        dirs = [ "hpack" ];
-        files = [ "hpack.opam" ];
+      src = with nix-filter; filter {
+        root = ./..;
+        include = [ "dune-project" "hpack" "hpack.opam" ];
       };
 
-      buildInputs = [ alcotest hex yojson ];
-      propagatedBuildInputs = [ angstrom faraday ];
+      inherit version doCheck;
+      checkInputs = with ocamlPackages; [ alcotest hex yojson ];
+      propagatedBuildInputs = with ocamlPackages; [ angstrom faraday ];
       checkPhase = ''
         dune build @slowtests -p hpack --no-buffer --force
       '';
     };
 
-    h2 = buildH2 {
+    h2 = buildDunePackage {
       pname = "h2";
-      src = genSrc {
-        dirs = [ "lib" "lib_test" ];
-        files = [ "h2.opam" ];
+      inherit version doCheck;
+      src = with nix-filter; filter {
+        root = ./..;
+        include = [ "dune-project" "lib" "lib_test" "h2.opam" ];
       };
 
-      buildInputs = [ alcotest hex yojson ];
-      propagatedBuildInputs = [
+      checkInputs = with ocamlPackages; [ alcotest hex yojson ];
+      propagatedBuildInputs = with ocamlPackages; [
         angstrom
         faraday
         base64
         psq
-        hpack
         httpaf
-      ];
+      ] ++ [ h2Pkgs.hpack ];
     };
 
     # These two don't have tests
-    h2-lwt = buildH2 {
+    h2-lwt = buildDunePackage {
       pname = "h2-lwt";
-      src = genSrc {
-        dirs = [ "lwt" ];
-        files = [ "h2-lwt.opam" ];
+      inherit version;
+      src = with nix-filter; filter {
+        root = ./..;
+        include = [ "dune-project" "lwt" "h2-lwt.opam" ];
       };
+
       doCheck = false;
-      propagatedBuildInputs = [ h2 lwt gluten-lwt ];
+      propagatedBuildInputs = with ocamlPackages;
+        [ lwt gluten-lwt ] ++ [ h2Pkgs.h2 ];
     };
 
-    h2-lwt-unix = buildH2 {
+    h2-lwt-unix = buildDunePackage {
       pname = "h2-lwt-unix";
-      src = genSrc {
-        dirs = [ "lwt-unix" ];
-        files = [ "h2-lwt-unix.opam" ];
+      inherit version;
+      src = with nix-filter; filter {
+        root = ./..;
+        include = [ "dune-project" "lwt-unix" "h2-lwt-unix.opam" ];
       };
       doCheck = false;
-      propagatedBuildInputs = [
-        h2-lwt
+      propagatedBuildInputs = with ocamlPackages; [
         gluten-lwt-unix
         faraday-lwt-unix
         lwt_ssl
-      ];
+      ] ++ [ h2Pkgs.h2-lwt ];
     };
-    h2-async = buildH2 {
+    h2-async = buildDunePackage {
       pname = "h2-async";
-      src = genSrc {
-        dirs = [ "async" ];
-        files = [ "h2-async.opam" ];
+      inherit version;
+      src = with nix-filter; filter {
+        root = ./..;
+        include = [ "dune-project" "async" "h2-async.opam" ];
       };
+
       doCheck = false;
-      propagatedBuildInputs = [
-        h2
+      propagatedBuildInputs = with ocamlPackages; [
         async
         gluten-async
         faraday-async
         async_ssl
-      ];
+      ] ++ [ h2Pkgs.h2 ];
     };
 
-    h2-mirage = buildH2 {
+    h2-mirage = buildDunePackage {
       pname = "h2-mirage";
-      src = genSrc {
-        dirs = [ "mirage" ];
-        files = [ "h2-mirage.opam" ];
+      inherit version;
+      src = with nix-filter; filter {
+        root = ./..;
+        include = [ "dune-project" "mirage" "h2-mirage.opam" ];
       };
+
       doCheck = false;
-      propagatedBuildInputs = [
+      propagatedBuildInputs = with ocamlPackages; [
         conduit-mirage
-        h2-lwt
         gluten-mirage
-      ];
+      ] ++ [ h2Pkgs.h2-lwt ];
     };
 
   };
 in
 
-with h2Pkgs;
-
 h2Pkgs // (if lib.versionOlder "5.0" ocaml.version then {
-  h2-eio = buildH2 {
+  h2-eio = buildDunePackage {
     pname = "h2-eio";
-    src = genSrc {
-      dirs = [ "eio" ];
-      files = [ "h2-eio.opam" ];
+    inherit version;
+    src = with nix-filter; filter {
+      root = ./..;
+      include = [ "dune-project" "eio" "h2-eio.opam" ];
     };
 
-    propagatedBuildInputs = [
-      gluten-eio
-      h2
-    ];
+    propagatedBuildInputs = with ocamlPackages; [ gluten-eio ] ++ [ h2Pkgs.h2 ];
   };
 
 } else { })

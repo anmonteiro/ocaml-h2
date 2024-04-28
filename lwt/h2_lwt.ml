@@ -39,11 +39,11 @@ module Server (Server_runtime : Gluten_lwt.Server) = struct
   type socket = Server_runtime.socket
 
   let create_connection_handler
-        ?(config = H2.Config.default)
-        ~request_handler
-        ~error_handler
-        client_addr
-        socket
+      ?(config = H2.Config.default)
+      ~request_handler
+      ~error_handler
+      client_addr
+      socket
     =
     let connection =
       H2.Server_connection.create
@@ -69,10 +69,10 @@ module Client (Client_runtime : Gluten_lwt.Client) = struct
     }
 
   let create_connection
-        ?(config = H2.Config.default)
-        ?push_handler
-        ~error_handler
-        socket
+      ?(config = H2.Config.default)
+      ?push_handler
+      ~error_handler
+      socket
     =
     let connection =
       H2.Client_connection.create ~config ?push_handler ~error_handler ()

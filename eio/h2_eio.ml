@@ -32,12 +32,12 @@
 
 module Server = struct
   let create_connection_handler
-        ?(config = H2.Config.default)
-        ~request_handler
-        ~error_handler
-        ~sw
-        client_addr
-        socket
+      ?(config = H2.Config.default)
+      ~request_handler
+      ~error_handler
+      ~sw
+      client_addr
+      socket
     =
     let connection =
       H2.Server_connection.create
@@ -61,11 +61,11 @@ module Client = struct
     }
 
   let create_connection
-        ?(config = H2.Config.default)
-        ?push_handler
-        ~sw
-        ~error_handler
-        socket
+      ?(config = H2.Config.default)
+      ?push_handler
+      ~sw
+      ~error_handler
+      socket
     =
     let connection =
       H2.Client_connection.create ~config ?push_handler ~error_handler ()

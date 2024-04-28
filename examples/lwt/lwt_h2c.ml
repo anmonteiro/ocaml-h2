@@ -4,9 +4,9 @@ module Http2 = struct
   open H2
 
   let connection_handler :
-     Httpaf.Request.t
-    -> Bigstringaf.t H2.IOVec.t list
-    -> (Server_connection.t, string) result
+       Httpaf.Request.t
+      -> Bigstringaf.t H2.IOVec.t list
+      -> (Server_connection.t, string) result
     =
     let request_handler : H2.Server_connection.request_handler =
      fun request_descriptor ->
