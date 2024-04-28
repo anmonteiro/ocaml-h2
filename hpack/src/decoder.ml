@@ -76,13 +76,11 @@ let decode_headers =
     (* From RFC7541§6.1:
      *   The index value of 0 is not used. It MUST be treated as a decoding
      *   error if found in an indexed header field representation. *)
-    if
-      index == 0
-      ||
-      (* From RFC7541§2.3.3:
-           *   Indices strictly greater than the sum of the lengths of both tables
-           *   MUST be treated as a decoding error. *)
-      index > static_table_size + dynamic_table_size
+    if index == 0
+       || (* From RFC7541§2.3.3:
+           * Indices strictly greater than the sum of the lengths of both
+           * tables MUST be treated as a decoding error. *)
+       index > static_table_size + dynamic_table_size
     then Error Decoding_error
     else if index <= static_table_size
     then
@@ -197,13 +195,11 @@ let decode_headers =
           | Error _ as e -> return e
         else if b land 0b1110_0000 == 0b0010_0000
         then
-          if
-            (* From RFC7541§6.3: Dynamic Table Size Update
-              *   A dynamic table size update signals a change to the size of the
-              *   dynamic table.
-              *   A dynamic table size update starts with the '001' 3-bit
-              *   pattern *)
-            saw_first_header
+          if (* From RFC7541§6.3: Dynamic Table Size Update
+              *   A dynamic table size update signals a change to the size of
+              *   the dynamic table. A dynamic table size update starts with
+              *   the '001' 3-bit pattern *)
+             saw_first_header
           then
             (* From RFC7541§4.2: Maximum Table Size
              *   A change in the maximum size of the dynamic table is signaled

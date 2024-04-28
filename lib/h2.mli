@@ -664,16 +664,16 @@ end
 module Config : sig
   type t =
     { read_buffer_size : int
-      (** [read_buffer_size] specifies the size of the largest frame payload that
+    (** [read_buffer_size] specifies the size of the largest frame payload that
         the sender is willing to receive, in octets. Defaults to [16384] *)
     ; request_body_buffer_size : int  (** Defaults to [4096] *)
     ; response_body_buffer_size : int  (** Defaults to [4096] *)
     ; enable_server_push : bool  (** Defaults to [true] *)
     ; max_concurrent_streams : int32
-      (** [max_concurrent_streams] specifies the maximum number of streams that
+    (** [max_concurrent_streams] specifies the maximum number of streams that
         the sender will allow the peer to initiate. Defaults to [2^31 - 1] *)
     ; initial_window_size : int32
-      (** [initial_window_size] specifies the initial window size for flow control
+    (** [initial_window_size] specifies the initial window size for flow control
         tokens. Defaults to [65535] *)
     }
 

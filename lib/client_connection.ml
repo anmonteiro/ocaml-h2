@@ -93,7 +93,7 @@ let shutdown_writer t =
 
 (* Handling frames against closed streams is hard. See:
  * https://docs.google.com/presentation/d/1iG_U2bKTc9CnKr0jPTrNfmxyLufx_cK2nNh9VjrKH6s
-*)
+ *)
 let was_closed_or_implicitly_closed t stream_id =
   if Stream_identifier.is_request stream_id
   then Stream_identifier.(stream_id <= t.current_stream_id)
@@ -177,8 +177,8 @@ let report_exn t exn =
     let reason = Printexc.to_string exn in
     report_connection_error t ~reason Error_code.InternalError
 
-let send_window_update : type a.
-  t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
+let send_window_update :
+    type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
   =
  fun t stream n ->
   let send_window_update_frame stream_id n =
@@ -345,12 +345,11 @@ let handle_headers t ~end_stream stream headers =
    *   receives a HEADERS frame that causes its advertised concurrent stream
    *   limit to be exceeded MUST treat this as a stream error (Section 5.4.2)
    *   of type PROTOCOL_ERROR or REFUSED_STREAM. *)
-  if
-    Int32.(
-      compare
-        (of_int (t.current_server_streams + 1))
-        t.config.max_concurrent_streams)
-    > 0
+  if Int32.(
+       compare
+         (of_int (t.current_server_streams + 1))
+         t.config.max_concurrent_streams)
+     > 0
   then
     if t.unacked_settings > 0
     then
@@ -385,12 +384,12 @@ let handle_headers t ~end_stream stream headers =
       assert false)
 
 let handle_headers_block
-      t
-      ?(is_trailers = false)
-      stream
-      partial_headers
-      flags
-      headers_block
+    t
+    ?(is_trailers = false)
+    stream
+    partial_headers
+    flags
+    headers_block
   =
   let open AB in
   let (Scheduler.Stream { descriptor = respd; _ }) = stream in
@@ -455,11 +454,11 @@ let create_partial_headers t flags headers_block =
   }
 
 let handle_first_response_bytes
-      t
-      stream
-      active_request
-      frame_header
-      headers_block
+    t
+    stream
+    active_request
+    frame_header
+    headers_block
   =
   let (Scheduler.Stream { descriptor; _ }) = stream in
   let { Frame.flags; stream_id; _ } = frame_header in
@@ -514,9 +513,8 @@ let process_headers_frame t { Frame.frame_header; _ } headers_block =
      * However, if the stream identifer is greater than the largest stream
      * identifier we have produced, they should know better. In this case,
      * send an RST_STREAM. *)
-    if
-      Stream_identifier.(
-        stream_id >= t.current_stream_id && is_request stream_id)
+    if Stream_identifier.(
+         stream_id >= t.current_stream_id && is_request stream_id)
     then report_stream_error t stream_id Error_code.StreamClosed
   | Some (Scheduler.Stream { descriptor; _ } as stream) ->
     (match descriptor.state with
@@ -958,10 +956,10 @@ let reserve_stream t { Frame.frame_header; _ } promised_stream_id headers_block 
   handle_headers_block t stream partial_headers flags headers_block
 
 let process_push_promise_frame
-      t
-      ({ Frame.frame_header; _ } as frame)
-      promised_stream_id
-      headers_block
+    t
+    ({ Frame.frame_header; _ } as frame)
+    promised_stream_id
+    headers_block
   =
   let { Frame.stream_id; _ } = frame_header in
   (* At this point, `promised_stream_id` has already been validated by the
@@ -1063,8 +1061,8 @@ let process_goaway_frame t _frame ~last_stream_id:_ ~data error =
    * complete. *)
   report_connection_error t ?reason error
 
-let add_window_increment : type a.
-  t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
+let add_window_increment :
+    type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
   =
  fun t stream increment ->
   let open Scheduler in
@@ -1331,11 +1329,11 @@ let create_and_add_stream t ~error_handler =
 (* Meant to be called after receiving an HTTP/1.1 `101 Switching_protocols`
  * response upgrading to HTTP/2. *)
 let create_h2c
-      ?config
-      ?push_handler
-      ~http_request
-      ~error_handler
-      (response_handler, response_error_handler)
+    ?config
+    ?push_handler
+    ~http_request
+    ~error_handler
+    (response_handler, response_error_handler)
   =
   let { Httpaf.Request.target; meth; _ } = http_request in
   match Headers.of_http1 http_request with
@@ -1376,12 +1374,12 @@ let create_h2c
   | Error msg -> Error msg
 
 let request
-      t
-      ?(flush_headers_immediately = false)
-      ?(trailers_handler = ignore)
-      request
-      ~error_handler
-      ~response_handler
+    t
+    ?(flush_headers_immediately = false)
+    ?(trailers_handler = ignore)
+    request
+    ~error_handler
+    ~response_handler
   =
   let max_frame_size = t.settings.max_frame_size in
   let respd = create_and_add_stream t ~error_handler in

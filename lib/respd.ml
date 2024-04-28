@@ -175,8 +175,7 @@ let flush_request_body (t : t) ~max_bytes =
       Writer.schedule_data t.writer frame_info ~len:0 Bigstringaf.empty;
       t.state <- Active (HalfClosed active_state, s);
       0)
-    else
-      (* not closed and no pending output *)
+    else (* not closed and no pending output *)
       0
   | _ -> 0
 

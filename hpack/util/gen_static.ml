@@ -77,11 +77,10 @@ let find_pos names =
   let n = Hashtbl.length names in
   let names = Hashtbl.fold (fun k _ lst -> k :: lst) names [] in
   let rec loop pos =
-    if
-      List.map (fun name -> name.[pos]) names
-      |> CharSet.of_list
-      |> CharSet.cardinal
-      |> ( = ) n
+    if List.map (fun name -> name.[pos]) names
+       |> CharSet.of_list
+       |> CharSet.cardinal
+       |> ( = ) n
     then pos
     else loop (pos + 1)
   in

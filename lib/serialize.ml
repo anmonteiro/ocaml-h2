@@ -322,10 +322,10 @@ module Writer = struct
   let faraday t = t.encoder
 
   let make_frame_info
-        ?(padding = Bigstringaf.empty)
-        ?(flags = Flags.default_flags)
-        ?(max_frame_size = Config.default.read_buffer_size)
-        stream_id
+      ?(padding = Bigstringaf.empty)
+      ?(flags = Flags.default_flags)
+      ?(max_frame_size = Config.default.read_buffer_size)
+      stream_id
     =
     { flags; stream_id; padding; max_frame_payload = max_frame_size }
 
@@ -386,16 +386,12 @@ module Writer = struct
   (* Chunk header block fragments into HEADERS|PUSH_PROMISE + CONTINUATION
    * frames. *)
   let chunk_header_block_fragments
-        t
-        frame_info
-        ?(has_priority = false)
-        ~(write_frame :
-           Faraday.t
-           -> frame_info
-           -> ?len:int
-           -> Bigstringaf.t iovec list
-           -> unit)
-        faraday
+      t
+      frame_info
+      ?(has_priority = false)
+      ~(write_frame :
+         Faraday.t -> frame_info -> ?len:int -> Bigstringaf.t iovec list -> unit)
+      faraday
     =
     let block_size = Faraday.pending_bytes faraday in
     let total_length =
