@@ -3,6 +3,8 @@ Unreleased
 
 - hpack: fix huffman encoding for codes > 24bit
   ([#229](https://github.com/anmonteiro/ocaml-h2/pull/229))
+- h2-eio: don't require `Eio_unix.stream_socket_ty`, allowing the use of mock
+  sockets ([#236](https://github.com/anmonteiro/gluten/pull/236))
 
 0.11.0 2023-10-26
 --------------
