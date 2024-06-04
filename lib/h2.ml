@@ -33,8 +33,8 @@
  *---------------------------------------------------------------------------*)
 
 module Headers = Headers
-module IOVec = Httpaf.IOVec
-module Method = Httpaf.Method
+module IOVec = Httpun.IOVec
+module Method = Httpun.Method
 module Reqd = Reqd
 module Request = Request
 module Response = Response

@@ -297,7 +297,7 @@ let handle_headers t ~end_stream stream active_stream headers =
       | `Error e -> set_error_and_handle t reqd e ProtocolError
       | `Fixed _ | `Unknown ->
         let request =
-          Request.create ~scheme ~headers (Httpaf.Method.of_string meth) path
+          Request.create ~scheme ~headers (Httpun.Method.of_string meth) path
         in
         let request_body =
           if end_stream
@@ -1261,7 +1261,7 @@ let handle_h2c_request t headers request_body_iovecs =
         (create_push_stream t)
     in
     t.max_client_stream_id <- reqd.Stream.id;
-    let lengthv = Httpaf.IOVec.lengthv request_body_iovecs in
+    let lengthv = Httpun.IOVec.lengthv request_body_iovecs in
     let end_stream = lengthv = 0 in
     handle_headers t ~end_stream stream active_stream headers;
     let request = Reqd.request reqd in
@@ -1281,7 +1281,7 @@ let handle_h2c_request t headers request_body_iovecs =
       if not (Faraday.is_closed faraday)
       then (
         List.iter
-          (fun { Httpaf.IOVec.buffer; off; len } ->
+          (fun { Httpun.IOVec.buffer; off; len } ->
              Faraday.schedule_bigstring faraday ~off ~len buffer)
           request_body_iovecs;
         (* Close the request body, we're not expecting more input. *)
@@ -1309,7 +1309,7 @@ let create_h2c
     ?(request_body = [])
     request_handler
   =
-  let { Httpaf.Request.headers; _ } = http_request in
+  let { Httpun.Request.headers; _ } = http_request in
   (* From RFC7540§3.2.1:
    *   A request that upgrades from HTTP/1.1 to HTTP/2 MUST include exactly one
    *   HTTP2-Settings header field.
@@ -1318,7 +1318,7 @@ let create_h2c
    *   field is not present or if more than one is present. A server MUST NOT
    *   send this header field. *)
   match
-    Httpaf.Headers.(
+    Httpun.Headers.(
       get_multi headers "http2-settings", get_multi headers "connection")
   with
   | [ settings ], [ connection ] when Headers.is_valid_h2c_connection connection

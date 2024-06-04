@@ -38,17 +38,17 @@
  *
  *   Note: While the above is true, we don't enforce in this library, as it
  *   makes unifying types with http/af much easier. `H2.Status.t` is, thus, a
- *   strict superset of `Httpaf.Status.t`. *)
+ *   strict superset of `Httpun.Status.t`. *)
 
 include (
-  Httpaf.Status :
-    module type of Httpaf.Status
-    with type client_error := Httpaf.Status.client_error
-     and type standard := Httpaf.Status.standard
-     and type t := Httpaf.Status.t)
+  Httpun.Status :
+    module type of Httpun.Status
+    with type client_error := Httpun.Status.client_error
+     and type standard := Httpun.Status.standard
+     and type t := Httpun.Status.t)
 
 type client_error =
-  [ Httpaf.Status.client_error
+  [ Httpun.Status.client_error
   | (* From RFC7540§9.1.2:
      *   The 421 (Misdirected Request) status code indicates that the request
      *   was directed at a server that is not able to produce a response. This
@@ -59,7 +59,7 @@ type client_error =
   ]
 
 type standard =
-  [ Httpaf.Status.standard
+  [ Httpun.Status.standard
   | client_error
   ]
 
@@ -76,47 +76,47 @@ type t =
  *   included in an HTTP/1.1 status line. *)
 let default_reason_phrase = function
   | `Misdirected_request -> "Misdirected Request"
-  | #Httpaf.Status.standard as t -> Httpaf.Status.default_reason_phrase t
+  | #Httpun.Status.standard as t -> Httpun.Status.default_reason_phrase t
 
 let to_code = function
   | `Misdirected_request -> 421
-  | #Httpaf.Status.t as t -> Httpaf.Status.to_code t
+  | #Httpun.Status.t as t -> Httpun.Status.to_code t
 
 let unsafe_of_code = function
   | 421 -> `Misdirected_request
-  | c -> (Httpaf.Status.unsafe_of_code c :> t)
+  | c -> (Httpun.Status.unsafe_of_code c :> t)
 
 let of_code = function
   | 421 -> `Misdirected_request
-  | c -> (Httpaf.Status.of_code c :> t)
+  | c -> (Httpun.Status.of_code c :> t)
 
 let is_informational = function
   | `Misdirected_request -> false
-  | #Httpaf.Status.t as t -> Httpaf.Status.is_informational t
+  | #Httpun.Status.t as t -> Httpun.Status.is_informational t
 
 let is_successful = function
   | `Misdirected_request -> false
-  | #Httpaf.Status.t as t -> Httpaf.Status.is_successful t
+  | #Httpun.Status.t as t -> Httpun.Status.is_successful t
 
 let is_redirection = function
   | `Misdirected_request -> false
-  | #Httpaf.Status.t as t -> Httpaf.Status.is_redirection t
+  | #Httpun.Status.t as t -> Httpun.Status.is_redirection t
 
 let is_client_error = function
   | `Misdirected_request -> true
-  | #Httpaf.Status.t as t -> Httpaf.Status.is_client_error t
+  | #Httpun.Status.t as t -> Httpun.Status.is_client_error t
 
 let is_server_error = function
   | `Misdirected_request -> false
-  | #Httpaf.Status.t as t -> Httpaf.Status.is_server_error t
+  | #Httpun.Status.t as t -> Httpun.Status.is_server_error t
 
 let is_error = function
   | `Misdirected_request -> true
-  | #Httpaf.Status.t as t -> Httpaf.Status.is_error t
+  | #Httpun.Status.t as t -> Httpun.Status.is_error t
 
 let to_string = function
   | `Misdirected_request -> "421"
-  | #Httpaf.Status.t as t -> Httpaf.Status.to_string t
+  | #Httpun.Status.t as t -> Httpun.Status.to_string t
 
 let of_string x = of_code (int_of_string x)
 let pp_hum fmt t = Format.fprintf fmt "%u" (to_code t)

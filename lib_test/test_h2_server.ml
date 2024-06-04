@@ -908,9 +908,9 @@ module Server_connection_tests = struct
     Settings.write_settings_payload f settings_payload;
     let serialized_settings = Faraday.serialize_to_string f in
     let http_request =
-      Httpaf.Request.create
+      Httpun.Request.create
         ~headers:
-          (Httpaf.Headers.of_list
+          (Httpun.Headers.of_list
              [ "Connection", "Upgrade, HTTP2-Settings"
              ; "Upgrade", "h2c"
              ; ( "HTTP2-Settings"

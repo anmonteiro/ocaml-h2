@@ -44,7 +44,7 @@
 
 (** {2 Basic HTTP Types} *)
 
-module Method : module type of Httpaf.Method
+module Method : module type of Httpun.Method
 (** Request Method
 
     The request method token is the primary source of request semantics; it
@@ -54,7 +54,7 @@ module Method : module type of Httpaf.Method
     See {{:https://tools.ietf.org/html/rfc7231#section-4} RFC7231§4} for more
     details.
 
-    This module is a proxy to [Httpaf.Method] and is included in h2 for
+    This module is a proxy to [Httpun.Method] and is included in h2 for
     convenience. *)
 
 (** Response Status Codes
@@ -65,7 +65,7 @@ module Method : module type of Httpaf.Method
     See {{:https://tools.ietf.org/html/rfc7231#section-6} RFC7231§6} for more
     details.
 
-    This module is a strict superset of [Httpaf.Status]. Even though the HTTP/2
+    This module is a strict superset of [Httpun.Status]. Even though the HTTP/2
     specification removes support for the [Switching_protocols] status code, h2
     keeps it for the sake of higher level interaction between OCaml libraries
     that support both HTTP/1 and HTTP/2.
@@ -74,13 +74,13 @@ module Method : module type of Httpaf.Method
     more details. *)
 module Status : sig
   include
-    module type of Httpaf.Status
-    with type client_error := Httpaf.Status.client_error
-     and type standard := Httpaf.Status.standard
-     and type t := Httpaf.Status.t
+    module type of Httpun.Status
+    with type client_error := Httpun.Status.client_error
+     and type standard := Httpun.Status.standard
+     and type t := Httpun.Status.t
 
   type client_error =
-    [ Httpaf.Status.client_error
+    [ Httpun.Status.client_error
     | `Misdirected_request
     ]
   (** The 4xx (Client Error) class of status code indicates that the client
@@ -95,7 +95,7 @@ module Status : sig
       more details. *)
 
   type standard =
-    [ Httpaf.Status.standard
+    [ Httpun.Status.standard
     | client_error
     ]
   (** The status codes defined in the HTTP/1.1 RFCs, excluding the
@@ -470,7 +470,7 @@ module Response : sig
   val pp_hum : Format.formatter -> t -> unit
 end
 
-module IOVec : module type of Httpaf.IOVec
+module IOVec : module type of Httpun.IOVec
 (** IOVec *)
 
 (** {2 Request Descriptor} *)
@@ -711,7 +711,7 @@ module Server_connection : sig
   val create_h2c :
      ?config:Config.t
     -> ?error_handler:error_handler
-    -> http_request:Httpaf.Request.t
+    -> http_request:Httpun.Request.t
     -> ?request_body:Bigstringaf.t IOVec.t list
     -> request_handler
     -> (t, string) result
@@ -843,7 +843,7 @@ module Client_connection : sig
   val create_h2c :
      ?config:Config.t
     -> ?push_handler:(Request.t -> (response_handler, unit) result)
-    -> http_request:Httpaf.Request.t
+    -> http_request:Httpun.Request.t
     -> error_handler:error_handler
     -> response_handler * error_handler
     -> (t, string) result

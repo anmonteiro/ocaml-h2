@@ -4,7 +4,7 @@ module Http2 = struct
   open H2
 
   let connection_handler :
-       Httpaf.Request.t
+       Httpun.Request.t
       -> Bigstringaf.t H2.IOVec.t list
       -> (Server_connection.t, string) result
     =
@@ -76,11 +76,11 @@ module Http2 = struct
 end
 
 let connection_handler =
-  let module Body = Httpaf.Body in
-  let module Headers = Httpaf.Headers in
-  let module Reqd = Httpaf.Reqd in
-  let module Response = Httpaf.Response in
-  let module Status = Httpaf.Status in
+  let module Body = Httpun.Body in
+  let module Headers = Httpun.Headers in
+  let module Reqd = Httpun.Reqd in
+  let module Response = Httpun.Response in
+  let module Status = Httpun.Status in
   let upgrade_handler request upgrade () =
     let off = 0 in
     let len = 3 in
@@ -106,7 +106,7 @@ let connection_handler =
     Body.Writer.write_string body message;
     Body.Writer.close body
   in
-  let request_handler _addr (reqd : Httpaf.Reqd.t Gluten.reqd) =
+  let request_handler _addr (reqd : Httpun.Reqd.t Gluten.reqd) =
     let { Gluten.reqd; upgrade } = reqd in
     let headers =
       Headers.of_list [ "Connection", "Upgrade"; "Upgrade", "h2c" ]
@@ -114,7 +114,7 @@ let connection_handler =
     let request = Reqd.request reqd in
     Reqd.respond_with_upgrade reqd headers (upgrade_handler request upgrade)
   in
-  Httpaf_lwt_unix.Server.create_connection_handler
+  Httpun_lwt_unix.Server.create_connection_handler
     ?config:None
     ~request_handler
     ~error_handler:http_error_handler
