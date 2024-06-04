@@ -33,8 +33,8 @@
  *---------------------------------------------------------------------------*)
 
 module Headers = Headers
-module IOVec = Httpun.IOVec
-module Method = Httpun.Method
+module IOVec = Httpun_types.IOVec
+module Method = Httpun_types.Method
 module Reqd = Reqd
 module Request = Request
 module Response = Response

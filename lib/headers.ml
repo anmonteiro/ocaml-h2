@@ -304,8 +304,8 @@ let is_valid_h2c_connection connection =
   | Some _, Some _ -> true
   | _ -> false
 
-let of_http1 { Httpun.Request.headers; meth; target; _ } =
-  let module Headers = Httpun.Headers in
+let of_http1 ~headers ~meth ~target =
+  let module Headers = Httpun_types.Headers in
   match Headers.get headers "host" with
   | Some host ->
     (* From RFC7540§8.1.2.3:
@@ -335,7 +335,7 @@ let of_http1 { Httpun.Request.headers; meth; target; _ } =
             (name, value) :: acc)
         ~init:
           [ ":authority", host
-          ; ":method", Httpun.Method.to_string meth
+          ; ":method", Httpun_types.Method.to_string meth
           ; ":path", target
           ; ":scheme", "https"
           ]

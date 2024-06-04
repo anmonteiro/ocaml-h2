@@ -214,12 +214,12 @@ let handle_push_promise_headers t respd headers =
      *   error (Section 5.4.2) of type PROTOCOL_ERROR. *)
     report_stream_error t respd.Stream.id Error_code.ProtocolError
   | `Valid (meth, path, scheme) ->
-    let meth = Httpun.Method.of_string meth in
+    let meth = Httpun_types.Method.of_string meth in
     (match
        meth, Headers.get_pseudo headers "authority", Message.body_length headers
      with
-    | (#Httpun.Method.standard as meth), _, _
-      when not Httpun.Method.(is_cacheable meth && is_safe meth) ->
+    | (#Httpun_types.Method.standard as meth), _, _
+      when not Httpun_types.Method.(is_cacheable meth && is_safe meth) ->
       report_stream_error t respd.id Error_code.ProtocolError
     | _, _, `Fixed len when not (Int64.equal len 0L) ->
       (* From RFC7540§8.2:
@@ -1331,12 +1331,13 @@ let create_and_add_stream t ~error_handler =
 let create_h2c
     ?config
     ?push_handler
-    ~http_request
+    ~headers
+    ~target
+    ~meth
     ~error_handler
     (response_handler, response_error_handler)
   =
-  let { Httpun.Request.target; meth; _ } = http_request in
-  match Headers.of_http1 http_request with
+  match Headers.of_http1 ~headers ~target ~meth with
   | Ok headers ->
     (* From RFC7540§3.2:
      *   Upon receiving the 101 response, the client MUST send a connection

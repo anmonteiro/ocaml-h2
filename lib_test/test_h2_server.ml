@@ -907,10 +907,14 @@ module Server_connection_tests = struct
     let f = Faraday.create 100 in
     Settings.write_settings_payload f settings_payload;
     let serialized_settings = Faraday.serialize_to_string f in
-    let http_request =
-      Httpun.Request.create
-        ~headers:
-          (Httpun.Headers.of_list
+    let request_handler_called = ref false in
+    match
+      create_h2c
+        ~meth:`GET
+        ~target:"/"
+
+      ~headers:
+          (Httpun_types.Headers.of_list
              [ "Connection", "Upgrade, HTTP2-Settings"
              ; "Upgrade", "h2c"
              ; ( "HTTP2-Settings"
@@ -919,12 +923,7 @@ module Server_connection_tests = struct
                )
              ; "Host", "localhost"
              ])
-        `GET
-        "/"
-    in
-    let request_handler_called = ref false in
-    match
-      create_h2c ~http_request (fun _ -> request_handler_called := true)
+      (fun _ -> request_handler_called := true)
     with
     | Ok t ->
       Alcotest.(check bool)

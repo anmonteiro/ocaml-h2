@@ -67,9 +67,12 @@ module Http2 = struct
       Body.Writer.close response_body
     in
     fun http_request request_body ->
+      let { Httpun.Request.headers; target; meth; _ } = http_request in
       H2.Server_connection.create_h2c
         ?config:None
-        ~http_request
+        ~headers
+        ~target
+        ~meth
         ~request_body
         ~error_handler
         request_handler

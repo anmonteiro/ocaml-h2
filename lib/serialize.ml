@@ -33,7 +33,7 @@
  *---------------------------------------------------------------------------*)
 
 open Faraday
-module IOVec = Httpun.IOVec
+module IOVec = Httpun_types.IOVec
 
 type frame_info =
   { flags : Flags.t
@@ -469,7 +469,7 @@ module Writer = struct
       hpack_encoder
       faraday
       { Headers.name = ":method"
-      ; value = Httpun.Method.to_string meth
+      ; value = Httpun_types.Method.to_string meth
       ; sensitive = false
       };
     if meth <> `CONNECT
