@@ -1,9 +1,11 @@
 (executable
  (name gen_huffman)
+ (modules gen_huffman)
  (libraries compiler-libs.common))
 
 (executable
  (name gen_static)
  (libraries compiler-libs.common)
+ (modules gen_static)
  (enabled_if
   (< %{ocaml_version} 5.2)))
