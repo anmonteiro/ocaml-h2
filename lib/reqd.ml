@@ -48,7 +48,8 @@ type response_state =
   | Fixed of
       { response : Response.t
       ; mutable iovec :
-          [ `String of string | `Bigstring of Bigstringaf.t ] Httpun_types.IOVec.t
+          [ `String of string | `Bigstring of Bigstringaf.t ]
+            Httpun_types.IOVec.t
       }
   | Streaming of
       { response : Response.t
@@ -159,7 +160,9 @@ let send_fixed_response (t : t) s response data =
         iovec, len
       | `Bigstring b ->
         let len = Bigstringaf.length b in
-        let iovec = { Httpun_types.IOVec.buffer = `Bigstring b; off = 0; len } in
+        let iovec =
+          { Httpun_types.IOVec.buffer = `Bigstring b; off = 0; len }
+        in
         iovec, len
     in
     let should_send_data = length <> 0 in

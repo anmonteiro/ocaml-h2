@@ -912,8 +912,7 @@ module Server_connection_tests = struct
       create_h2c
         ~meth:`GET
         ~target:"/"
-
-      ~headers:
+        ~headers:
           (Httpun_types.Headers.of_list
              [ "Connection", "Upgrade, HTTP2-Settings"
              ; "Upgrade", "h2c"
@@ -923,7 +922,7 @@ module Server_connection_tests = struct
                )
              ; "Host", "localhost"
              ])
-      (fun _ -> request_handler_called := true)
+        (fun _ -> request_handler_called := true)
     with
     | Ok t ->
       Alcotest.(check bool)

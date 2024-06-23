@@ -297,7 +297,11 @@ let handle_headers t ~end_stream stream active_stream headers =
       | `Error e -> set_error_and_handle t reqd e ProtocolError
       | `Fixed _ | `Unknown ->
         let request =
-          Request.create ~scheme ~headers (Httpun_types.Method.of_string meth) path
+          Request.create
+            ~scheme
+            ~headers
+            (Httpun_types.Method.of_string meth)
+            path
         in
         let request_body =
           if end_stream
