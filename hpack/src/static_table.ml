@@ -156,12 +156,12 @@ let table =
 let lookup_token_index name =
   match String.length name with
   | 3 ->
-    (match name.[0] with
+    (match String.unsafe_get name 0 with
     | 'a' when name = "age" -> 20
     | 'v' when name = "via" -> 59
     | _ -> -1)
   | 4 ->
-    (match name.[0] with
+    (match String.unsafe_get name 0 with
     | 'd' when name = "date" -> 32
     | 'e' when name = "etag" -> 33
     | 'f' when name = "from" -> 36
@@ -170,13 +170,13 @@ let lookup_token_index name =
     | 'v' when name = "vary" -> 58
     | _ -> -1)
   | 5 ->
-    (match name.[0] with
+    (match String.unsafe_get name 0 with
     | ':' when name = ":path" -> 3
     | 'a' when name = "allow" -> 21
     | 'r' when name = "range" -> 49
     | _ -> -1)
   | 6 ->
-    (match name.[0] with
+    (match String.unsafe_get name 0 with
     | 'a' when name = "accept" -> 18
     | 'c' when name = "cookie" -> 31
     | 'e' when name = "expect" -> 34
@@ -198,14 +198,17 @@ let lookup_token_index name =
     | 'a' when name = "location" -> 45
     | _ -> -1)
   | 10 ->
-    (match name.[0] with
+    (match String.unsafe_get name 0 with
     | ':' when name = ":authority" -> 0
     | 's' when name = "set-cookie" -> 54
     | 'u' when name = "user-agent" -> 57
     | _ -> -1)
-  | 11 -> (match name.[0] with 'r' when name = "retry-after" -> 52 | _ -> -1)
+  | 11 ->
+    (match String.unsafe_get name 0 with
+    | 'r' when name = "retry-after" -> 52
+    | _ -> -1)
   | 12 ->
-    (match name.[0] with
+    (match String.unsafe_get name 0 with
     | 'c' when name = "content-type" -> 30
     | 'm' when name = "max-forwards" -> 46
     | _ -> -1)
@@ -219,7 +222,7 @@ let lookup_token_index name =
     | 'o' when name = "last-modified" -> 43
     | _ -> -1)
   | 14 ->
-    (match name.[0] with
+    (match String.unsafe_get name 0 with
     | 'a' when name = "accept-charset" -> 14
     | 'c' when name = "content-length" -> 27
     | _ -> -1)
@@ -236,24 +239,26 @@ let lookup_token_index name =
     | 'i' when name = "www-authenticate" -> 60
     | _ -> -1)
   | 17 ->
-    (match name.[0] with
+    (match String.unsafe_get name 0 with
     | 'i' when name = "if-modified-since" -> 39
     | 't' when name = "transfer-encoding" -> 56
     | _ -> -1)
   | 18 ->
-    (match name.[0] with 'p' when name = "proxy-authenticate" -> 47 | _ -> -1)
+    (match String.unsafe_get name 0 with
+    | 'p' when name = "proxy-authenticate" -> 47
+    | _ -> -1)
   | 19 ->
-    (match name.[0] with
+    (match String.unsafe_get name 0 with
     | 'c' when name = "content-disposition" -> 24
     | 'i' when name = "if-unmodified-since" -> 42
     | 'p' when name = "proxy-authorization" -> 48
     | _ -> -1)
   | 25 ->
-    (match name.[0] with
+    (match String.unsafe_get name 0 with
     | 's' when name = "strict-transport-security" -> 55
     | _ -> -1)
   | 27 ->
-    (match name.[0] with
+    (match String.unsafe_get name 0 with
     | 'a' when name = "access-control-allow-origin" -> 19
     | _ -> -1)
   | _ -> -1
