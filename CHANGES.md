@@ -8,6 +8,8 @@ Unreleased
 - h2: drop the dependency on `httpaf`, use
   [`httpun-types`](https://ocaml.org/p/httpun-types/latest) instead
 ([#243](https://github.com/anmonteiro/ocaml-h2/pull/243))
+- hpack: use `String.unsafe_get` when the string length is known
+  ([#244](https://github.com/anmonteiro/ocaml-h2/pull/244))
 
 0.11.0 2023-10-26
 --------------
