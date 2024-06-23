@@ -1,4 +1,4 @@
-Unreleased
+0.12.0 2024-06-23
 --------------
 
 - hpack: fix huffman encoding for codes > 24bit
