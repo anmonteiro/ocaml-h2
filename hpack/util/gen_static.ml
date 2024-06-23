@@ -87,7 +87,7 @@ let find_pos names =
   loop 0
 
 let make_token_map static_table =
-  let tbl = Hashtbl.create 60 in
+  let tbl = Hashtbl.create (Array.length static_table) in
   Array.iter
     (fun (i, name, _) ->
        let length = String.length name in
@@ -96,11 +96,12 @@ let make_token_map static_table =
          | Some string_tbl -> string_tbl
          | None -> Hashtbl.create 10
        in
-       Hashtbl.add string_tbl name i)
+       add_name name i string_tbl;
+       Hashtbl.replace tbl length string_tbl)
     static_table;
   Hashtbl.fold
     (fun length names ret ->
-       let bindings = Hashtbl.fold (fun k v lst -> (k, v) :: lst) names [] in
+       let bindings = Hashtbl.to_seq names |> List.of_seq in
        (length, find_pos names, bindings) :: ret)
     tbl
     []
@@ -147,7 +148,7 @@ let mk_lookup_token token_map =
                       (Exp.match_
                          (Exp.apply
                             (Exp.ident
-                               { txt = Ldot (Lident "String", "get")
+                               { txt = Ldot (Lident "String", "unsafe_get")
                                ; loc = !default_loc
                                })
                             [ ( Nolabel
