@@ -9,12 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ocamlVersion: [4_14, 5_0, 5_1]
+        ocamlVersion: [4_14, 5_1, 5_2]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: 'recursive'
-    - uses: cachix/install-nix-action@v20
+    - uses: cachix/install-nix-action@v27
       with:
         extra_nix_config: |
           extra-substituters = https://anmonteiro.nix-cache.workers.dev
