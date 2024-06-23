@@ -916,10 +916,13 @@ module Client_connection_tests = struct
     let f = Faraday.create 100 in
     Settings.write_settings_payload f settings_payload;
     let serialized_settings = Faraday.serialize_to_string f in
-    let http_request =
-      Httpaf.Request.create
+    let response_handler_called = ref false in
+    match
+      create_h2c
+        ~meth:`GET
+        ~target:"/"
         ~headers:
-          (Httpaf.Headers.of_list
+          (Httpun_types.Headers.of_list
              [ "Connection", "Upgrade, HTTP2-Settings"
              ; "Upgrade", "h2c"
              ; ( "HTTP2-Settings"
@@ -928,13 +931,6 @@ module Client_connection_tests = struct
                )
              ; "Host", "localhost"
              ])
-        `GET
-        "/"
-    in
-    let response_handler_called = ref false in
-    match
-      create_h2c
-        ~http_request
         ~error_handler:default_error_handler
         ((fun _ _ -> response_handler_called := true), fun _ -> assert false)
     with

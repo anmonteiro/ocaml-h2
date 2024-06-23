@@ -40,7 +40,7 @@
  (synopsis
   "A high-performance, memory-efficient, and scalable HTTP/2 library for OCaml")
  (description
-  "h2 is an implementation of the HTTP/2 specification entirely in OCaml. It is based on the concepts in http/af, and therefore uses the Angstrom and Faraday libraries to implement the parsing and serialization layers of the HTTP/2 standard as a state machine that is agnostic to the underlying I/O specifics. It also preserves the same API as http/af wherever possible.")
+  "h2 is an implementation of the HTTP/2 specification entirely in OCaml. It is based on the concepts in httpun, and therefore uses the Angstrom and Faraday libraries to implement the parsing and serialization layers of the HTTP/2 standard as a state machine that is agnostic to the underlying I/O specifics. It also preserves the same API as httpun wherever possible.")
  (depends
   (ocaml
    (>= "4.08.0"))
@@ -53,8 +53,9 @@
   (bigstringaf
    (>= "0.5.0"))
   psq
-  (hpack (= :version))
-  httpaf
+  (hpack
+   (= :version))
+  httpun-types
   (alcotest :with-test)
   (yojson :with-test)
   (hex :with-test)))

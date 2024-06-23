@@ -5,7 +5,7 @@
 
 (executable
  (name lwt_h2c)
- (libraries h2 httpaf-lwt-unix h2-lwt-unix lwt.unix)
+ (libraries h2 httpun-lwt-unix h2-lwt-unix lwt.unix)
  (modules lwt_h2c))
 
 (alias

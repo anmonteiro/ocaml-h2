@@ -25,7 +25,7 @@ let hex_of_string s =
   String.uppercase_ascii hex
 
 let make_iovecs bs =
-  [ { Httpaf.IOVec.buffer = bs; off = 0; len = Bigstringaf.length bs } ]
+  [ { Httpun_types.IOVec.buffer = bs; off = 0; len = Bigstringaf.length bs } ]
 
 let write_frame ?padding t { Frame.frame_header; frame_payload } =
   let open Serialize in

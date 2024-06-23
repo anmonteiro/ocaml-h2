@@ -1,7 +1,7 @@
 open Alpn_lib
 
 let http1_handler =
-  Httpaf_lwt_unix.Server.SSL.create_connection_handler
+  Httpun_lwt_unix.Server.SSL.create_connection_handler
     ?config:None
     ~request_handler:Http1_handler.request_handler
     ~error_handler:Http1_handler.error_handler
@@ -17,7 +17,7 @@ let start_http_server () =
   Lwt.async (fun () ->
     Lwt_io.establish_server_with_client_socket
       listen_address
-      (Httpaf_lwt_unix.Server.create_connection_handler
+      (Httpun_lwt_unix.Server.create_connection_handler
          ?config:None
          ~request_handler:Http1_handler.redirect_handler
          ~error_handler:Http1_handler.redirect_error_handler)

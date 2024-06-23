@@ -33,18 +33,18 @@
  *---------------------------------------------------------------------------*)
 
 (** H2 is a high-performance, memory-efficient, and scalable HTTP/2
-    implementation for OCaml. It is based on the concepts in http/af, and
-    therefore uses the Angstrom and Faraday libraries to implement the parsing
-    and serialization layers of the HTTP/2 standard. It also preserves the same
-    API as http/af wherever possible.
+    implementation for OCaml. It is based on the concepts introduced http/af,
+  and therefore uses the Angstrom and Faraday libraries to implement the
+  parsing and serialization layers of the HTTP/2 standard. It preserves
+  the same API as httpun wherever possible.
 
-    Not unlike http/af, the user should be familiar with HTTP, and the basic
-    principles of memory management and vectorized IO in order to use this
-    library. *)
+  Not unlike httpun, the user should be familiar with HTTP, and the basic
+  principles of memory management and vectorized IO in order to use this
+  library. *)
 
 (** {2 Basic HTTP Types} *)
 
-module Method : module type of Httpaf.Method
+module Method : module type of Httpun_types.Method
 (** Request Method
 
     The request method token is the primary source of request semantics; it
@@ -54,7 +54,7 @@ module Method : module type of Httpaf.Method
     See {{:https://tools.ietf.org/html/rfc7231#section-4} RFC7231§4} for more
     details.
 
-    This module is a proxy to [Httpaf.Method] and is included in h2 for
+    This module is a proxy to [Httpun_types.Method] and is included in h2 for
     convenience. *)
 
 (** Response Status Codes
@@ -65,7 +65,7 @@ module Method : module type of Httpaf.Method
     See {{:https://tools.ietf.org/html/rfc7231#section-6} RFC7231§6} for more
     details.
 
-    This module is a strict superset of [Httpaf.Status]. Even though the HTTP/2
+    This module is a strict superset of [Httpun_types.Status]. Even though the HTTP/2
     specification removes support for the [Switching_protocols] status code, h2
     keeps it for the sake of higher level interaction between OCaml libraries
     that support both HTTP/1 and HTTP/2.
@@ -74,13 +74,13 @@ module Method : module type of Httpaf.Method
     more details. *)
 module Status : sig
   include
-    module type of Httpaf.Status
-    with type client_error := Httpaf.Status.client_error
-     and type standard := Httpaf.Status.standard
-     and type t := Httpaf.Status.t
+    module type of Httpun_types.Status
+    with type client_error := Httpun_types.Status.client_error
+     and type standard := Httpun_types.Status.standard
+     and type t := Httpun_types.Status.t
 
   type client_error =
-    [ Httpaf.Status.client_error
+    [ Httpun_types.Status.client_error
     | `Misdirected_request
     ]
   (** The 4xx (Client Error) class of status code indicates that the client
@@ -89,13 +89,13 @@ module Status : sig
       See {{:https://tools.ietf.org/html/rfc7231#section-6.5} RFC7231§6.5} for
       more details.
 
-      In addition to http/af, this type also includes the 421 (Misdirected
+      In addition to httpun, this type also includes the 421 (Misdirected
       Request) tag. See
       {{:https://tools.ietf.org/html/rfc7540#section-9.1.2} RFC7540§9.1.2} for
       more details. *)
 
   type standard =
-    [ Httpaf.Status.standard
+    [ Httpun_types.Status.standard
     | client_error
     ]
   (** The status codes defined in the HTTP/1.1 RFCs, excluding the
@@ -449,7 +449,7 @@ module Response : sig
     -> Status.t
     -> t
   (** [create ?headers status] creates an HTTP response with the given
-      parameters. Unlike the [Response] type in http/af, h2 does not define a
+      parameters. Unlike the [Response] type in httpun, h2 does not define a
       way for responses to carry reason phrases or protocol version.
 
       See
@@ -470,7 +470,7 @@ module Response : sig
   val pp_hum : Format.formatter -> t -> unit
 end
 
-module IOVec : module type of Httpaf.IOVec
+module IOVec : module type of Httpun_types.IOVec
 (** IOVec *)
 
 (** {2 Request Descriptor} *)
@@ -711,7 +711,9 @@ module Server_connection : sig
   val create_h2c :
      ?config:Config.t
     -> ?error_handler:error_handler
-    -> http_request:Httpaf.Request.t
+    -> headers:Httpun_types.Headers.t
+    -> target:string
+    -> meth:Httpun_types.Method.t
     -> ?request_body:Bigstringaf.t IOVec.t list
     -> request_handler
     -> (t, string) result
@@ -843,7 +845,9 @@ module Client_connection : sig
   val create_h2c :
      ?config:Config.t
     -> ?push_handler:(Request.t -> (response_handler, unit) result)
-    -> http_request:Httpaf.Request.t
+    -> headers:Httpun_types.Headers.t
+    -> target:string
+    -> meth:Httpun_types.Method.t
     -> error_handler:error_handler
     -> response_handler * error_handler
     -> (t, string) result

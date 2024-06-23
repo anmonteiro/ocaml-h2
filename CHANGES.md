@@ -5,6 +5,9 @@ Unreleased
   ([#229](https://github.com/anmonteiro/ocaml-h2/pull/229))
 - h2-eio: don't require `Eio_unix.stream_socket_ty`, allowing the use of mock
   sockets ([#236](https://github.com/anmonteiro/gluten/pull/236))
+- h2: drop the dependency on `httpaf`, use
+  [`httpun-types`](https://ocaml.org/p/httpun-types/latest) instead
+([#243](https://github.com/anmonteiro/ocaml-h2/pull/243))
 
 0.11.0 2023-10-26
 --------------

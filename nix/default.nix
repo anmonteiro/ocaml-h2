@@ -33,7 +33,7 @@ let
         faraday
         base64
         psq
-        httpaf
+        httpun
       ] ++ [ h2Pkgs.hpack ];
     };
 

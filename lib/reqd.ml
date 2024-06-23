@@ -48,7 +48,8 @@ type response_state =
   | Fixed of
       { response : Response.t
       ; mutable iovec :
-          [ `String of string | `Bigstring of Bigstringaf.t ] Httpaf.IOVec.t
+          [ `String of string | `Bigstring of Bigstringaf.t ]
+            Httpun_types.IOVec.t
       }
   | Streaming of
       { response : Response.t
@@ -155,11 +156,13 @@ let send_fixed_response (t : t) s response data =
       match data with
       | `String s ->
         let len = String.length s in
-        let iovec = { Httpaf.IOVec.buffer = `String s; off = 0; len } in
+        let iovec = { Httpun_types.IOVec.buffer = `String s; off = 0; len } in
         iovec, len
       | `Bigstring b ->
         let len = Bigstringaf.length b in
-        let iovec = { Httpaf.IOVec.buffer = `Bigstring b; off = 0; len } in
+        let iovec =
+          { Httpun_types.IOVec.buffer = `Bigstring b; off = 0; len }
+        in
         iovec, len
     in
     let should_send_data = length <> 0 in
@@ -503,7 +506,7 @@ let flush_response_body (t : t) ~max_bytes =
       in
       let len_to_write = if is_partial_flush then max_bytes else len in
       write_buffer_data t.writer ~off ~len:len_to_write frame_info buffer;
-      r.iovec <- Httpaf.IOVec.shift iovec len_to_write;
+      r.iovec <- Httpun_types.IOVec.shift iovec len_to_write;
       if not is_partial_flush then close_stream t;
       len_to_write
     | Fixed _ | Waiting | Complete _ -> 0)

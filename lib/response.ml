@@ -45,7 +45,7 @@ let create ?(headers = Headers.empty) status = { status; headers }
 let body_length ~request_method { headers; _ } =
   match request_method with
   | `HEAD -> `Fixed 0L
-  | #Httpaf.Method.standard -> Message.body_length headers
+  | #Httpun_types.Method.standard -> Message.body_length headers
 
 let pp_hum fmt { status; headers } =
   let reason =
