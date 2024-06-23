@@ -64,7 +64,7 @@ stdenv.mkDerivation {
   '';
   buildInputs =
     (lib.attrValues h2Drvs) ++
-    (with ocamlPackages; [ ocaml dune findlib ocamlformat httpaf-lwt-unix ]) ++
+    (with ocamlPackages; [ ocaml dune findlib ocamlformat httpun-lwt-unix ]) ++
     (with pkgs; [ lsof h2spec ]);
   checkInputs = with ocamlPackages; [ alcotest hex yojson ];
   doCheck = true;

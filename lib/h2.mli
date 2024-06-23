@@ -33,14 +33,14 @@
  *---------------------------------------------------------------------------*)
 
 (** H2 is a high-performance, memory-efficient, and scalable HTTP/2
-    implementation for OCaml. It is based on the concepts in http/af, and
-    therefore uses the Angstrom and Faraday libraries to implement the parsing
-    and serialization layers of the HTTP/2 standard. It also preserves the same
-    API as http/af wherever possible.
+    implementation for OCaml. It is based on the concepts introduced http/af,
+  and therefore uses the Angstrom and Faraday libraries to implement the
+  parsing and serialization layers of the HTTP/2 standard. It preserves
+  the same API as httpun wherever possible.
 
-    Not unlike http/af, the user should be familiar with HTTP, and the basic
-    principles of memory management and vectorized IO in order to use this
-    library. *)
+  Not unlike httpun, the user should be familiar with HTTP, and the basic
+  principles of memory management and vectorized IO in order to use this
+  library. *)
 
 (** {2 Basic HTTP Types} *)
 
@@ -89,7 +89,7 @@ module Status : sig
       See {{:https://tools.ietf.org/html/rfc7231#section-6.5} RFC7231§6.5} for
       more details.
 
-      In addition to http/af, this type also includes the 421 (Misdirected
+      In addition to httpun, this type also includes the 421 (Misdirected
       Request) tag. See
       {{:https://tools.ietf.org/html/rfc7540#section-9.1.2} RFC7540§9.1.2} for
       more details. *)
@@ -449,7 +449,7 @@ module Response : sig
     -> Status.t
     -> t
   (** [create ?headers status] creates an HTTP response with the given
-      parameters. Unlike the [Response] type in http/af, h2 does not define a
+      parameters. Unlike the [Response] type in httpun, h2 does not define a
       way for responses to carry reason phrases or protocol version.
 
       See

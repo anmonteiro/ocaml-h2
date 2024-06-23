@@ -13,11 +13,13 @@ let secrets = generic_kv_ro "../../../certificates"
 let server =
   let packages =
     [ package "tls-mirage"
-    ; package ~pin:"git+https://github.com/anmonteiro/httpaf#fork" "httpaf"
-    ; package ~pin:"git+https://github.com/anmonteiro/httpaf#fork" "httpaf-lwt"
+    ; package ~pin:"git+https://github.com/anmonteiro/httpun#master" "httpun"
     ; package
-        ~pin:"git+https://github.com/anmonteiro/httpaf#fork"
-        "httpaf-mirage"
+        ~pin:"git+https://github.com/anmonteiro/httpun#master"
+        "httpun-lwt"
+    ; package
+        ~pin:"git+https://github.com/anmonteiro/httpun#master"
+        "httpun-mirage"
     ; package ~pin:"file://../../.." "h2"
     ; package ~pin:"file://../../.." "h2-lwt"
     ; package ~pin:"file://../../.." "h2-mirage"

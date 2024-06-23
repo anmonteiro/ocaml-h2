@@ -37,7 +37,7 @@
  *   status code ([RFC7231], Section 6.2.2).
  *
  *   Note: While the above is true, we don't enforce in this library, as it
- *   makes unifying types with http/af much easier. `H2.Status.t` is, thus, a
+ *   makes unifying types with httpun much easier. `H2.Status.t` is, thus, a
  *   strict superset of `Httpun_types.Status.t`. *)
 
 include (
@@ -76,7 +76,8 @@ type t =
  *   included in an HTTP/1.1 status line. *)
 let default_reason_phrase = function
   | `Misdirected_request -> "Misdirected Request"
-  | #Httpun_types.Status.standard as t -> Httpun_types.Status.default_reason_phrase t
+  | #Httpun_types.Status.standard as t ->
+    Httpun_types.Status.default_reason_phrase t
 
 let to_code = function
   | `Misdirected_request -> 421

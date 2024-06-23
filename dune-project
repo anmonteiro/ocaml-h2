@@ -53,7 +53,8 @@
   (bigstringaf
    (>= "0.5.0"))
   psq
-  (hpack (= :version))
+  (hpack
+   (= :version))
   httpun-types
   (alcotest :with-test)
   (yojson :with-test)

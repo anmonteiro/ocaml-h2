@@ -346,7 +346,7 @@ let reprioritization_tests =
 
 let () =
   Alcotest.run
-    "httpaf unit tests"
+    "h2 unit tests"
     [ "Reprioritization tests", reprioritization_tests
     ; "Priority_Queue_Tests", priority_queue_tests
     ]

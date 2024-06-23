@@ -25,7 +25,14 @@ in
       ocamlPackages.dune-release
       git
     ] else [ ])
-    ++ (with ocamlPackages; [ merlin ocamlformat utop h2spec httpaf-lwt-unix tls-lwt ]);
+    ++ (with ocamlPackages; [
+      merlin
+      ocamlformat
+      utop
+      h2spec
+      httpun-lwt-unix
+      tls-lwt
+    ]);
 }).overrideAttrs (o: {
   propagatedBuildInputs = lib.filter
     (drv: drv.pname == null || !(lib.any (name: name == drv.pname) (lib.attrNames h2Drvs)))

@@ -43,7 +43,7 @@ It sets up a server that listens on 2 ports:
 
     If `h2` is negotiated, the example sets up a connection handler using
     `h2-lwt-unix`. Otherwise the connection handler will serve HTTP/1.1 traffic
-    using http/af.
+    using [httpun](https://github.com/anmonteiro/httpun).
 
 The ALPN example also provides a unikernel implementation with the same
 functionality that runs on [MirageOS](https://mirage.io).
