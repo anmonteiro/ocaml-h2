@@ -6,4 +6,6 @@
 (executable
  (name eio_h2spec)
  (modules eio_h2spec)
- (libraries eio_main h2 h2-eio))
+ (libraries eio_main h2 h2-eio)
+ (enabled_if
+  (>= %{ocaml_version} 5.0.0)))
