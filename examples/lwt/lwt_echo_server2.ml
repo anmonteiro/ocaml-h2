@@ -84,7 +84,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
       in
       (* let (finished, notify) = Lwt.wait () in *)
       let rec on_read _request_data ~off:_ ~len:_ =
-        Body.Writer.flush response_body (fun () ->
+        Body.Writer.flush response_body (fun _ ->
           Body.Reader.schedule_read request_body ~on_eof ~on_read)
       and on_eof () =
         set_interval
@@ -93,13 +93,13 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
              let _ =
                Body.Writer.write_string response_body "data: some data\n\n"
              in
-             Body.Writer.flush response_body (fun () -> ());
+             Body.Writer.flush response_body ignore;
              true)
           (fun () ->
              let _ =
                Body.Writer.write_string response_body "event: end\ndata: 1\n\n"
              in
-             Body.Writer.flush response_body (fun () ->
+             Body.Writer.flush response_body (fun _ ->
                Body.Writer.close response_body))
       in
       Body.Reader.schedule_read ~on_read ~on_eof request_body;

@@ -38,7 +38,6 @@ module Reader = struct
     ; mutable read_scheduled : bool
     ; mutable on_eof : unit -> unit
     ; mutable on_read : Bigstringaf.t -> off:int -> len:int -> unit
-    ; buffered_bytes : int ref
     ; done_reading : int -> unit
     }
 
@@ -51,7 +50,6 @@ module Reader = struct
     ; read_scheduled = false
     ; on_eof = default_on_eof
     ; on_read = default_on_read
-    ; buffered_bytes = ref 0
     ; done_reading
     }
 
@@ -110,12 +108,12 @@ module Writer = struct
 
   type t =
     { faraday : Faraday.t
-    ; buffered_bytes : int ref
+    ; mutable buffered_bytes : int
     ; writer : Serialize.Writer.t
     }
 
   let create buffer ~writer =
-    { faraday = Faraday.of_bigstring buffer; buffered_bytes = ref 0; writer }
+    { faraday = Faraday.of_bigstring buffer; buffered_bytes = 0; writer }
 
   let create_empty ~writer =
     let t = create Bigstringaf.empty ~writer in
@@ -177,17 +175,16 @@ module Writer = struct
       match Faraday.operation faraday with
       | `Yield | `Close -> 0
       | `Writev iovecs ->
-        let buffered = t.buffered_bytes in
-        let iovecs = Httpun_types.IOVec.shiftv iovecs !buffered in
+        let iovecs = Httpun_types.IOVec.shiftv iovecs t.buffered_bytes in
         let lengthv = Httpun_types.IOVec.lengthv iovecs in
         let writev_len = if max_bytes < lengthv then max_bytes else lengthv in
-        buffered := !buffered + writev_len;
+        t.buffered_bytes <- t.buffered_bytes + writev_len;
         let frame_info = Writer.make_frame_info ~max_frame_size stream_id in
         Writer.schedule_iovecs writer frame_info ~len:writev_len iovecs;
         Writer.flush t.writer (function
           | `Closed -> close_and_drain t
           | `Written ->
             Faraday.shift faraday writev_len;
-            buffered := !buffered - writev_len);
+            t.buffered_bytes <- t.buffered_bytes - writev_len);
         writev_len
 end
