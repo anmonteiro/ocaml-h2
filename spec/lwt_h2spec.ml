@@ -53,7 +53,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
                 ignore
                 @@ Reqd.try_with request_descriptor (fun () ->
                   Body.Writer.write_string response_body " data");
-                Body.Writer.flush response_body (fun () ->
+                Body.Writer.flush response_body (fun _reason ->
                   Body.Writer.close response_body))
             | "/bigstring" ->
               let res_body = "non-empty data." in
