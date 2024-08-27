@@ -135,7 +135,7 @@ let report_error =
         t.did_send_go_away <- true;
         if error <> Error_code.NoError
         then t.error_handler (`Protocol_error (error, data));
-        Writer.flush t.writer (fun () ->
+        Writer.flush t.writer (fun _reason ->
           (* XXX: We need to allow lower numbered streams to complete before
            * shutting down. *)
           shutdown_rw t);

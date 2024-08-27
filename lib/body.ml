@@ -125,27 +125,40 @@ module Writer = struct
   let ready_to_write t = Serialize.Writer.wakeup t.writer
 
   let write_char t c =
-    Faraday.write_char t.faraday c;
+    if not (Faraday.is_closed t.faraday) then Faraday.write_char t.faraday c;
     ready_to_write t
 
   let write_string t ?off ?len s =
-    Faraday.write_string ?off ?len t.faraday s;
+    if not (Faraday.is_closed t.faraday)
+    then Faraday.write_string ?off ?len t.faraday s;
     ready_to_write t
 
   let write_bigstring t ?off ?len b =
-    Faraday.write_bigstring ?off ?len t.faraday b;
+    if not (Faraday.is_closed t.faraday)
+    then Faraday.write_bigstring ?off ?len t.faraday b;
     ready_to_write t
 
   let schedule_bigstring t ?off ?len (b : Bigstringaf.t) =
-    Faraday.schedule_bigstring ?off ?len t.faraday b;
+    if not (Faraday.is_closed t.faraday)
+    then Faraday.schedule_bigstring ?off ?len t.faraday b;
     ready_to_write t
 
   let flush t kontinue =
-    Faraday.flush t.faraday kontinue;
-    ready_to_write t
+    if Serialize.Writer.is_closed t.writer
+    then kontinue `Closed
+    else (
+      Faraday.flush_with_reason t.faraday (function
+        | Drain -> kontinue `Closed
+        | Nothing_pending | Shift -> kontinue `Written);
+      ready_to_write t)
 
   let is_closed t = Faraday.is_closed t.faraday
   let has_pending_output t = Faraday.has_pending_output t.faraday
+
+  let close_and_drain t =
+    Faraday.close t.faraday;
+    (* Resolve all pending flushes *)
+    ignore (Faraday.drain t.faraday : int)
 
   let close t =
     Serialize.Writer.unyield t.writer;
@@ -156,18 +169,25 @@ module Writer = struct
 
   let transfer_to_writer t writer ~max_frame_size ~max_bytes stream_id =
     let faraday = t.faraday in
-    match Faraday.operation faraday with
-    | `Yield | `Close -> 0
-    | `Writev iovecs ->
-      let buffered = t.buffered_bytes in
-      let iovecs = Httpun_types.IOVec.shiftv iovecs !buffered in
-      let lengthv = Httpun_types.IOVec.lengthv iovecs in
-      let writev_len = if max_bytes < lengthv then max_bytes else lengthv in
-      buffered := !buffered + writev_len;
-      let frame_info = Writer.make_frame_info ~max_frame_size stream_id in
-      Writer.schedule_iovecs writer frame_info ~len:writev_len iovecs;
-      Writer.flush writer (fun () ->
-        Faraday.shift faraday writev_len;
-        buffered := !buffered - writev_len);
-      writev_len
+    if Serialize.Writer.is_closed t.writer
+    then (
+      close_and_drain t;
+      0)
+    else
+      match Faraday.operation faraday with
+      | `Yield | `Close -> 0
+      | `Writev iovecs ->
+        let buffered = t.buffered_bytes in
+        let iovecs = Httpun_types.IOVec.shiftv iovecs !buffered in
+        let lengthv = Httpun_types.IOVec.lengthv iovecs in
+        let writev_len = if max_bytes < lengthv then max_bytes else lengthv in
+        buffered := !buffered + writev_len;
+        let frame_info = Writer.make_frame_info ~max_frame_size stream_id in
+        Writer.schedule_iovecs writer frame_info ~len:writev_len iovecs;
+        Writer.flush t.writer (function
+          | `Closed -> close_and_drain t
+          | `Written ->
+            Faraday.shift faraday writev_len;
+            buffered := !buffered - writev_len);
+        writev_len
 end

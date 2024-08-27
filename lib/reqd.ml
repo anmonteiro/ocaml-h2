@@ -215,7 +215,8 @@ let unsafe_respond_with_data (t : t) response data =
      *   reserved (local): [...] In this state, only the following transitions
      *   are possible: The endpoint can send a HEADERS frame. This causes the
      *   stream to open in a "half-closed (remote)" state. *)
-    Writer.flush t.writer (fun () ->
+    Writer.flush t.writer (fun _reason ->
+      (* TODO(anmonteiro): different if closed? *)
       t.state <- Active (HalfClosed request_info, stream))
   | Closed _ -> assert false
 
@@ -268,7 +269,8 @@ let unsafe_respond_with_streaming (t : t) ~flush_headers_immediately response =
      *   reserved (local): [...] In this state, only the following transitions
      *   are possible: The endpoint can send a HEADERS frame. This causes the
      *   stream to open in a "half-closed (remote)" state. *)
-    Writer.flush t.writer (fun () ->
+    Writer.flush t.writer (fun _reason ->
+      (* TODO(anmonteiro): different if closed? *)
       t.state <- Active (HalfClosed request_info, stream));
     response_body
   | Closed _ -> assert false
@@ -444,7 +446,7 @@ let close_stream (t : t) =
        *   flag). *)
       Stream.reset_stream t Error_code.NoError
     | Active (HalfClosed _, _) ->
-      Writer.flush t.writer (fun () -> Stream.finish_stream t Finished)
+      Writer.flush t.writer (fun _reason -> Stream.finish_stream t Finished)
     | _ -> assert false)
   | Exn _ -> Stream.reset_stream t InternalError
   | Other { code; _ } -> Stream.reset_stream t code

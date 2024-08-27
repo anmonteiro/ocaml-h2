@@ -886,7 +886,9 @@ module Server_connection_tests = struct
       | [] -> Body.Writer.close body
       | w :: ws ->
         Body.Writer.write_string body w;
-        Body.Writer.flush body (fun () -> write ws)
+        Body.Writer.flush body (function
+          | `Closed -> assert false
+          | `Written -> write ws)
     in
     write writes
 
@@ -1159,8 +1161,9 @@ module Server_connection_tests = struct
       let response = Response.create `OK in
       let response_body = Reqd.respond_with_streaming reqd response in
       Body.Writer.write_string response_body "hello";
-      Body.Writer.flush response_body (fun () ->
-        Body.Writer.close response_body)
+      Body.Writer.flush response_body (function
+        | `Closed -> assert false
+        | `Written -> Body.Writer.close response_body)
     in
     let t =
       create_and_handle_preface
@@ -1211,9 +1214,11 @@ module Server_connection_tests = struct
     (* Send the response for / *)
     let response_body = Reqd.respond_with_streaming reqd response in
     Body.Writer.write_string response_body "somedata";
-    Body.Writer.flush response_body (fun () ->
-      Reqd.schedule_trailers reqd Headers.(add empty "foo" "bar");
-      Body.Writer.close response_body)
+    Body.Writer.flush response_body (function
+      | `Closed -> assert false
+      | `Written ->
+        Reqd.schedule_trailers reqd Headers.(add empty "foo" "bar");
+        Body.Writer.close response_body)
 
   let test_trailers () =
     let t = create ~error_handler trailers_request_handler in

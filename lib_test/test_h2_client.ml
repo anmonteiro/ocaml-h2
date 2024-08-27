@@ -1251,7 +1251,9 @@ module Client_connection_tests = struct
     flush_request t;
     Body.Writer.write_string request_body "hello";
     flush_request t;
-    Body.Writer.flush request_body (fun () -> Body.Writer.close request_body);
+    Body.Writer.flush request_body (function
+      | `Closed -> assert false
+      | `Written -> Body.Writer.close request_body);
     let frames, _lenv = flush_pending_writes t in
     Alcotest.(check (list int))
       "Writes empty DATA frame"

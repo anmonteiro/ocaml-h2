@@ -589,12 +589,19 @@ module Writer = struct
     t.wakeup <- Optional_thunk.none;
     Optional_thunk.call_if_some f
 
-  let flush t f = flush t.encoder f
+  let flush t f =
+    flush_with_reason t.encoder (fun reason ->
+      let result =
+        match reason with
+        | Nothing_pending | Shift -> `Written
+        | Drain -> `Closed
+      in
+      f result)
 
   let unyield t =
     (* Faraday doesn't have a function to take the serializer out of a yield
        state. In the meantime, `flush` does it. *)
-    flush t (fun () -> ())
+    flush t (fun _reason -> ())
 
   let yield t = Faraday.yield t.encoder
   let close t = Faraday.close t.encoder

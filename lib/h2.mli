@@ -34,13 +34,13 @@
 
 (** H2 is a high-performance, memory-efficient, and scalable HTTP/2
     implementation for OCaml. It is based on the concepts introduced http/af,
-  and therefore uses the Angstrom and Faraday libraries to implement the
-  parsing and serialization layers of the HTTP/2 standard. It preserves
-  the same API as httpun wherever possible.
+    and therefore uses the Angstrom and Faraday libraries to implement the
+    parsing and serialization layers of the HTTP/2 standard. It preserves the
+    same API as httpun wherever possible.
 
-  Not unlike httpun, the user should be familiar with HTTP, and the basic
-  principles of memory management and vectorized IO in order to use this
-  library. *)
+    Not unlike httpun, the user should be familiar with HTTP, and the basic
+    principles of memory management and vectorized IO in order to use this
+    library. *)
 
 (** {2 Basic HTTP Types} *)
 
@@ -65,10 +65,10 @@ module Method : module type of Httpun_types.Method
     See {{:https://tools.ietf.org/html/rfc7231#section-6} RFC7231§6} for more
     details.
 
-    This module is a strict superset of [Httpun_types.Status]. Even though the HTTP/2
-    specification removes support for the [Switching_protocols] status code, h2
-    keeps it for the sake of higher level interaction between OCaml libraries
-    that support both HTTP/1 and HTTP/2.
+    This module is a strict superset of [Httpun_types.Status]. Even though the
+    HTTP/2 specification removes support for the [Switching_protocols] status
+    code, h2 keeps it for the sake of higher level interaction between OCaml
+    libraries that support both HTTP/1 and HTTP/2.
 
     See {{:https://tools.ietf.org/html/rfc7540#section-8.1.1} RFC7540§8.1.1} for
     more details. *)
@@ -373,7 +373,7 @@ module Body : sig
         the next opportunity without performing a copy. [bs] should not be
         modified until a subsequent call to {!flush} has successfully completed. *)
 
-    val flush : t -> (unit -> unit) -> unit
+    val flush : t -> ([ `Written | `Closed ] -> unit) -> unit
     (** [flush t f] makes all bytes in [t] available for writing to the awaiting
         output channel. Once those bytes have reached that output channel, [f]
         will be called.
@@ -449,8 +449,8 @@ module Response : sig
     -> Status.t
     -> t
   (** [create ?headers status] creates an HTTP response with the given
-      parameters. Unlike the [Response] type in httpun, h2 does not define a
-      way for responses to carry reason phrases or protocol version.
+      parameters. Unlike the [Response] type in httpun, h2 does not define a way
+      for responses to carry reason phrases or protocol version.
 
       See
       {{:https://tools.ietf.org/html/rfc7540#section-8.1.2.4} RFC7540§8.1.2.4}

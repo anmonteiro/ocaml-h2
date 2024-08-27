@@ -129,7 +129,7 @@ let report_error t = function
         ~debug_data
         ~last_stream_id:t.max_client_stream_id
         error;
-      Writer.flush t.writer (fun () ->
+      Writer.flush t.writer (fun _reason ->
         (* XXX: We need to allow lower numbered streams to complete before
          * shutting down. *)
         shutdown t);
