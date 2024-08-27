@@ -1,3 +1,13 @@
+Unreleased
+--------------
+
+- h2: surface (body) write failures through `flush`
+  ([#247](https://github.com/anmonteiro/ocaml-h2/pull/247))
+    - `Body.Writer.flush` now takes a callback of the type
+       ``([ `Written | ` Closed] -> unit)``, informing the caller whether the
+       previous writes have been written or whether the output channel was
+       closed.
+
 0.12.0 2024-06-23
 --------------
 
