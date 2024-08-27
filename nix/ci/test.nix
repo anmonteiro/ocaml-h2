@@ -90,7 +90,7 @@ stdenv.mkDerivation {
     kill $(lsof -i tcp:8080 -t)
 
     # Run Eio h2spec now
-    ${if lib.versionOlder "5.0" ocaml.version then ''
+    ${if lib.versionOlder "5.0" ocamlPackages.ocaml.version then ''
       dune exec --display=short spec/eio_h2spec.exe &
       while [ -z "$(lsof -t -i tcp:8080)" ]; do
         sleep 1;
