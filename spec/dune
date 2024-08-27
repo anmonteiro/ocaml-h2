@@ -1,3 +1,9 @@
 (executable
  (name lwt_h2spec)
+ (modules lwt_h2spec)
  (libraries lwt.unix h2 h2-lwt-unix))
+
+(executable
+ (name eio_h2spec)
+ (modules eio_h2spec)
+ (libraries eio_main h2 h2-eio))
