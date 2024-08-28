@@ -8,4 +8,5 @@
  (action
   (with-stdout-to
    %{targets}
-   (run ../util/gen_huffman.exe %{deps}))))
+   (run ../util/gen_huffman.exe %{deps})))
+ (mode fallback))
