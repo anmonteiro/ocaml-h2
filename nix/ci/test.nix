@@ -37,7 +37,7 @@ let
   srcs = lib.mapAttrsFlatten (n: v: v.src) h2Drvs ++ [
     (with nix-filter; filter {
       root = ../..;
-      include = [ "spec" ".ocamlformat" ];
+      include = [ "spec" ".ocamlformat" ".ocamlformat-ignore" ];
     })
   ];
 in
