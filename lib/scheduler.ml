@@ -419,8 +419,8 @@ module Make (Streamd : StreamDescriptor) = struct
             StreamsTbl.remove root.all_streams id
           | None -> ());
           remove_expired queue'
-        | Some ((id, expires_at), queue') ->
-          root.cleanup_queue <- CleanupQueue.add id expires_at queue';
+        | Some ((_id, expires_at), _queue') ->
+          root.cleanup_queue <- queue;
           root.next_cleanup_epoch <- Some expires_at
         | None ->
           root.cleanup_queue <- CleanupQueue.empty;
