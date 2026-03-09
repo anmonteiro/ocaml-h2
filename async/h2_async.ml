@@ -132,8 +132,16 @@ module Client = struct
 
   let request t = Client_connection.request t.connection
   let ping t = Client_connection.ping t.connection
-  let shutdown t = Client_runtime.shutdown t.runtime
+
+  let shutdown t =
+    (* Do we need to shutdown the connection here? *)
+    Client_connection.shutdown t.connection;
+    Client_runtime.shutdown t.runtime
+
   let is_closed t = Client_runtime.is_closed t.runtime
+
+  (* Under no circumstances can this return an exception! *)
+  let close_finished t = Client_runtime.close_finished t.runtime
 
   module SSL = struct
     module Client_runtime = Gluten_async.Client.SSL
@@ -176,6 +184,10 @@ module Client = struct
     let ping t = Client_connection.ping t.connection
     let shutdown t = Client_runtime.shutdown t.runtime
     let is_closed t = Client_runtime.is_closed t.runtime
+
+    let close_finished t =
+      Client_runtime.close_finished t.runtime >>| fun () ->
+      H2.Client_connection.shutdown t.connection
   end
 
   module TLS = struct
@@ -223,5 +235,9 @@ module Client = struct
     let ping t = Client_connection.ping t.connection
     let shutdown t = Client_runtime.shutdown t.runtime
     let is_closed t = Client_runtime.is_closed t.runtime
+
+    let close_finished t =
+      Client_runtime.close_finished t.runtime >>| fun () ->
+      H2.Client_connection.shutdown t.connection
   end
 end
