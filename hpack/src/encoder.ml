@@ -290,7 +290,7 @@ let encode_header =
   let encode_string t s =
     let string_length = String.length s in
     let huffman_length = Huffman.encoded_length s in
-    if huffman_length > string_length
+    if huffman_length >= string_length
     then (
       (* From RFC7541§5.2:
        *   The number of octets used to encode the string literal, encoded as an
