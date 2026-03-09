@@ -16,29 +16,42 @@ let
   };
   nix-filter = import "${nix-filter-src}";
 
-
   pkgs = import "${src}" {
     extraOverlays = [
       (self: super: {
-        ocamlPackages = super.ocaml-ng."ocamlPackages_${ocamlVersion}".overrideScope (oself: osuper: {
-          gluten-lwt-unix = osuper.gluten-lwt-unix.overrideAttrs (o: {
-            propagatedBuildInputs = o.propagatedBuildInputs ++ [ oself.tls-lwt ];
-          });
-        });
+        ocamlPackages = super.ocaml-ng."ocamlPackages_${ocamlVersion}".overrideScope (
+          oself: osuper: {
+            gluten-lwt-unix = osuper.gluten-lwt-unix.overrideAttrs (o: {
+              propagatedBuildInputs = o.propagatedBuildInputs ++ [ oself.tls-lwt ];
+            });
+          }
+        );
       })
     ];
   };
 
-
-  inherit (pkgs) lib stdenv fetchTarball ocamlPackages h2spec;
+  inherit (pkgs)
+    lib
+    stdenv
+    fetchTarball
+    ocamlPackages
+    h2spec
+    ;
 
   h2Pkgs = pkgs.callPackage ./.. { inherit nix-filter; };
   h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
   srcs = lib.mapAttrsToList (_: v: v.src) h2Drvs ++ [
-    (with nix-filter; filter {
-      root = ../..;
-      include = [ "spec" ".ocamlformat" ".ocamlformat-ignore" ];
-    })
+    (
+      with nix-filter;
+      filter {
+        root = ../..;
+        include = [
+          "spec"
+          ".ocamlformat"
+          ".ocamlformat-ignore"
+        ];
+      }
+    )
   ];
 in
 
@@ -63,17 +76,30 @@ stdenv.mkDerivation {
     touch $out
   '';
   buildInputs =
-    (lib.attrValues h2Drvs) ++
-    (with ocamlPackages; [ ocaml dune findlib ocamlformat httpun-lwt-unix ]) ++
-    (with pkgs; [ lsof h2spec ]);
-  checkInputs = with ocamlPackages; [ alcotest hex yojson ];
+    (lib.attrValues h2Drvs)
+    ++ (with ocamlPackages; [
+      ocaml
+      dune
+      findlib
+      ocamlformat
+      httpun-lwt-unix
+    ])
+    ++ (with pkgs; [
+      lsof
+      h2spec
+    ]);
+  checkInputs = with ocamlPackages; [
+    alcotest
+    hex
+    yojson
+  ];
   doCheck = true;
   checkPhase = ''
     # Check code is formatted with OCamlformat
     dune build --root=. @fmt
 
     # Build the examples
-    dune build @all --display=short
+    dune build --display=short @install @spec/all
 
     dune build --root=. --display=short spec/lwt_h2spec.exe
     dune exec --display=short spec/lwt_h2spec.exe &
@@ -90,20 +116,25 @@ stdenv.mkDerivation {
     kill $(lsof -i tcp:8080 -t)
 
     # Run Eio h2spec now
-    ${if lib.versionOlder "5.0" ocamlPackages.ocaml.version then ''
-      dune build --display=short spec/eio_h2spec.exe
-      dune exec --display=short spec/eio_h2spec.exe &
-      while [ -z "$(lsof -t -i tcp:8080)" ]; do
-        sleep 1;
-      done;
+    ${
+      if lib.versionOlder "5.0" ocamlPackages.ocaml.version then
+        ''
+          dune build --display=short spec/eio_h2spec.exe
+          dune exec --display=short spec/eio_h2spec.exe &
+          while [ -z "$(lsof -t -i tcp:8080)" ]; do
+            sleep 1;
+          done;
 
-      h2spec --strict -p 8080 -P /string
+          h2spec --strict -p 8080 -P /string
 
-      h2spec --strict -p 8080 -P /bigstring
+          h2spec --strict -p 8080 -P /bigstring
 
-      h2spec --strict -p 8080 --timeout 3 -P /streaming
+          h2spec --strict -p 8080 --timeout 3 -P /streaming
 
-      kill $(lsof -i tcp:8080 -t)
-    '' else ""}
+          kill $(lsof -i tcp:8080 -t)
+        ''
+      else
+        ""
+    }
   '';
 }
