@@ -126,13 +126,26 @@ let bounded_schedule_iovecs t ~len iovecs =
   in
   loop t len iovecs
 
+let bounded_write_iovecs t ~len iovecs =
+  let rec loop t remaining iovecs =
+    match remaining, iovecs with
+    | 0, _ | _, [] -> ()
+    | remaining, { IOVec.buffer; off; len } :: xs ->
+      if remaining < len
+      then write_bigstring t ~off ~len:remaining buffer
+      else (
+        write_bigstring t ~off ~len buffer;
+        loop t (remaining - len) xs)
+  in
+  loop t len iovecs
+
 let write_headers_frame t info ~priority ?len iovecs =
   let len = match len with Some len -> len | None -> IOVec.lengthv iovecs in
   if priority == Priority.default_priority
   then
     (* See RFC7540§6.3:
      *   Just the Header Block Fragment length if no priority. *)
-    let writer t = bounded_schedule_iovecs t ~len iovecs in
+    let writer t = bounded_write_iovecs t ~len iovecs in
     write_frame_with_padding t info Headers len writer
   else
     (* See RFC7540§6.2:
@@ -142,7 +155,7 @@ let write_headers_frame t info ~priority ?len iovecs =
     let info' = { info with flags = Flags.set_priority info.flags } in
     let writer t =
       write_priority t priority;
-      bounded_schedule_iovecs t ~len iovecs
+      bounded_write_iovecs t ~len iovecs
     in
     write_frame_with_padding t info' Headers payload_length writer
 
@@ -202,7 +215,7 @@ let write_push_promise_frame t info ~promised_id ?len iovecs =
   in
   let writer t =
     BE.write_uint32 t promised_id;
-    bounded_schedule_iovecs t ~len iovecs
+    bounded_write_iovecs t ~len iovecs
   in
   write_frame_with_padding t info PushPromise payload_length writer
 
@@ -276,7 +289,7 @@ let write_continuation_frame t info ?len iovecs =
     }
   in
   write_frame_header t header;
-  bounded_schedule_iovecs t ~len iovecs
+  bounded_write_iovecs t ~len iovecs
 
 let write_unknown_frame t ~code info payload =
   let payload_length = Bigstringaf.length payload in
@@ -307,6 +320,12 @@ module Writer = struct
     ; encoder : Faraday.t
       (* The encoder that handles encoding for writes. Uses the [buffer]
        * referenced above internally. *)
+    ; headers_encoder : Faraday.t
+      (* Reused scratch encoder for HPACK header blocks to avoid per-message
+       * Faraday allocations on request/response/trailer encoding paths. *)
+      (* TODO(perf): Replace this single scratch encoder + copy-out strategy with
+       * a pooled set of header encoders tracked by in-flight bytes, so HEADERS
+       * payloads can stay zero-copy without buffer-aliasing risks. *)
     ; mutable drained_bytes : int
       (* The number of bytes that were not written due to the output stream
        * being closed before all buffered output could be written. Useful
@@ -317,7 +336,13 @@ module Writer = struct
   let create buffer_size =
     let buffer = Bigstringaf.create buffer_size in
     let encoder = Faraday.of_bigstring buffer in
-    { buffer; encoder; drained_bytes = 0; wakeup = Optional_thunk.none }
+    let headers_encoder = Faraday.create 0x1000 in
+    { buffer
+    ; encoder
+    ; headers_encoder
+    ; drained_bytes = 0
+    ; wakeup = Optional_thunk.none
+    }
 
   let faraday t = t.encoder
 
@@ -462,34 +487,41 @@ module Writer = struct
            `Ok len))
 
   let encode_headers hpack_encoder faraday headers =
-    List.iter
-      (fun header -> Hpack.Encoder.encode_header hpack_encoder faraday header)
-      (Headers.to_hpack_list headers)
+    Headers.iter_hpack headers ~f:(fun header ->
+      Hpack.Encoder.encode_header hpack_encoder faraday header)
+
+  let with_headers_encoder t f =
+    let faraday = t.headers_encoder in
+    if Faraday.pending_bytes faraday > 0
+    then failwith "with_headers_encoder: undrained scratch encoder";
+    f faraday;
+    if Faraday.pending_bytes faraday > 0
+    then failwith "with_headers_encoder: scratch encoder not fully drained"
 
   let write_request_like_frame t hpack_encoder ~write_frame frame_info request =
-    let { Request.meth; target; scheme; headers } = request in
-    let faraday = Faraday.create 0x1000 in
-    Hpack.Encoder.encode_header
-      hpack_encoder
-      faraday
-      { Headers.name = ":method"
-      ; value = Httpun_types.Method.to_string meth
-      ; sensitive = false
-      };
-    if meth <> `CONNECT
-    then (
-      (* From RFC7540§8.3:
-       *   The :scheme and :path pseudo-header fields MUST be omitted. *)
+    with_headers_encoder t (fun faraday ->
+      let { Request.meth; target; scheme; headers } = request in
       Hpack.Encoder.encode_header
         hpack_encoder
         faraday
-        { Headers.name = ":path"; value = target; sensitive = false };
-      Hpack.Encoder.encode_header
-        hpack_encoder
-        faraday
-        { Headers.name = ":scheme"; value = scheme; sensitive = false });
-    encode_headers hpack_encoder faraday headers;
-    chunk_header_block_fragments t frame_info ~write_frame faraday
+        { Headers.name = ":method"
+        ; value = Httpun_types.Method.to_string meth
+        ; sensitive = false
+        };
+      if meth <> `CONNECT
+      then (
+        (* From RFC7540§8.3:
+         *   The :scheme and :path pseudo-header fields MUST be omitted. *)
+        Hpack.Encoder.encode_header
+          hpack_encoder
+          faraday
+          { Headers.name = ":path"; value = target; sensitive = false };
+        Hpack.Encoder.encode_header
+          hpack_encoder
+          faraday
+          { Headers.name = ":scheme"; value = scheme; sensitive = false });
+      encode_headers hpack_encoder faraday headers;
+      chunk_header_block_fragments t frame_info ~write_frame faraday)
 
   let write_request_headers t hpack_encoder ~priority frame_info request =
     if not (is_closed t.encoder)
@@ -505,44 +537,44 @@ module Writer = struct
 
   let write_response_headers t hpack_encoder frame_info response =
     if not (is_closed t.encoder)
-    then (
-      let { Response.status; headers; _ } = response in
-      let faraday = Faraday.create 0x1000 in
-      (* From RFC7540§8.1.2.4:
-       *   For HTTP/2 responses, a single :status pseudo-header field is defined
-       *   that carries the HTTP status code field (see [RFC7231], Section 6).
-       *   This pseudo-header field MUST be included in all responses; otherwise,
-       *   the response is malformed (Section 8.1.2.6). *)
-      Hpack.Encoder.encode_header
-        hpack_encoder
-        faraday
-        { Headers.name = ":status"
-        ; value = Status.to_string status
-        ; sensitive = false
-        };
-      encode_headers hpack_encoder faraday headers;
-      chunk_header_block_fragments
-        t
-        frame_info
-        ~write_frame:(write_headers_frame ~priority:Priority.default_priority)
-        ~has_priority:false
-        faraday)
+    then
+      with_headers_encoder t (fun faraday ->
+        let { Response.status; headers; _ } = response in
+        (* From RFC7540§8.1.2.4:
+         *   For HTTP/2 responses, a single :status pseudo-header field is
+         *   defined that carries the HTTP status code field (see [RFC7231],
+         *   Section 6). This pseudo-header field MUST be included in all
+         *   responses; otherwise, the response is malformed (Section 8.1.2.6). *)
+        Hpack.Encoder.encode_header
+          hpack_encoder
+          faraday
+          { Headers.name = ":status"
+          ; value = Status.to_string status
+          ; sensitive = false
+          };
+        encode_headers hpack_encoder faraday headers;
+        chunk_header_block_fragments
+          t
+          frame_info
+          ~write_frame:(write_headers_frame ~priority:Priority.default_priority)
+          ~has_priority:false
+          faraday)
 
   let write_response_trailers t hpack_encoder frame_info trailers =
     if not (is_closed t.encoder)
-    then (
-      let faraday = Faraday.create 0x1000 in
-      (* From RFC7540§8.1:
-       *  optionally, one HEADERS frame, followed by zero or more
-       *  CONTINUATION frames containing the trailer-part, if present (see
-       *  [RFC7230], Section 4.1.2). *)
-      encode_headers hpack_encoder faraday trailers;
-      chunk_header_block_fragments
-        t
-        frame_info
-        ~write_frame:(write_headers_frame ~priority:Priority.default_priority)
-        ~has_priority:false
-        faraday)
+    then
+      with_headers_encoder t (fun faraday ->
+        (* From RFC7540§8.1:
+         *  optionally, one HEADERS frame, followed by zero or more
+         *  CONTINUATION frames containing the trailer-part, if present (see
+         *  [RFC7230], Section 4.1.2). *)
+        encode_headers hpack_encoder faraday trailers;
+        chunk_header_block_fragments
+          t
+          frame_info
+          ~write_frame:(write_headers_frame ~priority:Priority.default_priority)
+          ~has_priority:false
+          faraday)
 
   let write_rst_stream t frame_info e =
     if not (is_closed t.encoder)

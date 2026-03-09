@@ -167,6 +167,18 @@ module Pseudo = struct
   let is_pseudo name = Char.code (String.unsafe_get name 0) = 0x3A
 end
 
+(* Headers are stored in reverse transmission order. Iterate in wire/HPACK order
+ * without allocating an intermediate reversed list. *)
+let iter_hpack ~f t =
+  let rec loop t =
+    match t with
+    | [] -> ()
+    | header :: t' ->
+      loop t';
+      f header
+  in
+  loop t
+
 let iter ~f t = List.iter (fun { name; value; _ } -> f name value) t
 
 let fold ~f ~init t =
@@ -193,41 +205,48 @@ let valid_headers ?(is_request = true) t =
     false
   | _ ->
     let pseudo_ended = ref false in
+    let exception Invalid_headers in
     let invalid =
-      exists
-        ~f:(fun name _ ->
-          let is_pseudo = Pseudo.is_pseudo name in
-          let pseudo_did_end = !pseudo_ended in
-          if (not is_pseudo) && not pseudo_did_end then pseudo_ended := true;
-          (* From RFC7540§8.1.2:
-           *   [...] header field names MUST be converted to lowercase
-           *   prior to their encoding in HTTP/2. A request or response
-           *   containing uppercase header field names MUST be treated as
-           *   malformed (Section 8.1.2.6). *)
-          (not CI.(is_lowercase name))
-          (* From RFC7540§8.1.2.1:
-           *   Pseudo-header fields are only valid in the context in
-           *   which they are defined. [...] pseudo-header fields defined
-           *   for responses MUST NOT appear in requests. [...] Endpoints
-           *   MUST treat a request or response that contains undefined
-           *   or invalid pseudo-header fields as malformed (Section
-           *   8.1.2.6). *)
-          || (is_pseudo
-             && not
-                  (List.mem
-                     name
-                     (if is_request
-                      then Pseudo.reserved_request
-                      else Pseudo.reserved_response)))
-          ||
-          (* From RFC7540§8.1.2.1:
-           * All pseudo-header fields MUST appear in the header block before
-           * regular header fields. Any request or response that contains a
-           * pseudo-header field that appears in a header block after a
-           * regular header field MUST be treated as malformed (Section
-           * 8.1.2.6). *)
-          (is_pseudo && pseudo_did_end))
-        (to_hpack_list t)
+      try
+        iter_hpack
+          ~f:(fun { name; _ } ->
+            let is_pseudo = Pseudo.is_pseudo name in
+            let pseudo_did_end = !pseudo_ended in
+            if (not is_pseudo) && not pseudo_did_end then pseudo_ended := true;
+            if
+              (* From RFC7540§8.1.2:
+               *   [...] header field names MUST be converted to lowercase
+               *   prior to their encoding in HTTP/2. A request or response
+               *   containing uppercase header field names MUST be treated as
+               *   malformed (Section 8.1.2.6). *)
+              (not CI.(is_lowercase name))
+              (* From RFC7540§8.1.2.1:
+               *   Pseudo-header fields are only valid in the context in
+               *   which they are defined. [...] pseudo-header fields defined
+               *   for responses MUST NOT appear in requests. [...] Endpoints
+               *   MUST treat a request or response that contains undefined
+               *   or invalid pseudo-header fields as malformed (Section
+               *   8.1.2.6). *)
+              || (is_pseudo
+                 && not
+                      (List.mem
+                         name
+                         (if is_request
+                          then Pseudo.reserved_request
+                          else Pseudo.reserved_response)))
+              ||
+              (* From RFC7540§8.1.2.1:
+               * All pseudo-header fields MUST appear in the header block before
+               * regular header fields. Any request or response that contains a
+               * pseudo-header field that appears in a header block after a
+               * regular header field MUST be treated as malformed (Section
+               * 8.1.2.6). *)
+              (is_pseudo && pseudo_did_end)
+            then raise Invalid_headers)
+          t;
+        false
+      with
+      | Invalid_headers -> true
     in
     not invalid
 
