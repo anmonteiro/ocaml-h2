@@ -113,19 +113,6 @@ let write_priority t { Priority.exclusive; stream_dependency; weight } =
    * Note: we store priority with values from 1 to 256, so decrement here. *)
   write_uint8 t (weight - 1)
 
-let bounded_schedule_iovecs t ~len iovecs =
-  let rec loop t remaining iovecs =
-    match remaining, iovecs with
-    | 0, _ | _, [] -> ()
-    | remaining, { IOVec.buffer; off; len } :: xs ->
-      if remaining < len
-      then schedule_bigstring t ~off ~len:remaining buffer
-      else (
-        schedule_bigstring t ~off ~len buffer;
-        loop t (remaining - len) xs)
-  in
-  loop t len iovecs
-
 let bounded_write_iovecs t ~len iovecs =
   let rec loop t remaining iovecs =
     match remaining, iovecs with
@@ -588,7 +575,22 @@ module Writer = struct
     if not (is_closed t.encoder)
     then
       let { max_frame_payload; _ } = frame_info in
-      let rec loop iovecs remaining =
+      let rec schedule_from_cursor t iovecs head_consumed remaining =
+        match remaining, iovecs with
+        | 0, _ -> iovecs, head_consumed
+        | _, [] -> [], 0
+        | remaining, { IOVec.buffer; off; len } :: xs ->
+          let off = off + head_consumed in
+          let len = len - head_consumed in
+          if remaining < len
+          then (
+            schedule_bigstring t ~off ~len:remaining buffer;
+            iovecs, head_consumed + remaining)
+          else (
+            schedule_bigstring t ~off ~len buffer;
+            schedule_from_cursor t xs 0 (remaining - len))
+      in
+      let rec loop iovecs head_consumed remaining =
         if remaining > 0
         then (
           let chunk_len =
@@ -606,11 +608,17 @@ module Writer = struct
               }
             else frame_info
           in
+          let next_iovecs = ref iovecs in
+          let next_head_consumed = ref head_consumed in
           write_frame_with_padding t.encoder frame_info Data chunk_len (fun t ->
-            bounded_schedule_iovecs t ~len:chunk_len iovecs);
-          loop (IOVec.shiftv iovecs chunk_len) (remaining - chunk_len))
+            let iovecs', head_consumed' =
+              schedule_from_cursor t iovecs head_consumed chunk_len
+            in
+            next_iovecs := iovecs';
+            next_head_consumed := head_consumed');
+          loop !next_iovecs !next_head_consumed (remaining - chunk_len))
       in
-      loop iovecs len
+      loop iovecs 0 len
 
   let write_priority t frame_info priority =
     if not (is_closed t.encoder)
