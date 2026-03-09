@@ -34,7 +34,7 @@ let
 
   h2Pkgs = pkgs.callPackage ./.. { inherit nix-filter; };
   h2Drvs = lib.filterAttrs (_: value: lib.isDerivation value) h2Pkgs;
-  srcs = lib.mapAttrsFlatten (n: v: v.src) h2Drvs ++ [
+  srcs = lib.mapAttrsToList (_: v: v.src) h2Drvs ++ [
     (with nix-filter; filter {
       root = ../..;
       include = [ "spec" ".ocamlformat" ".ocamlformat-ignore" ];
