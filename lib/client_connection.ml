@@ -1468,7 +1468,14 @@ let unexpected_eof t =
           (`Malformed_response "unexpected eof")
           ProtocolError)
     t.streams;
-  Queue.iter (fun f -> f (Error `EOF)) t.pending_pings;
+  let rec notify_pending_pings () =
+    match Queue.take_opt t.pending_pings with
+    | Some callback ->
+      callback (Error `EOF);
+      notify_pending_pings ()
+    | None -> ()
+  in
+  notify_pending_pings ();
   report_connection_error t ~reason:"unexpected eof" ProtocolError
 
 let read_eof t bs ~off ~len =
