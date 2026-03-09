@@ -126,26 +126,13 @@ let bounded_schedule_iovecs t ~len iovecs =
   in
   loop t len iovecs
 
-let bounded_write_iovecs t ~len iovecs =
-  let rec loop t remaining iovecs =
-    match remaining, iovecs with
-    | 0, _ | _, [] -> ()
-    | remaining, { IOVec.buffer; off; len } :: xs ->
-      if remaining < len
-      then write_bigstring t ~off ~len:remaining buffer
-      else (
-        write_bigstring t ~off ~len buffer;
-        loop t (remaining - len) xs)
-  in
-  loop t len iovecs
-
 let write_headers_frame t info ~priority ?len iovecs =
   let len = match len with Some len -> len | None -> IOVec.lengthv iovecs in
   if priority == Priority.default_priority
   then
     (* See RFC7540§6.3:
      *   Just the Header Block Fragment length if no priority. *)
-    let writer t = bounded_write_iovecs t ~len iovecs in
+    let writer t = bounded_schedule_iovecs t ~len iovecs in
     write_frame_with_padding t info Headers len writer
   else
     (* See RFC7540§6.2:
@@ -155,7 +142,7 @@ let write_headers_frame t info ~priority ?len iovecs =
     let info' = { info with flags = Flags.set_priority info.flags } in
     let writer t =
       write_priority t priority;
-      bounded_write_iovecs t ~len iovecs
+      bounded_schedule_iovecs t ~len iovecs
     in
     write_frame_with_padding t info' Headers payload_length writer
 
@@ -215,7 +202,7 @@ let write_push_promise_frame t info ~promised_id ?len iovecs =
   in
   let writer t =
     BE.write_uint32 t promised_id;
-    bounded_write_iovecs t ~len iovecs
+    bounded_schedule_iovecs t ~len iovecs
   in
   write_frame_with_padding t info PushPromise payload_length writer
 
@@ -289,7 +276,7 @@ let write_continuation_frame t info ?len iovecs =
     }
   in
   write_frame_header t header;
-  bounded_write_iovecs t ~len iovecs
+  bounded_schedule_iovecs t ~len iovecs
 
 let write_unknown_frame t ~code info payload =
   let payload_length = Bigstringaf.length payload in
@@ -320,12 +307,11 @@ module Writer = struct
     ; encoder : Faraday.t
       (* The encoder that handles encoding for writes. Uses the [buffer]
        * referenced above internally. *)
-    ; headers_encoder : Faraday.t
-      (* Reused scratch encoder for HPACK header blocks to avoid per-message
-       * Faraday allocations on request/response/trailer encoding paths. *)
-      (* TODO(perf): Replace this single scratch encoder + copy-out strategy with
-       * a pooled set of header encoders tracked by in-flight bytes, so HEADERS
-       * payloads can stay zero-copy without buffer-aliasing risks. *)
+    ; mutable available_headers_encoders : Faraday.t list
+      (* Pool of scratch encoders used for HPACK header blocks. *)
+    ; mutable inflight_headers_encoders : Faraday.t list
+      (* Scratch encoders whose backing buffers are still referenced by pending
+       * output iovecs. Reclaim only once output is fully drained. *)
     ; mutable drained_bytes : int
       (* The number of bytes that were not written due to the output stream
        * being closed before all buffered output could be written. Useful
@@ -336,15 +322,33 @@ module Writer = struct
   let create buffer_size =
     let buffer = Bigstringaf.create buffer_size in
     let encoder = Faraday.of_bigstring buffer in
-    let headers_encoder = Faraday.create 0x1000 in
     { buffer
     ; encoder
-    ; headers_encoder
+    ; available_headers_encoders = [ Faraday.create 0x1000 ]
+    ; inflight_headers_encoders = []
     ; drained_bytes = 0
     ; wakeup = Optional_thunk.none
     }
 
   let faraday t = t.encoder
+
+  let reclaim_headers_encoders t =
+    if (not (Faraday.has_pending_output t.encoder))
+       && t.inflight_headers_encoders <> []
+    then (
+      t.available_headers_encoders <-
+        List.rev_append
+          t.inflight_headers_encoders
+          t.available_headers_encoders;
+      t.inflight_headers_encoders <- [])
+
+  let acquire_headers_encoder t =
+    reclaim_headers_encoders t;
+    match t.available_headers_encoders with
+    | faraday :: rest ->
+      t.available_headers_encoders <- rest;
+      faraday
+    | [] -> Faraday.create 0x1000
 
   let make_frame_info
         ?(padding = Bigstringaf.empty)
@@ -491,12 +495,13 @@ module Writer = struct
       Hpack.Encoder.encode_header hpack_encoder faraday header)
 
   let with_headers_encoder t f =
-    let faraday = t.headers_encoder in
+    let faraday = acquire_headers_encoder t in
     if Faraday.pending_bytes faraday > 0
     then failwith "with_headers_encoder: undrained scratch encoder";
     f faraday;
     if Faraday.pending_bytes faraday > 0
-    then failwith "with_headers_encoder: scratch encoder not fully drained"
+    then failwith "with_headers_encoder: scratch encoder not fully drained";
+    t.inflight_headers_encoders <- faraday :: t.inflight_headers_encoders
 
   let write_request_like_frame t hpack_encoder ~write_frame frame_info request =
     with_headers_encoder t (fun faraday ->
@@ -661,7 +666,8 @@ module Writer = struct
   let close_and_drain t =
     Faraday.close t.encoder;
     let drained = Faraday.drain t.encoder in
-    t.drained_bytes <- t.drained_bytes + drained
+    t.drained_bytes <- t.drained_bytes + drained;
+    reclaim_headers_encoders t
 
   let is_closed t = Faraday.is_closed t.encoder
   let drained_bytes t = t.drained_bytes
@@ -669,7 +675,9 @@ module Writer = struct
   let report_result t result =
     match result with
     | `Closed -> close_and_drain t
-    | `Ok len -> shift t.encoder len
+    | `Ok len ->
+      shift t.encoder len;
+      reclaim_headers_encoders t
 
   let next t =
     match Faraday.operation t.encoder with
