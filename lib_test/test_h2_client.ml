@@ -721,6 +721,46 @@ module Client_connection_tests = struct
       true
       (match stream.Stream.state with Closed _ -> true | _ -> false)
 
+  let test_closed_stream_cleanup_without_write_poll () =
+    let t = create_and_handle_preface () in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let response_handler _response _response_body = () in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~flush_headers_immediately:true
+        ~error_handler:default_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    let stream = opt_exn (Scheduler.find t.streams 1l) in
+    Body.Writer.close request_body;
+    let _, lenv = flush_pending_writes t in
+    report_write_result t (`Ok lenv);
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    read_response t hpack_encoder (Response.create `OK);
+    let polls_needed =
+      match stream.Stream.state with
+      | Closed closed -> closed.ttl + 1
+      | _ ->
+        Alcotest.fail "Expected stream to be closed after END_STREAM response"
+    in
+    Alcotest.(check bool)
+      "Closed stream is initially still tracked"
+      true
+      (match Scheduler.find t.streams 1l with Some _ -> true | None -> false);
+    for _ = 1 to polls_needed do
+      Alcotest.(check read_operation)
+        "Read polling remains active"
+        `Read
+        (next_read_operation t)
+    done;
+    Alcotest.(check bool)
+      "Closed stream is reaped without write polling"
+      true
+      (match Scheduler.find t.streams 1l with Some _ -> false | None -> true)
+
   let test_ping () =
     let t = create_and_handle_preface () in
     let ping_handler1_called = ref false in
@@ -1558,6 +1598,9 @@ module Client_connection_tests = struct
     ; ( "stream correctly transitions state"
       , `Quick
       , test_stream_transitions_state )
+    ; ( "closed stream cleanup does not depend on write polling"
+      , `Quick
+      , test_closed_stream_cleanup_without_write_poll )
     ; ( "continuation frame on another stream"
       , `Quick
       , test_continuation_frame_other_stream )
