@@ -89,6 +89,7 @@ module Make (Streamd : StreamDescriptor) = struct
             mutable inflow : Settings.WindowSize.t
           ; mutable marked_for_removal : Stream.closed StreamsTbl.t
           ; mutable cleanup_epoch : int
+          ; mutable next_cleanup_epoch : int option
           ; mutable cleanup_queue : CleanupQueue.t
           }
           -> root node
@@ -147,6 +148,7 @@ module Make (Streamd : StreamDescriptor) = struct
       ; inflow = Settings.WindowSize.default_initial_window_size
       ; marked_for_removal = StreamsTbl.create ~random:true 256
       ; cleanup_epoch = 0
+      ; next_cleanup_epoch = None
       ; cleanup_queue = CleanupQueue.empty
       }
 
@@ -396,24 +398,35 @@ module Make (Streamd : StreamDescriptor) = struct
     (* Keep cleanup cost proportional to expirations by scheduling each stream
      * at its expiration epoch instead of scanning the full table each poll. *)
     let expires_at = root.cleanup_epoch + closed.Stream.ttl + 1 in
-    root.cleanup_queue <- CleanupQueue.add id expires_at root.cleanup_queue
+    root.cleanup_queue <- CleanupQueue.add id expires_at root.cleanup_queue;
+    root.next_cleanup_epoch <-
+      (match root.next_cleanup_epoch with
+      | None -> Some expires_at
+      | Some next_expiry -> Some (min next_expiry expires_at))
 
   let tick_closed_streams (Connection root) =
     let current_epoch = root.cleanup_epoch + 1 in
     root.cleanup_epoch <- current_epoch;
-    let rec remove_expired queue =
-      match CleanupQueue.pop queue with
-      | Some ((id, expires_at), queue') when expires_at <= current_epoch ->
-        (match StreamsTbl.find_opt root.marked_for_removal id with
-        | Some _closed ->
-          StreamsTbl.remove root.marked_for_removal id;
-          StreamsTbl.remove root.all_streams id
-        | None -> ());
-        remove_expired queue'
-      | Some ((id, expires_at), queue') -> CleanupQueue.add id expires_at queue'
-      | None -> CleanupQueue.empty
-    in
-    root.cleanup_queue <- remove_expired root.cleanup_queue
+    match root.next_cleanup_epoch with
+    | Some next_expiry when next_expiry > current_epoch -> ()
+    | _ ->
+      let rec remove_expired queue =
+        match CleanupQueue.pop queue with
+        | Some ((id, expires_at), queue') when expires_at <= current_epoch ->
+          (match StreamsTbl.find_opt root.marked_for_removal id with
+          | Some _closed ->
+            StreamsTbl.remove root.marked_for_removal id;
+            StreamsTbl.remove root.all_streams id
+          | None -> ());
+          remove_expired queue'
+        | Some ((id, expires_at), queue') ->
+          root.cleanup_queue <- CleanupQueue.add id expires_at queue';
+          root.next_cleanup_epoch <- Some expires_at
+        | None ->
+          root.cleanup_queue <- CleanupQueue.empty;
+          root.next_cleanup_epoch <- None
+      in
+      remove_expired root.cleanup_queue
 
   let implicitly_close_idle_stream descriptor max_seen_ids =
     let implicitly_close_stream descriptor =
