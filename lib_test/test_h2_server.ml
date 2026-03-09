@@ -445,7 +445,8 @@ module Server_connection_tests = struct
         ~len:
           (frame_length
           - max_length
-          - (* random *)
+          -
+          (* random *)
           5)
         frame_wire
     in
@@ -453,7 +454,8 @@ module Server_connection_tests = struct
       "advances over more input"
       (frame_length
       - max_length
-      - (* random *)
+      -
+      (* random *)
       5)
       read3;
     Alcotest.check

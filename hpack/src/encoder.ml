@@ -43,8 +43,8 @@ module ValueMap = Map.Make (String)
 
 type t =
   { table : Dynamic_table.t
-        (* We maintain a lookup table of header fields to their indexes in the
-         * dynamic table. The format is name -> (value -> index) *)
+    (* We maintain a lookup table of header fields to their indexes in the
+     * dynamic table. The format is name -> (value -> index) *)
   ; lookup_table : int ValueMap.t HeaderFieldsTbl.t
   ; mutable next_seq : int
   }
@@ -172,15 +172,16 @@ let encode =
           ; set_cookie
           ]
     in
-    fun [@inline] token ->
+    fun[@inline] token ->
       token <> -1 && IntSet.mem token tokens_without_indexing
   in
   let[@inline] is_sensitive token value =
     token <> -1
-    && (* From RFC7541§7.1.3: Never-Indexed Literals
-        *   An encoder might also choose not to index values for header fields
-        *   that are considered to be highly valuable or sensitive to recovery,
-        *   such as the Cookie or Authorization header fields. *)
+    &&
+    (* From RFC7541§7.1.3: Never-Indexed Literals
+     *   An encoder might also choose not to index values for header fields
+     *   that are considered to be highly valuable or sensitive to recovery,
+     *   such as the Cookie or Authorization header fields. *)
     Static_table.TokenIndices.(
       token == authorization || (token == cookie && String.length value < 20))
   in

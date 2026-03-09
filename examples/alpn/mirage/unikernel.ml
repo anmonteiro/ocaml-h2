@@ -1,5 +1,5 @@
 (*
-   * This code was adapted from
+ * This code was adapted from
  * https://github.com/mirage/mirage-www/blob/master/src/dispatch_tls.ml.
  *
  * Its copyright header is retained below.

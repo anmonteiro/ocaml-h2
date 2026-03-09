@@ -64,19 +64,19 @@ type t =
   ; request_handler : request_handler
   ; error_handler : error_handler
   ; streams : Scheduler.t
-        (* Number of currently open client streams. Used for
-         * MAX_CONCURRENT_STREAMS bookkeeping *)
+    (* Number of currently open client streams. Used for
+     * MAX_CONCURRENT_STREAMS bookkeeping *)
   ; mutable current_client_streams : int
   ; mutable max_client_stream_id : Stream_identifier.t
   ; mutable max_pushed_stream_id : Stream_identifier.t
   ; mutable receiving_headers_for_stream : Stream_identifier.t option
-        (* Keep track of number of SETTINGS frames that we sent and for which
-         * we haven't eceived an acknowledgment from the client. *)
+    (* Keep track of number of SETTINGS frames that we sent and for which
+     * we haven't eceived an acknowledgment from the client. *)
   ; mutable unacked_settings : int
   ; mutable did_send_go_away : bool
-        (* From RFC7540§4.3:
-         *   Header compression is stateful. One compression context and one
-         *   decompression context are used for the entire connection. *)
+    (* From RFC7540§4.3:
+     *   Header compression is stateful. One compression context and one
+     *   decompression context are used for the entire connection. *)
   ; hpack_encoder : Hpack.Encoder.t
   ; hpack_decoder : Hpack.Decoder.t
   }
@@ -175,8 +175,8 @@ let on_close_stream t id ~active closed =
     t.current_client_streams <- t.current_client_streams - 1;
   Scheduler.mark_for_removal t.streams id closed
 
-let send_window_update :
-    type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
+let send_window_update : type a.
+  t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
   =
  fun t stream n ->
   let send_window_update_frame stream_id n =
@@ -253,11 +253,12 @@ let handle_headers t ~end_stream stream active_stream headers =
    *   receives a HEADERS frame that causes its advertised concurrent stream
    *   limit to be exceeded MUST treat this as a stream error (Section 5.4.2)
    *   of type PROTOCOL_ERROR or REFUSED_STREAM. *)
-  if Int32.(
-       compare
-         (of_int (t.current_client_streams + 1))
-         t.config.max_concurrent_streams)
-     > 0
+  if
+    Int32.(
+      compare
+        (of_int (t.current_client_streams + 1))
+        t.config.max_concurrent_streams)
+    > 0
   then
     if t.unacked_settings > 0
     then
@@ -338,13 +339,13 @@ let handle_headers t ~end_stream stream active_stream headers =
         wakeup_writer t))
 
 let handle_headers_block
-    t
-    ?(is_trailers = false)
-    stream
-    active_stream
-    partial_headers
-    flags
-    headers_block
+      t
+      ?(is_trailers = false)
+      stream
+      active_stream
+      partial_headers
+      flags
+      headers_block
   =
   let open AB in
   let (Scheduler.Stream { descriptor = reqd; _ }) = stream in
@@ -983,8 +984,8 @@ let process_goaway_frame t _frame ~last_stream_id:_ ~data error =
    * complete. *)
   report_connection_error t ?reason error
 
-let add_window_increment :
-    type a. t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
+let add_window_increment : type a.
+  t -> a Scheduler.PriorityTreeNode.node -> int32 -> unit
   =
  fun t stream increment ->
   let open Scheduler in
@@ -1244,9 +1245,9 @@ let create_generic ~h2c ~config ~error_handler request_handler =
   Lazy.force t
 
 let create
-    ?(config = Config.default)
-    ?(error_handler = default_error_handler)
-    request_handler
+      ?(config = Config.default)
+      ?(error_handler = default_error_handler)
+      request_handler
   =
   (* `h2c` false = direct *)
   create_generic ~h2c:false ~config ~error_handler request_handler
@@ -1307,13 +1308,13 @@ let handle_h2c_request t headers request_body_iovecs =
  *   that a large request can block the use of the connection until
  *   it is completely sent. *)
 let create_h2c
-    ?(config = Config.default)
-    ?(error_handler = default_error_handler)
-    ~headers
-    ~target
-    ~meth
-    ?(request_body = [])
-    request_handler
+      ?(config = Config.default)
+      ?(error_handler = default_error_handler)
+      ~headers
+      ~target
+      ~meth
+      ?(request_body = [])
+      request_handler
   =
   (* From RFC7540§3.2.1:
    *   A request that upgrades from HTTP/1.1 to HTTP/2 MUST include exactly one

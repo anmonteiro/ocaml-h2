@@ -24,9 +24,9 @@ let parse_file file =
          let headers =
            List.map
              (function
-                | `Assoc [ (name, `String value) ] ->
-                  { Hpack.name; value; sensitive = false }
-                | _ -> assert false)
+               | `Assoc [ (name, `String value) ] ->
+                 { Hpack.name; value; sensitive = false }
+               | _ -> assert false)
              Json.(case |> member "headers" |> to_list)
          in
          header_table_size, wire, headers)

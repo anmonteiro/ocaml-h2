@@ -55,7 +55,7 @@ type client_error =
      *   can be sent by a server that is not configured to produce responses
      *   for the combination of scheme and authority that are included in the
      *   request URI. *)
-    `Misdirected_request
+      `Misdirected_request
   ]
 
 type standard =

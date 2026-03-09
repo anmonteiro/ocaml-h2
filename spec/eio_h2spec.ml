@@ -75,11 +75,11 @@ let connection_handler ~sw ~clock =
       respond ()
   in
   let error_handler :
-       Eio.Net.Sockaddr.stream
-      -> ?request:H2.Request.t
-      -> _
-      -> (Headers.t -> Body.Writer.t)
-      -> unit
+     Eio.Net.Sockaddr.stream
+    -> ?request:H2.Request.t
+    -> _
+    -> (Headers.t -> Body.Writer.t)
+    -> unit
     =
    fun _client_address ?request:_ error start_response ->
     let response_body = start_response Headers.empty in

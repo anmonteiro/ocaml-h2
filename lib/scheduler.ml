@@ -138,10 +138,10 @@ module Make (Streamd : StreamDescriptor) = struct
       }
 
   let create
-      ~parent
-      ~initial_send_window_size
-      ~initial_recv_window_size
-      descriptor
+        ~parent
+        ~initial_send_window_size
+        ~initial_recv_window_size
+        descriptor
     =
     Stream
       { descriptor
@@ -262,8 +262,9 @@ module Make (Streamd : StreamDescriptor) = struct
       let current_parent_id = stream_id current_parent_node in
       (* only need to set a different parent if the parent or exclusive status
        * changed *)
-      if (not Stream_identifier.(stream_dependency === current_parent_id))
-         || exclusive <> stream.priority.exclusive
+      if
+        (not Stream_identifier.(stream_dependency === current_parent_id))
+        || exclusive <> stream.priority.exclusive
       then (
         let (Parent new_parent_node) = new_parent in
         (match new_parent_node with
@@ -310,11 +311,11 @@ module Make (Streamd : StreamDescriptor) = struct
     | Stream p -> p.t_last <- t_last
 
   let add
-      (Connection root as t)
-      ~priority
-      ~initial_send_window_size
-      ~initial_recv_window_size
-      descriptor
+        (Connection root as t)
+        ~priority
+        ~initial_send_window_size
+        ~initial_recv_window_size
+        descriptor
     =
     let stream =
       create

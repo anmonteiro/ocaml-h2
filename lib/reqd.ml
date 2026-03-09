@@ -70,9 +70,9 @@ type active_stream =
   { body_buffer_size : int
   ; encoder : Hpack.Encoder.t
   ; mutable response_state : response_state
-        (* We're not doing anything with these yet, we could probably have a
-         * `Reqd.schedule_read_trailers` function that would be called once
-         * trailer headers are emitted. *)
+    (* We're not doing anything with these yet, we could probably have a
+     * `Reqd.schedule_read_trailers` function that would be called once
+     * trailer headers are emitted. *)
   ; mutable trailers_parser : Stream.partial_headers option
   ; mutable trailers : Headers.t option
   ; create_push_stream :

@@ -302,15 +302,15 @@ let write_connection_preface t =
 module Writer = struct
   type t =
     { buffer : Bigstringaf.t
-          (* The buffer that the encoder uses for buffered writes. Managed by
-           * the control module for the encoder. *)
+      (* The buffer that the encoder uses for buffered writes. Managed by
+       * the control module for the encoder. *)
     ; encoder : Faraday.t
-          (* The encoder that handles encoding for writes. Uses the [buffer]
-           * referenced above internally. *)
+      (* The encoder that handles encoding for writes. Uses the [buffer]
+       * referenced above internally. *)
     ; mutable drained_bytes : int
-          (* The number of bytes that were not written due to the output stream
-           * being closed before all buffered output could be written. Useful
-           * for detecting error cases. *)
+      (* The number of bytes that were not written due to the output stream
+       * being closed before all buffered output could be written. Useful
+       * for detecting error cases. *)
     ; mutable wakeup : Optional_thunk.t
     }
 
@@ -322,10 +322,10 @@ module Writer = struct
   let faraday t = t.encoder
 
   let make_frame_info
-      ?(padding = Bigstringaf.empty)
-      ?(flags = Flags.default_flags)
-      ?(max_frame_size = Config.default.read_buffer_size)
-      stream_id
+        ?(padding = Bigstringaf.empty)
+        ?(flags = Flags.default_flags)
+        ?(max_frame_size = Config.default.read_buffer_size)
+        stream_id
     =
     { flags; stream_id; padding; max_frame_payload = max_frame_size }
 
@@ -386,12 +386,16 @@ module Writer = struct
   (* Chunk header block fragments into HEADERS|PUSH_PROMISE + CONTINUATION
    * frames. *)
   let chunk_header_block_fragments
-      t
-      frame_info
-      ?(has_priority = false)
-      ~(write_frame :
-         Faraday.t -> frame_info -> ?len:int -> Bigstringaf.t iovec list -> unit)
-      faraday
+        t
+        frame_info
+        ?(has_priority = false)
+        ~(write_frame :
+           Faraday.t
+           -> frame_info
+           -> ?len:int
+           -> Bigstringaf.t iovec list
+           -> unit)
+        faraday
     =
     let block_size = Faraday.pending_bytes faraday in
     let total_length =
