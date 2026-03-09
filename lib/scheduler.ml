@@ -88,6 +88,8 @@ module Make (Streamd : StreamDescriptor) = struct
           ; (* inbound flow control, what the client is allowed to send. *)
             mutable inflow : Settings.WindowSize.t
           ; mutable marked_for_removal : Stream.closed StreamsTbl.t
+          ; mutable cleanup_epoch : int
+          ; mutable cleanup_queue : CleanupQueue.t
           }
           -> root node
       | Stream :
@@ -122,6 +124,15 @@ module Make (Streamd : StreamDescriptor) = struct
           compare t1 t2
       end)
 
+  and CleanupQueue : (Psq.S with type k = Int32.t and type p = int) =
+    Psq.Make
+      (Int32)
+      (struct
+        type t = int
+
+        let compare = compare
+      end)
+
   include PriorityTreeNode
 
   type t = root node
@@ -135,6 +146,8 @@ module Make (Streamd : StreamDescriptor) = struct
       ; flow = Settings.WindowSize.default_initial_window_size
       ; inflow = Settings.WindowSize.default_initial_window_size
       ; marked_for_removal = StreamsTbl.create ~random:true 256
+      ; cleanup_epoch = 0
+      ; cleanup_queue = CleanupQueue.empty
       }
 
   let create
@@ -379,7 +392,28 @@ module Make (Streamd : StreamDescriptor) = struct
     written
 
   let mark_for_removal (Connection root) id closed =
-    StreamsTbl.replace root.marked_for_removal id closed
+    StreamsTbl.replace root.marked_for_removal id closed;
+    (* Keep cleanup cost proportional to expirations by scheduling each stream
+     * at its expiration epoch instead of scanning the full table each poll. *)
+    let expires_at = root.cleanup_epoch + closed.Stream.ttl + 1 in
+    root.cleanup_queue <- CleanupQueue.add id expires_at root.cleanup_queue
+
+  let tick_closed_streams (Connection root) =
+    let current_epoch = root.cleanup_epoch + 1 in
+    root.cleanup_epoch <- current_epoch;
+    let rec remove_expired queue =
+      match CleanupQueue.pop queue with
+      | Some ((id, expires_at), queue') when expires_at <= current_epoch ->
+        (match StreamsTbl.find_opt root.marked_for_removal id with
+        | Some _closed ->
+          StreamsTbl.remove root.marked_for_removal id;
+          StreamsTbl.remove root.all_streams id
+        | None -> ());
+        remove_expired queue'
+      | Some ((id, expires_at), queue') -> CleanupQueue.add id expires_at queue'
+      | None -> CleanupQueue.empty
+    in
+    root.cleanup_queue <- remove_expired root.cleanup_queue
 
   let implicitly_close_idle_stream descriptor max_seen_ids =
     let implicitly_close_stream descriptor =
@@ -491,22 +525,8 @@ module Make (Streamd : StreamDescriptor) = struct
       | false -> loop children
     in
 
-    let (Connection root) = t in
     ignore (schedule t);
-    StreamsTbl.iter
-      (fun id closed ->
-         (* When a stream completes, i.e. doesn't require more output and
-          * enters the `Closed` state, we set a TTL value which represents the
-          * number of writer yields that the stream has before it is removed
-          * from the connection Hash Table. By doing this we avoid losing some
-          * potentially useful information regarding the stream's state at the
-          * cost of keeping it around for a little while longer. *)
-         if closed.Stream.ttl = 0
-         then (
-           StreamsTbl.remove root.marked_for_removal id;
-           StreamsTbl.remove root.all_streams id)
-         else closed.ttl <- closed.ttl - 1)
-      root.marked_for_removal
+    tick_closed_streams t
 
   (* XXX(anmonteiro): Consider using `optint` for this?
    * https://github.com/mirage/optint

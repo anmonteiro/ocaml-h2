@@ -1440,6 +1440,7 @@ let ping t ?payload ?(off = 0) callback =
   Writer.wakeup t.writer
 
 let next_read_operation t =
+  Scheduler.tick_closed_streams t.streams;
   if Reader.is_closed t.reader then shutdown_reader t;
   match Reader.next t.reader with
   | (`Read | `Close) as operation -> operation
