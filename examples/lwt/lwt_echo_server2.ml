@@ -66,7 +66,7 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
                  (* Body.flush response_body ignore; *)
                  true)
               (* Body.flush response_body ignore; *)
-                 (fun () -> Body.Writer.close response_body))
+              (fun () -> Body.Writer.close response_body))
           ~on_read:(fun request_data ~off ~len ->
             Body.Writer.write_bigstring response_body request_data ~off ~len;
             respond ())
@@ -111,11 +111,11 @@ let connection_handler : Unix.sockaddr -> Lwt_unix.file_descr -> unit Lwt.t =
         "Hello, Sean."
   in
   let error_handler :
-       Unix.sockaddr
-      -> ?request:H2.Request.t
-      -> _
-      -> (Headers.t -> Body.Writer.t)
-      -> unit
+     Unix.sockaddr
+    -> ?request:H2.Request.t
+    -> _
+    -> (Headers.t -> Body.Writer.t)
+    -> unit
     =
    fun _client_address ?request:_ error start_response ->
     let response_body = start_response Headers.empty in
