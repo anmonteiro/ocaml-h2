@@ -1306,6 +1306,51 @@ module Client_connection_tests = struct
             Frame.FrameType.serialize frame_type)
          frames)
 
+  let test_fragmented_request_body_chunking () =
+    let t = create_and_handle_preface () in
+    let request = Request.create ~scheme:"http" `POST "/" in
+    let response_handler _response _response_body = () in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~flush_headers_immediately:true
+        ~error_handler:default_error_handler
+        ~response_handler
+    in
+    (* Flush request HEADERS first so subsequent writes only contain DATA frames
+       from the body. *)
+    flush_request t;
+
+    let expected = Buffer.create 0x10000 in
+    for i = 0 to 2999 do
+      let len = (i mod 17) + 1 in
+      let c = Char.chr (97 + (i mod 26)) in
+      let fragment = String.make len c in
+      Body.Writer.write_string request_body fragment;
+      Buffer.add_string expected fragment
+    done;
+    Body.Writer.close request_body;
+
+    let frames, lenv = flush_pending_writes t in
+    let data_frames =
+      List.filter_map
+        (fun Frame.{ frame_payload; _ } ->
+           match frame_payload with
+           | Frame.Data bs -> Some (bs_to_string bs)
+           | _ -> None)
+        frames
+    in
+    Alcotest.(check bool)
+      "Body is split into multiple DATA frames"
+      true
+      (List.length data_frames > 1);
+    Alcotest.(check string)
+      "Concatenated DATA payload matches original fragmented body"
+      (Buffer.contents expected)
+      (String.concat "" data_frames);
+    report_write_result t (`Ok lenv)
+
   let test_header_buffer_sharing () =
     let t = create_and_handle_preface () in
     let request1 =
@@ -1547,6 +1592,9 @@ module Client_connection_tests = struct
     ; ( "flow control -- can send empty data frame"
       , `Quick
       , test_flow_control_can_send_empty_data_frame )
+    ; ( "fragmented request body chunking"
+      , `Quick
+      , test_fragmented_request_body_chunking )
     ; ( "don't flush headers immediately"
       , `Quick
       , test_dont_flush_headers_immediately )

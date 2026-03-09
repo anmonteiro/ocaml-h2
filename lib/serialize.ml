@@ -555,14 +555,30 @@ module Writer = struct
   let schedule_iovecs t ~len frame_info iovecs =
     if not (is_closed t.encoder)
     then
-      let writer t ~len ~iovecs = bounded_schedule_iovecs t ~len iovecs in
-      chunk_data_frames frame_info len ~f:(fun ~off ~len frame_info ->
-        write_frame_with_padding
-          t.encoder
-          frame_info
-          Data
-          len
-          (writer ~iovecs:(IOVec.shiftv iovecs off) ~len))
+      let { max_frame_payload; _ } = frame_info in
+      let rec loop iovecs remaining =
+        if remaining > 0
+        then (
+          let chunk_len =
+            if max_frame_payload < remaining
+            then max_frame_payload
+            else remaining
+          in
+          let frame_info =
+            if chunk_len < remaining
+            then
+              (* If we're splitting data into several frames, only the last
+               * one should contain the END_STREAM flag. *)
+              { frame_info with
+                flags = Flags.clear_end_stream frame_info.flags
+              }
+            else frame_info
+          in
+          write_frame_with_padding t.encoder frame_info Data chunk_len (fun t ->
+            bounded_schedule_iovecs t ~len:chunk_len iovecs);
+          loop (IOVec.shiftv iovecs chunk_len) (remaining - chunk_len))
+      in
+      loop iovecs len
 
   let write_priority t frame_info priority =
     if not (is_closed t.encoder)
