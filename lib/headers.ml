@@ -160,12 +160,20 @@ let get_multi t name =
 let get_multi_pseudo t name = get_multi t (":" ^ name)
 
 module Pseudo = struct
-  let reserved_request = [ ":method"; ":scheme"; ":authority"; ":path" ]
-  let reserved_response = [ ":status" ]
-
   (* 0x3A is the char code for `:` *)
   let is_pseudo name = Char.code (String.unsafe_get name 0) = 0x3A
 end
+
+let is_reserved_pseudo_header ~is_request name =
+  if is_request
+  then
+    match name with
+    | ":method" | ":scheme" | ":authority" | ":path" -> true
+    | _ -> false
+  else
+    match name with
+    | ":status" -> true
+    | _ -> false
 
 (* Headers are stored in reverse transmission order. Iterate in wire/HPACK order
  * without allocating an intermediate reversed list. *)
@@ -186,80 +194,138 @@ let fold ~f ~init t =
 
 let exists ~f t = List.exists (fun { name; value; _ } -> f name value) t
 
+type request_headers_scan =
+  { valid : bool
+  ; method_count : int
+  ; method_value : string option
+  ; scheme_count : int
+  ; scheme_value : string option
+  ; path_count : int
+  ; path_value : string option
+  ; has_authority : bool
+  }
+
+let validate_headers ~is_request t =
+  let pseudo_ended = ref false in
+  let has_connection = ref false in
+  let invalid_te = ref false in
+  let exception Invalid_headers in
+  try
+    iter_hpack
+      ~f:(fun { name; value; _ } ->
+        let is_pseudo = Pseudo.is_pseudo name in
+        let pseudo_did_end = !pseudo_ended in
+        if (not is_pseudo) && not pseudo_did_end then pseudo_ended := true;
+        if
+          (* From RFC7540§8.1.2:
+           *   [...] header field names MUST be converted to lowercase
+           *   prior to their encoding in HTTP/2. A request or response
+           *   containing uppercase header field names MUST be treated as
+           *   malformed (Section 8.1.2.6). *)
+          (not (CI.is_lowercase name))
+          (* From RFC7540§8.1.2.1:
+           *   Pseudo-header fields are only valid in the context in
+           *   which they are defined. [...] pseudo-header fields defined
+           *   for responses MUST NOT appear in requests. [...] Endpoints
+           *   MUST treat a request or response that contains undefined
+           *   or invalid pseudo-header fields as malformed (Section
+           *   8.1.2.6). *)
+          || (is_pseudo && not (is_reserved_pseudo_header ~is_request name))
+          ||
+          (* From RFC7540§8.1.2.1:
+           * All pseudo-header fields MUST appear in the header block before
+           * regular header fields. Any request or response that contains a
+           * pseudo-header field that appears in a header block after a
+           * regular header field MUST be treated as malformed (Section
+           * 8.1.2.6). *)
+          (is_pseudo && pseudo_did_end)
+        then raise Invalid_headers;
+        if CI.equal name "connection"
+        then has_connection := true
+        else if CI.equal name "te" && value <> "trailers"
+        then invalid_te := true)
+      t;
+    not !has_connection && not !invalid_te
+  with
+  | Invalid_headers -> false
+
+let scan_request_headers t =
+  let pseudo_ended = ref false in
+  let has_connection = ref false in
+  let invalid_te = ref false in
+  let method_count = ref 0 in
+  let method_value = ref None in
+  let scheme_count = ref 0 in
+  let scheme_value = ref None in
+  let path_count = ref 0 in
+  let path_value = ref None in
+  let has_authority = ref false in
+  let exception Invalid_headers in
+  let valid =
+    try
+      iter_hpack
+        ~f:(fun { name; value; _ } ->
+          let is_pseudo = Pseudo.is_pseudo name in
+          let pseudo_did_end = !pseudo_ended in
+          if (not is_pseudo) && not pseudo_did_end then pseudo_ended := true;
+          if
+            (not (CI.is_lowercase name))
+            || (is_pseudo && not (is_reserved_pseudo_header ~is_request:true name))
+            || (is_pseudo && pseudo_did_end)
+          then raise Invalid_headers;
+          if CI.equal name "connection"
+          then has_connection := true
+          else if CI.equal name "te" && value <> "trailers"
+          then invalid_te := true
+          else if CI.equal name ":method"
+          then (
+            incr method_count;
+            if !method_value = None then method_value := Some value)
+          else if CI.equal name ":scheme"
+          then (
+            incr scheme_count;
+            if !scheme_value = None then scheme_value := Some value)
+          else if CI.equal name ":path"
+          then (
+            incr path_count;
+            if !path_value = None then path_value := Some value)
+          else if CI.equal name ":authority"
+          then has_authority := true)
+        t;
+      not !has_connection && not !invalid_te
+    with
+    | Invalid_headers -> false
+  in
+  { valid
+  ; method_count = !method_count
+  ; method_value = !method_value
+  ; scheme_count = !scheme_count
+  ; scheme_value = !scheme_value
+  ; path_count = !path_count
+  ; path_value = !path_value
+  ; has_authority = !has_authority
+  }
+
 let valid_headers ?(is_request = true) t =
-  match get t "connection", get t "TE" with
-  | Some _, _ ->
-    (* From RFC7540§8.1.2.2:
-     *   HTTP/2 does not use the Connection header field to indicate
-     *   connection-specific header fields; in this protocol,
-     *   connection-specific metadata is conveyed by other means. An endpoint
-     *   MUST NOT generate an HTTP/2 message containing connection-specific
-     *   header fields; any message containing connection-specific header
-     *   fields MUST be treated as malformed (Section 8.1.2.6). *)
-    false
-  | _, Some value when value <> "trailers" ->
-    (* From RFC7540§8.1.2.2:
-     *   The only exception to this is the TE header field, which MAY be
-     *   present in an HTTP/2 request; when it is, it MUST NOT contain any
-     *   value other than "trailers". *)
-    false
-  | _ ->
-    let pseudo_ended = ref false in
-    let exception Invalid_headers in
-    let invalid =
-      try
-        iter_hpack
-          ~f:(fun { name; _ } ->
-            let is_pseudo = Pseudo.is_pseudo name in
-            let pseudo_did_end = !pseudo_ended in
-            if (not is_pseudo) && not pseudo_did_end then pseudo_ended := true;
-            if
-              (* From RFC7540§8.1.2:
-               *   [...] header field names MUST be converted to lowercase
-               *   prior to their encoding in HTTP/2. A request or response
-               *   containing uppercase header field names MUST be treated as
-               *   malformed (Section 8.1.2.6). *)
-              (not CI.(is_lowercase name))
-              (* From RFC7540§8.1.2.1:
-               *   Pseudo-header fields are only valid in the context in
-               *   which they are defined. [...] pseudo-header fields defined
-               *   for responses MUST NOT appear in requests. [...] Endpoints
-               *   MUST treat a request or response that contains undefined
-               *   or invalid pseudo-header fields as malformed (Section
-               *   8.1.2.6). *)
-              || (is_pseudo
-                 && not
-                      (List.mem
-                         name
-                         (if is_request
-                          then Pseudo.reserved_request
-                          else Pseudo.reserved_response)))
-              ||
-              (* From RFC7540§8.1.2.1:
-               * All pseudo-header fields MUST appear in the header block before
-               * regular header fields. Any request or response that contains a
-               * pseudo-header field that appears in a header block after a
-               * regular header field MUST be treated as malformed (Section
-               * 8.1.2.6). *)
-              (is_pseudo && pseudo_did_end)
-            then raise Invalid_headers)
-          t;
-        false
-      with
-      | Invalid_headers -> true
-    in
-    not invalid
+  if is_request then (scan_request_headers t).valid else validate_headers ~is_request t
 
 let valid_request_headers t = valid_headers t
 let valid_response_headers t = valid_headers ~is_request:false t
 
 let method_path_and_scheme_or_malformed t =
-  match
-    ( get_multi_pseudo t "method"
-    , get_multi_pseudo t "scheme"
-    , get_multi_pseudo t "path" )
-  with
-  | _, [ ("http" | "https") ], [ path ] when String.length path = 0 ->
+  let { valid
+      ; method_count
+      ; method_value
+      ; scheme_count
+      ; scheme_value
+      ; path_count
+      ; path_value
+      ; has_authority
+      } =
+    scan_request_headers t
+  in
+  match method_count, method_value, scheme_count, scheme_value, path_count, path_value with
+  | _, _, 1, Some ("http" | "https"), 1, Some path when String.length path = 0 ->
     (* From RFC7540§8.1.2.6:
      *   This pseudo-header field MUST NOT be empty for http or https URIs;
      *   http or https URIs that do not contain a path component MUST include a
@@ -269,7 +335,7 @@ let method_path_and_scheme_or_malformed t =
    *   All HTTP/2 requests MUST include exactly one valid value for the
    *   :method, :scheme, and :path pseudo-header fields, unless it is a
    *   CONNECT request (Section 8.3). *)
-  | [ ("CONNECT" as meth) ], [], [] ->
+  | 1, Some ("CONNECT" as meth), 0, None, 0, None ->
     (* From RFC7540§8.3:
      *   The HTTP header field mapping works as defined in Section 8.1.2.3
      *   ("Request Pseudo-Header Fields"), with a few differences.
@@ -283,10 +349,10 @@ let method_path_and_scheme_or_malformed t =
      *
      *   A CONNECT request that does not conform to these restrictions is
      *   malformed (Section 8.1.2.6). *)
-    if mem t ":authority" then `Valid (meth, "", "") else `Malformed
-  | [ "CONNECT" ], _, _ -> `Malformed
-  | [ meth ], [ scheme ], [ path ] ->
-    if valid_request_headers t then `Valid (meth, path, scheme) else `Malformed
+    if valid && has_authority then `Valid (meth, "", "") else `Malformed
+  | 1, Some "CONNECT", _, _, _, _ -> `Malformed
+  | 1, Some meth, 1, Some scheme, 1, Some path ->
+    if valid then `Valid (meth, path, scheme) else `Malformed
   | _ -> `Malformed
 
 let trailers_valid t =
