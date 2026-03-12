@@ -1346,7 +1346,12 @@ module Client_connection_tests = struct
          frames)
 
   let test_fragmented_request_body_chunking () =
-    let t = create_and_handle_preface () in
+    let config =
+      { Config.default with
+        read_buffer_size = Settings.default.max_frame_size
+      }
+    in
+    let t = create_and_handle_preface ~config () in
     let request = Request.create ~scheme:"http" `POST "/" in
     let response_handler _response _response_body = () in
     let request_body =

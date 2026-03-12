@@ -665,7 +665,7 @@ module Config : sig
   type t =
     { read_buffer_size : int
       (** [read_buffer_size] specifies the size of the largest frame payload that
-        the sender is willing to receive, in octets. Defaults to [16384] *)
+        the sender is willing to receive, in octets. Defaults to [65536] *)
     ; request_body_buffer_size : int  (** Defaults to [4096] *)
     ; response_body_buffer_size : int  (** Defaults to [4096] *)
     ; enable_server_push : bool  (** Defaults to [true] *)

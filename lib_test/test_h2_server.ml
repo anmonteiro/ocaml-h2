@@ -940,6 +940,7 @@ module Server_connection_tests = struct
         = { Settings.default with
             enable_push = false
           ; max_concurrent_streams = 2l
+          ; max_frame_size = Config.default.read_buffer_size
           });
       (match next_write_operation t with
       | `Write iovecs ->
