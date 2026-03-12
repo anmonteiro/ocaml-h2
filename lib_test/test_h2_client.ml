@@ -1194,6 +1194,55 @@ module Client_connection_tests = struct
       !body_eof_called
 
   let test_flow_control () =
+    let config =
+      { Config.default with
+        initial_window_size = 0x8000l
+      ; response_body_buffer_size = 0x4000
+      }
+    in
+    let t = create_and_handle_preface ~config () in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let body_read_called = ref false in
+    let response_handler _response response_body =
+      Body.Reader.schedule_read
+        response_body
+        ~on_eof:ignore
+        ~on_read:(fun _bs ~off:_ ~len:_ -> body_read_called := true)
+    in
+    let request_body =
+      Client_connection.request
+        t
+        request
+        ~flush_headers_immediately:true
+        ~error_handler:default_error_handler
+        ~response_handler
+    in
+    flush_request t;
+    Body.Writer.close request_body;
+    flush_request t;
+    let hpack_encoder = Hpack.Encoder.create 4096 in
+    read_response
+      t
+      hpack_encoder
+      ~flags:Flags.(default_flags |> set_end_header)
+      (Response.create
+         `OK
+         ~headers:(Headers.of_list [ "content-length", "16384" ]));
+    read_response_body t (String.make 0x4000 'x');
+    let frames, lenv = flush_pending_writes t in
+    Alcotest.(check (list int))
+      "Only writes are WINDOW_UPDATE frames"
+      (List.map
+         Frame.FrameType.serialize
+         Frame.FrameType.[ WindowUpdate; WindowUpdate ])
+      (List.map
+         (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
+            Frame.FrameType.serialize frame_type)
+         frames);
+      report_write_result t (`Ok lenv);
+      Alcotest.(check bool) "Response handler called" true !body_read_called
+
+  let test_flow_control_delays_small_updates () =
     let t = create_and_handle_preface () in
     let request = Request.create ~scheme:"http" `GET "/" in
     let body_read_called = ref false in
@@ -1221,17 +1270,7 @@ module Client_connection_tests = struct
       ~flags:Flags.(default_flags |> set_end_header)
       (Response.create `OK ~headers:(Headers.of_list [ "content-length", "3" ]));
     read_response_body t "foo";
-    let frames, lenv = flush_pending_writes t in
-    Alcotest.(check (list int))
-      "Only writes are WINDOW_UPDATE frames"
-      (List.map
-         Frame.FrameType.serialize
-         Frame.FrameType.[ WindowUpdate; WindowUpdate ])
-      (List.map
-         (fun Frame.{ frame_header = { frame_type; _ }; _ } ->
-            Frame.FrameType.serialize frame_type)
-         frames);
-    report_write_result t (`Ok lenv);
+    writer_yielded t;
     Alcotest.(check bool) "Response handler called" true !body_read_called
 
   let test_flow_control_can_send_empty_data_frame () =
@@ -1589,6 +1628,7 @@ module Client_connection_tests = struct
       , `Quick
       , test_reading_response_body )
     ; "flow control", `Quick, test_flow_control
+    ; "flow control delays small updates", `Quick, test_flow_control_delays_small_updates
     ; ( "flow control -- can send empty data frame"
       , `Quick
       , test_flow_control_can_send_empty_data_frame )
