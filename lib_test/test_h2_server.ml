@@ -1055,7 +1055,9 @@ module Server_connection_tests = struct
           ; flags = Flags.default_flags
           ; frame_type = Data
           }
-      ; frame_payload = Frame.Data (Bigstringaf.of_string ~off:0 ~len:3 "foo")
+      ; frame_payload =
+          let buffer = Bigstringaf.of_string ~off:0 ~len:3 "foo" in
+          Frame.Data { Httpun_types.IOVec.buffer; off = 0; len = 3 }
       }
     in
     read_frames t [ data_frame ];
@@ -1095,7 +1097,9 @@ module Server_connection_tests = struct
           ; flags = Flags.default_flags
           ; frame_type = Data
           }
-      ; frame_payload = Frame.Data (Bigstringaf.of_string ~off:0 ~len:3 "foo")
+      ; frame_payload =
+          let buffer = Bigstringaf.of_string ~off:0 ~len:3 "foo" in
+          Frame.Data { Httpun_types.IOVec.buffer; off = 0; len = 3 }
       }
     in
     let rst_stream =
@@ -1136,7 +1140,9 @@ module Server_connection_tests = struct
           ; flags = Flags.(default_flags |> set_end_stream)
           ; frame_type = Data
           }
-      ; frame_payload = Frame.Data (Bigstringaf.of_string ~off:0 ~len:3 "foo")
+      ; frame_payload =
+          let buffer = Bigstringaf.of_string ~off:0 ~len:3 "foo" in
+          Frame.Data { Httpun_types.IOVec.buffer; off = 0; len = 3 }
       }
     in
     read_frames t [ data_frame ];
@@ -1181,7 +1187,9 @@ module Server_connection_tests = struct
           ; flags = Flags.(default_flags |> set_end_stream)
           ; frame_type = Data
           }
-      ; frame_payload = Frame.Data (Bigstringaf.of_string ~off:0 ~len:3 "foo")
+      ; frame_payload =
+          let buffer = Bigstringaf.of_string ~off:0 ~len:3 "foo" in
+          Frame.Data { Httpun_types.IOVec.buffer; off = 0; len = 3 }
       }
     in
     read_frames t [ data_frame ];

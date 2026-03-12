@@ -601,7 +601,11 @@ let process_headers_frame t { Frame.frame_header; _ } ~priority headers_block =
          *   connection error (Section 5.4.1) of type STREAM_CLOSED [...]. *)
         report_connection_error t Error_code.StreamClosed)
 
-let process_data_frame t { Frame.frame_header; _ } bstr =
+let process_data_frame
+      t
+      { Frame.frame_header; _ }
+      { Httpun_types.IOVec.buffer; off; len }
+  =
   let open Scheduler in
   let { Frame.flags; stream_id; payload_length; _ } = frame_header in
   if not (Stream_identifier.is_request stream_id)
@@ -626,10 +630,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
       | Active (Open (ActiveMessage request_info), active_stream) ->
         let request_body = Reqd.request_body descriptor in
         request_info.request_body_bytes <-
-          Int64.(
-            add
-              request_info.request_body_bytes
-              (of_int (Bigstringaf.length bstr)));
+          Int64.(add request_info.request_body_bytes (of_int len));
         let request = request_info.request in
         if not Scheduler.(allowed_to_receive t.streams stream payload_len32)
         then (
@@ -683,7 +684,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
             let faraday = Body.Reader.unsafe_faraday request_body in
             if not (Faraday.is_closed faraday)
             then (
-              Faraday.schedule_bigstring faraday bstr;
+              Faraday.write_bigstring faraday ~off ~len buffer;
               if end_stream then Body.Reader.close request_body);
             Reqd.flush_request_body descriptor)
       | Idle ->
@@ -1192,7 +1193,7 @@ let create_generic ~h2c ~config ~error_handler request_handler =
         (match frame_payload with
         | Headers (priority, headers_block) ->
           process_headers_frame t frame ~priority headers_block
-        | Data bs -> process_data_frame t frame bs
+        | Data payload -> process_data_frame t frame payload
         | Priority priority -> process_priority_frame t frame priority
         | RSTStream error_code -> process_rst_stream_frame t frame error_code
         | Settings settings -> process_settings_frame t frame settings

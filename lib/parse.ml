@@ -33,6 +33,7 @@
  *---------------------------------------------------------------------------*)
 
 open Angstrom
+module Unsafe = Angstrom.Unsafe
 
 (* We use the tail-recursive variant of `skip_many` from
  * https://github.com/inhabitedtype/angstrom/pull/219 to avoid memory leaks in
@@ -157,7 +158,11 @@ let parse_data_frame ({ Frame.stream_id; payload_length; _ } as frame_header) =
       "Data frames must be associated with a stream"
   else
     let parse_data length =
-      lift (fun bs -> Ok (Frame.Data bs)) (take_bigstring length)
+      lift
+        (fun payload -> Ok (Frame.Data payload))
+        (Unsafe.peek length (fun buffer ~off ~len ->
+           { Httpun_types.IOVec.buffer; off; len })
+         <* advance length)
     in
     parse_padded_payload frame_header parse_data
 
