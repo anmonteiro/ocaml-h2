@@ -62,7 +62,9 @@ type t =
   ; reader : Reader.frame
   ; writer : Writer.t
   ; config : Config.t
+  ; window_update_batch_size : int32
   ; streams : Scheduler.t
+  ; mutable pending_connection_window_update : int32
   ; mutable current_stream_id : Stream_identifier.t
   ; mutable max_pushed_stream_id : Stream_identifier.t
   ; mutable current_server_streams : int
@@ -201,6 +203,12 @@ let send_window_update : type a.
     loop n;
     Writer.wakeup t.writer)
 
+let queue_window_update t pending len =
+  let pending = Int32.add pending len in
+  if Int32.compare pending t.window_update_batch_size >= 0
+  then 0l, pending
+  else pending, 0l
+
 let handle_push_promise_headers t respd headers =
   (* From RFC7540§8.2.2:
    *   The header fields in PUSH_PROMISE and any subsequent CONTINUATION frames
@@ -297,6 +305,7 @@ let handle_response_headers t stream ~end_stream active_request headers =
         (`Invalid_response_body_length response)
         ProtocolError
     | `Fixed _ | `Unknown ->
+      let pending_stream_window_update = ref 0l in
       let response_body =
         if end_stream
         then Body.Reader.empty
@@ -305,8 +314,22 @@ let handle_response_headers t stream ~end_stream active_request headers =
             (Bigstringaf.create t.config.response_body_buffer_size)
             ~done_reading:(fun len ->
               let len = Int32.of_int len in
-              send_window_update t t.streams len;
-              send_window_update t stream len)
+              let pending_connection_window_update, connection_credit =
+                queue_window_update
+                  t
+                  t.pending_connection_window_update
+                  len
+              in
+              t.pending_connection_window_update <-
+                pending_connection_window_update;
+              if Int32.compare connection_credit 0l > 0
+              then send_window_update t t.streams connection_credit;
+              let pending_window_update, stream_credit =
+                queue_window_update t !pending_stream_window_update len
+              in
+              pending_stream_window_update := pending_window_update;
+              if Int32.compare stream_credit 0l > 0
+              then send_window_update t stream stream_credit)
       in
       let new_response_state =
         Respd.create_active_response response response_body
@@ -1191,6 +1214,10 @@ let create ?(config = Config.default) ?push_handler ~error_handler () =
         config.enable_server_push && push_handler != default_push_handler
     }
   in
+  let half_window = Int32.shift_right_logical config.initial_window_size 1 in
+  let window_update_batch_size =
+    max 0x4000l (min 0x100000l half_window)
+  in
   let rec connection_preface_handler recv_frame settings_list =
     let t = Lazy.force t in
     (* Now process the client's SETTINGS frame. `process_settings_frame` will
@@ -1242,6 +1269,8 @@ let create ?(config = Config.default) ?push_handler ~error_handler () =
     lazy
       { settings
       ; config
+      ; window_update_batch_size
+      ; pending_connection_window_update = 0l
         (* From RFC7540§5.1.1:
          *   Streams initiated by a client MUST use odd-numbered stream
          *   identifiers *)

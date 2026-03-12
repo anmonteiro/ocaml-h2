@@ -1123,6 +1123,12 @@ module Server_connection_tests = struct
 
   let test_flow_control () =
     let body_read_called = ref false in
+    let config =
+      { Config.default with
+        initial_window_size = 0x8000l
+      ; request_body_buffer_size = 0x4000
+      }
+    in
     let request = Request.create ~scheme:"http" `GET "/" in
     let request_handler reqd =
       let request_body = Reqd.request_body reqd in
@@ -1131,18 +1137,24 @@ module Server_connection_tests = struct
         ~on_eof:ignore
         ~on_read:(fun _bs ~off:_ ~len:_ -> body_read_called := true)
     in
-    let t = create_and_handle_preface ~error_handler request_handler in
+    let t =
+      create_and_handle_preface ~config ~error_handler request_handler
+    in
     read_request ~body:"request body" t request;
+    let payload_length = 0x4000 in
     let data_frame =
       { Frame.frame_header =
-          { payload_length = 0
+          { payload_length
           ; stream_id = 1l
           ; flags = Flags.(default_flags |> set_end_stream)
           ; frame_type = Data
           }
       ; frame_payload =
-          let buffer = Bigstringaf.of_string ~off:0 ~len:3 "foo" in
-          Frame.Data { Httpun_types.IOVec.buffer; off = 0; len = 3 }
+          let body = String.make payload_length 'x' in
+          let buffer =
+            Bigstringaf.of_string ~off:0 ~len:payload_length body
+          in
+          Frame.Data { Httpun_types.IOVec.buffer; off = 0; len = payload_length }
       }
     in
     read_frames t [ data_frame ];
@@ -1162,6 +1174,34 @@ module Server_connection_tests = struct
       Alcotest.(check bool) "Response handler called" true !body_read_called;
       writer_yields t
     | _ -> assert false
+
+  let test_flow_control_delays_small_updates () =
+    let body_read_called = ref false in
+    let request = Request.create ~scheme:"http" `GET "/" in
+    let request_handler reqd =
+      let request_body = Reqd.request_body reqd in
+      Body.Reader.schedule_read
+        request_body
+        ~on_eof:ignore
+        ~on_read:(fun _bs ~off:_ ~len:_ -> body_read_called := true)
+    in
+    let t = create_and_handle_preface ~error_handler request_handler in
+    read_request ~body:"request body" t request;
+    let data_frame =
+      { Frame.frame_header =
+          { payload_length = 3
+          ; stream_id = 1l
+          ; flags = Flags.(default_flags |> set_end_stream)
+          ; frame_type = Data
+          }
+      ; frame_payload =
+          let buffer = Bigstringaf.of_string ~off:0 ~len:3 "foo" in
+          Frame.Data { Httpun_types.IOVec.buffer; off = 0; len = 3 }
+      }
+    in
+    read_frames t [ data_frame ];
+    writer_yields t;
+    Alcotest.(check bool) "Response handler called" true !body_read_called
 
   let test_flow_control_can_send_empty_data_frame () =
     let request = Request.create ~scheme:"http" `GET "/" in
@@ -1406,6 +1446,7 @@ module Server_connection_tests = struct
       , test_reading_request_body )
     ; "accepting multiple RST_STREAM frames", `Quick, test_rst_stream_frames
     ; "flow control", `Quick, test_flow_control
+    ; "flow control delays small updates", `Quick, test_flow_control_delays_small_updates
     ; ( "flow control -- can send empty data frame"
       , `Quick
       , test_flow_control_can_send_empty_data_frame )

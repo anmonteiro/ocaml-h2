@@ -61,9 +61,11 @@ type t =
   ; reader : Reader.frame
   ; writer : Writer.t
   ; config : Config.t
+  ; window_update_batch_size : int32
   ; request_handler : request_handler
   ; error_handler : error_handler
   ; streams : Scheduler.t
+  ; mutable pending_connection_window_update : int32
     (* Number of currently open client streams. Used for
      * MAX_CONCURRENT_STREAMS bookkeeping *)
   ; mutable current_client_streams : int
@@ -199,6 +201,12 @@ let send_window_update : type a.
     loop n;
     wakeup_writer t)
 
+let queue_window_update t pending len =
+  let pending = Int32.add pending len in
+  if Int32.compare pending t.window_update_batch_size >= 0
+  then 0l, pending
+  else pending, 0l
+
 let create_push_stream t parent_stream_id =
   let candidate_push_stream_id = Int32.add t.max_pushed_stream_id 2l in
   if not t.settings.enable_push
@@ -304,6 +312,7 @@ let handle_headers t ~end_stream stream active_stream headers =
             (Httpun_types.Method.of_string meth)
             path
         in
+        let pending_stream_window_update = ref 0l in
         let request_body =
           if end_stream
           then Body.Reader.empty
@@ -319,8 +328,25 @@ let handle_headers t ~end_stream stream active_stream headers =
                  *   connection-level flow-control windows. *)
                 match reqd.state with
                 | Active _ ->
-                  send_window_update t t.streams len;
-                  send_window_update t stream len
+                  let pending_connection_window_update, connection_credit =
+                    queue_window_update
+                      t
+                      t.pending_connection_window_update
+                      len
+                  in
+                  t.pending_connection_window_update <-
+                    pending_connection_window_update;
+                  if Int32.compare connection_credit 0l > 0
+                  then send_window_update t t.streams connection_credit;
+                  let pending_window_update, stream_credit =
+                    queue_window_update
+                      t
+                      !pending_stream_window_update
+                      len
+                  in
+                  pending_stream_window_update := pending_window_update;
+                  if Int32.compare stream_credit 0l > 0
+                  then send_window_update t stream stream_credit
                 | Idle | Reserved _ | Closed _ -> ())
         in
         let request_info = Reqd.create_active_request request request_body in
@@ -1158,6 +1184,10 @@ let write_connection_preface t =
 let create_generic ~h2c ~config ~error_handler request_handler =
   let settings = Config.to_settings config in
   let writer = Writer.create settings.max_frame_size in
+  let half_window = Int32.shift_right_logical config.initial_window_size 1 in
+  let window_update_batch_size =
+    max 0x4000l (min 0x100000l half_window)
+  in
   let rec connection_preface_handler recv_frame settings_list =
     let t = Lazy.force t in
     (* If this connection is `h2c` (HTTP/2 over TCP), we have already written
@@ -1230,9 +1260,11 @@ let create_generic ~h2c ~config ~error_handler request_handler =
             frame_handler
       ; writer
       ; config
+      ; window_update_batch_size
       ; request_handler
       ; error_handler
       ; streams = Scheduler.make_root ()
+      ; pending_connection_window_update = 0l
       ; current_client_streams = 0
       ; max_client_stream_id = 0l
       ; max_pushed_stream_id = 0l
