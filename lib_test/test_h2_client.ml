@@ -1337,7 +1337,7 @@ module Client_connection_tests = struct
       List.filter_map
         (fun Frame.{ frame_payload; _ } ->
            match frame_payload with
-           | Frame.Data bs -> Some (bs_to_string bs)
+           | Frame.Data payload -> Some (payload_view_to_string payload)
            | _ -> None)
         frames
     in

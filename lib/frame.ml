@@ -127,6 +127,8 @@ type frame_header =
   ; frame_type : FrameType.t
   }
 
+type payload_view = Bigstringaf.t Httpun_types.IOVec.t
+
 (* From RFC7540§4.1:
  *   The structure and content of the frame payload is dependent entirely on
  *   the frame type. *)
@@ -139,7 +141,7 @@ type frame_payload =
    *   Data: Application data. The amount of data is the remainder of the
    *         frame payload after subtracting the length of the other fields
    *         that are present. *)
-  | Data of Bigstringaf.t
+  | Data of payload_view
   (* From RFC7540§6.2:
    *   The HEADERS frame payload has the following fields:
    *

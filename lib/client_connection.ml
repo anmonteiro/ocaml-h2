@@ -569,7 +569,11 @@ let process_headers_frame t { Frame.frame_header; _ } headers_block =
        *   connection error (Section 5.4.1) of type STREAM_CLOSED [...]. *)
       report_connection_error t Error_code.StreamClosed)
 
-let process_data_frame t { Frame.frame_header; _ } bstr =
+let process_data_frame
+      t
+      { Frame.frame_header; _ }
+      { Httpun_types.IOVec.buffer; off; len }
+  =
   let open Scheduler in
   let { Frame.flags; stream_id; payload_length; _ } = frame_header in
   let payload_len32 = Int32.of_int payload_length in
@@ -584,7 +588,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
         response_info
       in
       response_info.response_body_bytes <-
-        Int64.(add response_body_bytes (of_int (Bigstringaf.length bstr)));
+        Int64.(add response_body_bytes (of_int len));
       (* First, calculate whether we're allowed to receive this frame based
        * on the _current_ inflow. *)
       let allowed_to_receive =
@@ -640,7 +644,7 @@ let process_data_frame t { Frame.frame_header; _ } bstr =
           let faraday = Body.Reader.unsafe_faraday response_body in
           if not (Faraday.is_closed faraday)
           then (
-            Faraday.schedule_bigstring faraday bstr;
+            Faraday.write_bigstring faraday ~off ~len buffer;
             if end_stream then Body.Reader.close response_body);
           Respd.flush_response_body descriptor;
           if end_stream && not (Respd.requires_output descriptor)
@@ -1217,7 +1221,7 @@ let create ?(config = Config.default) ?push_handler ~error_handler () =
         (match frame_payload with
         | Headers (_priority, headers_block) ->
           process_headers_frame t frame headers_block
-        | Data bs -> process_data_frame t frame bs
+        | Data payload -> process_data_frame t frame payload
         | Priority priority -> process_priority_frame t frame priority
         | RSTStream error_code -> process_rst_stream_frame t frame error_code
         | Settings settings -> process_settings_frame t frame settings

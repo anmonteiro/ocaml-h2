@@ -17,6 +17,9 @@ let bs_to_string bs =
   let len = Bigstringaf.length bs in
   Bigstringaf.substring ~off ~len bs
 
+let payload_view_to_string { Httpun_types.IOVec.buffer; off; len } =
+  Bigstringaf.substring ~off ~len buffer
+
 let bs_of_string s = Bigstringaf.of_string ~off:0 ~len:(String.length s) s
 let string_of_hex s = Hex.to_string (`Hex s)
 
@@ -32,7 +35,8 @@ let write_frame ?padding t { Frame.frame_header; frame_payload } =
   let { Frame.flags; stream_id; _ } = frame_header in
   let info = Writer.make_frame_info ~flags ?padding stream_id in
   match frame_payload with
-  | Data body -> Writer.schedule_data t info body
+  | Data { Httpun_types.IOVec.buffer; off; len } ->
+    Writer.schedule_data t info (Bigstringaf.copy ~off ~len buffer)
   | Headers (priority, headers_block) ->
     (* Block already HPACK-encoded. *)
     write_headers_frame t.encoder info ~priority (make_iovecs headers_block)

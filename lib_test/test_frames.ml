@@ -99,7 +99,7 @@ let frame_testable =
     let frame_payload_to_json frame_type payload =
       let others =
         match payload with
-        | Frame.Data data -> [ "data", `String (bs_to_string data) ]
+        | Frame.Data data -> [ "data", `String (payload_view_to_string data) ]
         | Headers (priority, fragment) ->
           ("header_block_fragment", `String (bs_to_string fragment))
           :: priority_to_yojson priority
@@ -195,7 +195,8 @@ let frame_type_of_string = function
 let frame_payload_of_json frame_type json =
   match frame_type with
   | Frame.FrameType.Data ->
-    Frame.Data Json.(json |> member "data" |> to_string |> bs_of_string)
+    let buffer = Json.(json |> member "data" |> to_string |> bs_of_string) in
+    Frame.Data { Httpun_types.IOVec.buffer; off = 0; len = Bigstringaf.length buffer }
   | Headers ->
     let priority = priority_of_json json in
     let fragment =
