@@ -45,7 +45,7 @@ type t =
 let default =
   { (* This is effectively MAX_FRAME_SIZE, because the parser commits the frame
      * header to prevent backtracking, therefore the entire payload can fit the
-     * read buffer. The default is 16384, and can't be lower than that.
+     * read buffer. The default is 65536, and can't be lower than 16384.
      *
      * Note: h2 does not check that MAX_FRAME_SIZE is lower than 16384
      * octets. In the case that a lower value than permitted is set, peers will
@@ -57,7 +57,7 @@ let default =
      *   The initial value is 2^14 (16,384) octets. The value advertised by an
      *   endpoint MUST be between this initial value and the maximum allowed
      *   frame size (2^24-1 or 16,777,215 octets), inclusive. *)
-    read_buffer_size = Settings.default.max_frame_size
+    read_buffer_size = 0x10000
   ; (* Buffer size for request bodies *) request_body_buffer_size = 0x1000
   ; (* Buffer size for response bodies *) response_body_buffer_size = 0x1000
   ; enable_server_push = true
