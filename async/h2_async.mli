@@ -55,6 +55,22 @@ module Server : sig
       -> ([ `Active ], 'a) Socket.t
       -> unit Deferred.t
   end
+
+  module TLS : sig
+    include
+      H2_async_intf.Server
+      with type 'a socket := 'a Gluten_async.Server.TLS.socket
+
+    val create_connection_handler_with_default :
+       certfile:string
+      -> keyfile:string
+      -> ?config:Config.t
+      -> request_handler:('a -> Server_connection.request_handler)
+      -> error_handler:('a -> Server_connection.error_handler)
+      -> (Socket.Address.Inet.t as 'a)
+      -> ([ `Active ], 'a) Socket.t
+      -> unit Deferred.t
+  end
 end
 
 module Client : sig
