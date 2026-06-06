@@ -29,7 +29,6 @@
   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-open Parsetree
 open Ast_helper
 open Asttypes
 
@@ -110,8 +109,8 @@ let mk_encode_table encode_table =
       (fun acc (code, length) ->
          let tup =
            Exp.tuple
-             [ Exp.constant (Pconst_integer (string_of_int code, None))
-             ; Exp.constant (Pconst_integer (string_of_int length, None))
+             [ None, Exp.constant (Const.integer (string_of_int code))
+             ; None, Exp.constant (Const.integer (string_of_int length))
              ]
          in
          tup :: acc)
@@ -122,8 +121,8 @@ let mk_encode_table encode_table =
 
 let output_transition (id, accept, symbol) =
   let output_int = function
-    | Some i -> Exp.constant (Pconst_integer (string_of_int i, None))
-    | None -> Exp.constant (Pconst_integer ("-1", None))
+    | Some i -> Exp.constant (Const.integer (string_of_int i))
+    | None -> Exp.constant (Const.integer "-1")
   in
   let output_bool b =
     Exp.construct
@@ -133,10 +132,10 @@ let output_transition (id, accept, symbol) =
       None
   in
   let output_char = function
-    | Some c -> Exp.constant (Pconst_char c)
-    | None -> Exp.constant (Pconst_char '\000')
+    | Some c -> Exp.constant (Const.char c)
+    | None -> Exp.constant (Const.char '\000')
   in
-  Exp.tuple [ output_int id; output_bool accept; output_char symbol ]
+  Exp.tuple [ None, output_int id; None, output_bool accept; None, output_char symbol ]
 
 let mk_decode_table tree =
   let rec loop tree (i, acc) =
