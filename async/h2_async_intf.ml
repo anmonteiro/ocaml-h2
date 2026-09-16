@@ -80,4 +80,8 @@ module type Client = sig
 
   val shutdown : _ t -> unit Deferred.t
   val is_closed : _ t -> bool
+
+  val close_finished : _ t -> unit Deferred.t
+  (** Becomes determined once the connection's I/O loop has finished and its
+      socket has been closed, whether it was shut down or failed. *)
 end

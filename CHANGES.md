@@ -1,3 +1,10 @@
+Unreleased
+--------------
+
+- h2-async: add `Client.close_finished` (and to `Client.SSL` / `Client.TLS`),
+  requires gluten-async with anmonteiro/gluten#88
+  ([#277](https://github.com/anmonteiro/ocaml-h2/pull/277))
+
 0.13.0 2024-09-04
 --------------
 
