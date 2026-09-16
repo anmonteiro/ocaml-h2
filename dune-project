@@ -61,54 +61,6 @@
   (hex :with-test)))
 
 (package
- (name h2-lwt)
- (synopsis "Lwt support for h2")
- (description
-  "h2 is an implementation of the HTTP/2 specification entirely in OCaml. h2-lwt provides an Lwt runtime implementation for h2.")
- (depends
-  (ocaml
-   (>= "4.08.0"))
-  (h2
-   (= :version))
-  (lwt
-   (>= "5.1.1"))
-  (gluten-lwt
-   (>= "0.2.1"))))
-
-(package
- (name h2-mirage)
- (synopsis "Lwt support for h2")
- (description
-  "h2 is an implementation of the HTTP/2 specification entirely in OCaml. h2-mirage provides an Lwt runtime implementation for h2 that targets MirageOS unikernels.")
- (depends
-  (ocaml
-   (>= "4.08.0"))
-  (h2-lwt
-   (= :version))
-  faraday-lwt
-  lwt
-  (gluten-mirage
-   (>= "0.3.0"))
-  (mirage-flow
-   (>= "2.0.0"))
-  cstruct))
-
-(package
- (name h2-lwt-unix)
- (synopsis "Lwt + UNIX support for h2")
- (description
-  "h2 is an implementation of the HTTP/2 specification entirely in OCaml. h2-lwt-unix provides an Lwt runtime implementation for h2 that targets UNIX binaries.")
- (depends
-  (ocaml
-   (>= "4.08.0"))
-  (h2-lwt
-   (= :version))
-  faraday-lwt-unix
-  (gluten-lwt-unix
-   (>= "0.2.1")))
- (depopts tls-lwt lwt_ssl))
-
-(package
  (name h2-async)
  (synopsis "Async support for h2")
  (description
@@ -122,16 +74,3 @@
   (gluten-async
    (>= "0.4.0")))
  (depopts async_ssl tls-async))
-
-(package
- (name h2-eio)
- (synopsis "EIO support for h2")
- (description
-  "h2 is an implementation of the HTTP/2 specification entirely in OCaml. h2-eio provides an EIO runtime implementation for h2.")
- (depends
-  (ocaml
-   (>= "4.08.0"))
-  (h2
-   (= :version))
-  (gluten-eio
-   (>= "0.5.0"))))

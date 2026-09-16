@@ -1,4 +1,0 @@
-(library
- (name h2_lwt_unix)
- (public_name h2-lwt-unix)
- (libraries faraday-lwt-unix h2 h2-lwt gluten-lwt-unix lwt.unix))

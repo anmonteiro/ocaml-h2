@@ -365,16 +365,6 @@ directory structure is as follows:
   HTTP/2 frame parsing, serialization and state machine implementations.
 - [`lib_test/`](./lib_test): contains various unit tests for modules in the
   core h2 package.
--  [`lwt/`](./lwt): contains an implementation of a Lwt runtime for h2
-  functorized over the specific input / output channel abstraction such that it
-  can work in either UNIX-like systems or MirageOS.
-- [`lwt-unix/`](./lwt-unix): contains an Lwt runtime adapter for h2 that
-  communicates over UNIX file descriptors.
-- [`mirage/`](./mirage): contains a Mirage runtime adapter for h2 that
-  allows using h2 to write unikernels that serve traffic over HTTP/2.
-- [`spec/`](./spec): contains example implementations of servers using h2
-  that respond with the different provided APIs to be used for conformance
-  testing with the [h2spec](https://github.com/summerwind/h2spec) tool.
 
 ### Cloning the repository
 

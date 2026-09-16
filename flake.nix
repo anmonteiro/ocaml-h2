@@ -18,13 +18,7 @@
       let
         pkgs = nixpkgs.legacyPackages."${system}".extend (
           self: super: {
-            ocamlPackages = super.ocaml-ng.ocamlPackages_5_5.overrideScope (
-              oself: osuper: {
-                gluten-lwt-unix = osuper.gluten-lwt-unix.overrideAttrs (o: {
-                  propagatedBuildInputs = o.propagatedBuildInputs ++ [ oself.tls-lwt ];
-                });
-              }
-            );
+            ocamlPackages = super.ocaml-ng.ocamlPackages_5_5;
           }
         );
         packages = pkgs.callPackage ./nix { nix-filter = nix-filter.lib; };

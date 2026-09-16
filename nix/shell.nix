@@ -6,7 +6,6 @@
 , curl
 , ocamlPackages
 , git
-, h2spec
 , release-mode ? false
 }:
 
@@ -29,9 +28,6 @@ in
       merlin
       ocamlformat
       utop
-      h2spec
-      httpun-lwt-unix
-      tls-lwt
     ]);
 }).overrideAttrs (o: {
   propagatedBuildInputs = lib.filter
