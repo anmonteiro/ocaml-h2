@@ -168,7 +168,7 @@ module Client = struct
           ~error_handler
           socket
       =
-      Client_runtime.create_default ~alpn_protocols:[ "http/1.1" ] socket
+      Client_runtime.create_default ~alpn_protocols:[ "h2" ] socket
       >>= fun ssl_client ->
       create_connection ~config ?push_handler ~error_handler ssl_client
 
@@ -213,7 +213,7 @@ module Client = struct
           where_to_connect
       =
       Client_runtime.create_default
-        ~alpn_protocols:[ "http/1.1" ]
+        ~alpn_protocols:[ "h2" ]
         socket
         where_to_connect
       >>= fun tls_client ->

@@ -1,3 +1,10 @@
+Unreleased
+--------------
+
+- h2-async: advertise `h2`, not `http/1.1`, via ALPN in
+  `Client.{SSL,TLS}.create_connection_with_default`
+  ([#276](https://github.com/anmonteiro/ocaml-h2/pull/276))
+
 0.13.0 2024-09-04
 --------------
 
