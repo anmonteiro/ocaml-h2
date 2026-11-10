@@ -894,6 +894,32 @@ module Server_connection_tests = struct
     in
     write writes
 
+  let test_head_fixed_response () =
+    let request = Request.create ~scheme:"http" `HEAD "/" in
+    let response =
+      Response.create `OK ~headers:(Headers.of_list [ "content-length", "5" ])
+    in
+    let t =
+      create_and_handle_preface ~error_handler (fun reqd ->
+          Reqd.respond_with_string reqd response "Hello")
+    in
+    read_request t request;
+    write_response t response;
+    writer_yields t
+
+  let test_head_streaming_response () =
+    let request = Request.create ~scheme:"http" `HEAD "/" in
+    let response =
+      Response.create `OK ~headers:(Headers.of_list [ "content-length", "5" ])
+    in
+    let t =
+      create_and_handle_preface ~error_handler
+        (streaming_handler response [ "Hello" ])
+    in
+    read_request t request;
+    write_response t response;
+    writer_yields t
+
   let test_empty_fixed_streaming_response () =
     let request = Request.create ~scheme:"http" `GET "/" in
     let response =
@@ -1385,6 +1411,10 @@ module Server_connection_tests = struct
     ; ( "empty fixed streaming response"
       , `Quick
       , test_empty_fixed_streaming_response )
+    ; "HEAD fixed response has no body", `Quick, test_head_fixed_response
+    ; ( "HEAD streaming response has no body"
+      , `Quick
+      , test_head_streaming_response )
     ; "starting an h2c connection", `Quick, test_h2c
     ; ( "non-zero `content-length` and no DATA frames"
       , `Quick
