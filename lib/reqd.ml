@@ -97,6 +97,16 @@ let create_active_stream encoder body_buffer_size create_push_stream =
   ; create_push_stream
   }
 
+let request_method_opt (t : t) =
+  match t.state with
+  | Active ((Open (ActiveMessage { request; _ }) | HalfClosed { request; _ }), _)
+  | Reserved ({ request; _ }, _) ->
+    Some request.meth
+  | Idle
+  | Active (Open (WaitingForPeer | PartialHeaders _ | FullHeaders), _)
+  | Closed _ ->
+    None
+
 let request (t : t) =
   match t.state with
   | Idle | Active (Open (WaitingForPeer | PartialHeaders _ | FullHeaders), _) ->
@@ -165,7 +175,9 @@ let send_fixed_response (t : t) s response data =
         in
         iovec, len
     in
-    let should_send_data = length <> 0 in
+    let should_send_data =
+      length <> 0 && request_method_opt t <> Some `HEAD
+    in
     let frame_info =
       Writer.make_frame_info
         ~max_frame_size:t.max_frame_size
@@ -238,19 +250,32 @@ let send_streaming_response ~flush_headers_immediately (t : t) s response =
   let wait_for_first_flush = not flush_headers_immediately in
   match s.response_state with
   | Waiting ->
+    let is_head = request_method_opt t = Some `HEAD in
     let frame_info =
-      Writer.make_frame_info ~max_frame_size:t.max_frame_size t.id
-    in
-    let response_body_buffer = Bigstringaf.create s.body_buffer_size in
-    let response_body =
-      Body.Writer.create response_body_buffer ~writer:t.writer
+      Writer.make_frame_info
+        ~max_frame_size:t.max_frame_size
+        ~flags:
+          (if is_head
+          then Flags.(set_end_stream default_flags)
+          else Flags.default_flags)
+        t.id
     in
     Writer.write_response_headers t.writer s.encoder frame_info response;
-    if wait_for_first_flush then Writer.yield t.writer;
-    s.response_state <-
-      Streaming { response; response_body; trailers = Headers.empty };
-    Writer.wakeup t.writer;
-    response_body
+    if is_head then begin
+      s.response_state <- Complete response;
+      Body.Writer.create_discard ~writer:t.writer
+    end
+    else begin
+      let response_body_buffer = Bigstringaf.create s.body_buffer_size in
+      let response_body =
+        Body.Writer.create response_body_buffer ~writer:t.writer
+      in
+      if wait_for_first_flush then Writer.yield t.writer;
+      s.response_state <-
+        Streaming { response; response_body; trailers = Headers.empty };
+      Writer.wakeup t.writer;
+      response_body
+    end
   | Streaming _ ->
     failwith "h2.Reqd.respond_with_streaming: response already started"
   | Fixed _ | Complete _ ->

@@ -110,15 +110,27 @@ module Writer = struct
     { faraday : Faraday.t
     ; mutable buffered_bytes : int
     ; writer : Serialize.Writer.t
+    ; discard : bool
     }
 
   let create buffer ~writer =
-    { faraday = Faraday.of_bigstring buffer; buffered_bytes = 0; writer }
+    { faraday = Faraday.of_bigstring buffer
+    ; buffered_bytes = 0
+    ; writer
+    ; discard = false
+    }
 
   let create_empty ~writer =
     let t = create Bigstringaf.empty ~writer in
     Faraday.close t.faraday;
     t
+
+  let create_discard ~writer =
+    { faraday = Faraday.of_bigstring Bigstringaf.empty
+    ; buffered_bytes = 0
+    ; writer
+    ; discard = true
+    }
 
   let ready_to_write t = Serialize.Writer.wakeup t.writer
 
@@ -144,6 +156,8 @@ module Writer = struct
   let flush t kontinue =
     if Serialize.Writer.is_closed t.writer
     then kontinue `Closed
+    else if t.discard
+    then kontinue `Written
     else (
       Faraday.flush_with_reason t.faraday (function
         | Drain -> kontinue `Closed
@@ -167,7 +181,9 @@ module Writer = struct
 
   let transfer_to_writer t writer ~max_frame_size ~max_bytes stream_id =
     let faraday = t.faraday in
-    if Serialize.Writer.is_closed t.writer
+    if t.discard
+    then 0
+    else if Serialize.Writer.is_closed t.writer
     then (
       close_and_drain t;
       0)
